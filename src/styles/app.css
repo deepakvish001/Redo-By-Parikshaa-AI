@@ -60,10 +60,32 @@ body {
 /* The side panel is user-resizable, so nothing may assume a fixed width. The
    options page's cards are `.section-card`, deliberately not `.panel`, which
    would also match this element and hand the whole body a card's chrome. */
+/**
+ * The panel's height chain, which has to be unbroken from the viewport down to
+ * `.scroll` or nothing scrolls at all.
+ *
+ * `#root` sits between `body` and `.shell` and had no height of its own, so
+ * `.shell { height: 100% }` resolved against `auto`, `.scroll` never became a
+ * bounded box, and the overflow was clipped by `body`'s `overflow: hidden` —
+ * with more problems than fit on screen, the rest were simply unreachable.
+ */
+html {
+  height: 100%;
+}
+
 body.panel {
   min-width: 300px;
   height: 100vh;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+body.panel > #root {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 body.options {
@@ -168,7 +190,10 @@ button:focus-visible {
 .shell {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  /* Without this a flex item refuses to shrink below its content, which is
+     what stops `.scroll` from ever becoming a scrolling box. */
+  min-height: 0;
 }
 
 .shell__header {
@@ -246,7 +271,9 @@ button:focus-visible {
 
 .scroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 14px 16px 28px;
 }
 
@@ -336,6 +363,289 @@ button:focus-visible {
   line-height: 1.5;
 }
 
+.card__collapse {
+  border: 0;
+  background: none;
+  padding: 0 2px 0 0;
+  color: var(--text-faint);
+  line-height: 0;
+}
+
+.card__collapse .is-open {
+  transform: rotate(90deg);
+}
+
+/* ------------------------------------------------------------ collapsed row */
+
+/* The collapsed form of a problem: enough to recognise it and to know when it
+   is next due, and nothing else. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  margin-bottom: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  text-align: left;
+  font-weight: 500;
+}
+
+.row:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.row__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--text-faint);
+}
+
+.row__dot--easy {
+  background: var(--easy);
+}
+.row__dot--medium {
+  background: var(--medium);
+}
+.row__dot--hard {
+  background: var(--hard);
+}
+
+.row__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row__warn {
+  color: var(--danger);
+  line-height: 0;
+  flex: none;
+}
+
+.row__due {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  flex: none;
+}
+
+.row__due.is-overdue {
+  color: var(--danger);
+}
+
+.row__chevron {
+  color: var(--text-faint);
+  flex: none;
+}
+
+/* ----------------------------------------------------------------- folders */
+
+.folder {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin-bottom: 9px;
+  overflow: hidden;
+}
+
+.folder__head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+
+.folder__chevron {
+  color: var(--text-faint);
+  transition: transform 140ms ease;
+  flex: none;
+}
+
+.folder__chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.pmark {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 6px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  flex: none;
+}
+
+.folder__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder__count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  flex: none;
+}
+
+.tag {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  flex: none;
+}
+
+.tag--due {
+  color: hsl(20 40% 10%);
+  background: var(--amber);
+}
+
+.tag--bad {
+  color: var(--accent-contrast);
+  background: var(--danger);
+}
+
+/* A single hairline showing the easy/medium/hard mix of the folder. */
+.folder__bar {
+  display: flex;
+  height: 2px;
+  gap: 1px;
+  padding: 0 12px 0;
+  background: transparent;
+}
+
+.folder__seg {
+  border-radius: 2px;
+  min-width: 3px;
+}
+
+.folder__seg--easy {
+  background: var(--easy);
+}
+.folder__seg--medium {
+  background: var(--medium);
+}
+.folder__seg--hard {
+  background: var(--hard);
+}
+.folder__seg--unknown {
+  background: var(--border-strong);
+}
+
+.folder__body {
+  padding: 9px 9px 5px;
+}
+
+.folder__empty {
+  padding: 6px 3px 10px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+/* ------------------------------------------------------------------ search */
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  margin-bottom: 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-faint);
+}
+
+.search:focus-within {
+  border-color: var(--accent);
+}
+
+.search input[type='text'] {
+  border: 0;
+  background: none;
+  padding: 8px 0;
+  font-size: 12px;
+}
+
+.search input:focus-visible {
+  outline: none;
+}
+
+/* -------------------------------------------------------------- due header */
+
+.duehead {
+  margin-bottom: 13px;
+}
+
+.duehead__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.duestat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.duestat strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.duestat--due {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--accent-soft);
+}
+
+.duestat--late {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  color: var(--danger);
+}
+
+.duestat--streak {
+  border-color: color-mix(in srgb, var(--amber) 45%, var(--border));
+  color: var(--amber);
+}
+
+.duehead__hint {
+  margin: 9px 0 0;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+
 /* -------------------------------------------------------- attempt journal */
 
 .journal__toggle {
@@ -418,7 +728,9 @@ button:focus-visible {
   background: var(--surface-raised);
   font-size: 10px;
   font-weight: 700;
-  text-transform: capitalize;
+  /* Sentence case comes from the labels themselves. `capitalize` turned
+     "not on parikshaa" into "Not On Parikshaa", which reads as a proper noun. */
+  text-transform: none;
   letter-spacing: 0.02em;
   white-space: nowrap;
   color: var(--text-muted);

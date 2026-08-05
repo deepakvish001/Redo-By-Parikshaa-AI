@@ -10,7 +10,16 @@ import {
 import { describeStruggle, formatDuration as formatSpan, summarise } from '../core/journal.ts';
 import { send, type ContestsResponse, type DashboardData } from '../core/messages.ts';
 import { dueProblems, formatDueIn, upcomingProblems } from '../core/srs.ts';
-import type { Difficulty, Recall, SolvedProblem, TopicStat } from '../core/types.ts';
+import { PLATFORM_LABELS, type Difficulty, type Recall, type SolvedProblem, type TopicStat } from '../core/types.ts';
+import {
+  AlertIcon,
+  ChevronRight,
+  ClockIcon,
+  FlameIcon,
+  PlatformMark,
+  SearchIcon,
+  TrophyIcon,
+} from './icons.tsx';
 
 type Tab = 'due' | 'all' | 'contests' | 'stats';
 
@@ -32,9 +41,20 @@ function openUrl(url: string): void {
   void chrome.tabs.create({ url });
 }
 
+const DIFFICULTY_LABEL: Record<Difficulty, string> = {
+  easy: 'Easy',
+  medium: 'Medium',
+  hard: 'Hard',
+  unknown: '',
+};
+
 function DifficultyChip({ difficulty }: { difficulty: Difficulty }) {
   if (difficulty === 'unknown') return null;
-  return <span className={`chip chip--${difficulty}`}>{difficulty}</span>;
+  return <span className={`chip chip--${difficulty}`}>{DIFFICULTY_LABEL[difficulty]}</span>;
+}
+
+function sentence(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function SyncChip({ problem }: { problem: SolvedProblem }) {
@@ -42,18 +62,18 @@ function SyncChip({ problem }: { problem: SolvedProblem }) {
   if (status === 'synced') {
     return (
       <span className="chip chip--ok" title={commitUrl || undefined}>
-        synced
+        Synced
       </span>
     );
   }
   if (status === 'error') {
     return (
       <span className="chip chip--overdue" title={error}>
-        sync failed
+        Sync failed
       </span>
     );
   }
-  return <span className="chip">{status === 'pending' ? 'syncing' : 'local only'}</span>;
+  return <span className="chip">{status === 'pending' ? 'Syncing' : 'Local only'}</span>;
 }
 
 function ParikshaaChip({ problem }: { problem: SolvedProblem }) {
@@ -64,14 +84,14 @@ function ParikshaaChip({ problem }: { problem: SolvedProblem }) {
   if (state.status === 'synced') {
     return (
       <span className="chip chip--ok" title={state.url}>
-        parikshaa ✓
+        Parikshaa ✓
       </span>
     );
   }
   if (state.status === 'error') {
     return (
       <span className="chip chip--overdue" title={state.error}>
-        parikshaa failed
+        Parikshaa failed
       </span>
     );
   }
@@ -81,13 +101,13 @@ function ParikshaaChip({ problem }: { problem: SolvedProblem }) {
     const notThere = /no parikshaa problem uses this slug/i.test(state.reason ?? '');
     return (
       <span className="chip" title={state.reason}>
-        {notThere ? 'not on parikshaa' : 'parikshaa n/a'}
+        {notThere ? 'Not on Parikshaa' : 'Parikshaa n/a'}
       </span>
     );
   }
   return (
     <span className="chip" title={state.reason}>
-      parikshaa queued
+      Parikshaa queued
     </span>
   );
 }
@@ -201,6 +221,8 @@ function ProblemCard({
   onDelete,
   onSaveDetails,
   showRecall,
+  collapsible = false,
+  defaultOpen = false,
 }: {
   problem: SolvedProblem;
   now: number;
@@ -214,24 +236,60 @@ function ProblemCard({
     complexity: { time?: string; space?: string },
   ) => Promise<void>;
   showRecall: boolean;
+  /**
+   * Collapsed cards show only what identifies the problem and when it is next
+   * due. Everything else is a click away — with a few hundred problems, an
+   * always-expanded list is unreadable however well it scrolls.
+   */
+  collapsible?: boolean;
+  defaultOpen?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [showAttempts, setShowAttempts] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const overdue = problem.revision.dueAt <= now;
   const events = problem.events ?? [];
   const journal = summarise(events);
   const struggle = problem.revision.struggle;
 
+  if (collapsible && !open) {
+    return (
+      <button type="button" className="row" onClick={() => setOpen(true)}>
+        <span className={`row__dot row__dot--${problem.difficulty}`} />
+        <span className="row__title">{problem.title}</span>
+        {problem.github.status === 'error' && (
+          <span className="row__warn" title={problem.github.error}>
+            <AlertIcon size={12} />
+          </span>
+        )}
+        <span className={`row__due ${overdue ? 'is-overdue' : ''}`}>
+          {formatDueIn(problem.revision.dueAt, now)}
+        </span>
+        <ChevronRight size={12} className="row__chevron" />
+      </button>
+    );
+  }
+
   return (
     <div className="card">
       <div className="card__top">
+        {collapsible && (
+          <button
+            type="button"
+            className="card__collapse"
+            onClick={() => setOpen(false)}
+            aria-label="Collapse"
+          >
+            <ChevronRight size={12} className="is-open" />
+          </button>
+        )}
         <div className="card__title">{problem.title}</div>
         <DifficultyChip difficulty={problem.difficulty} />
       </div>
 
       <div className="card__meta">
         <span className={`chip ${overdue ? 'chip--overdue' : ''}`}>
-          {formatDueIn(problem.revision.dueAt, now)}
+          {sentence(formatDueIn(problem.revision.dueAt, now))}
         </span>
         <SyncChip problem={problem} />
         <ParikshaaChip problem={problem} />
@@ -288,7 +346,7 @@ function ProblemCard({
         </div>
       )}
 
-      {problem.parikshaa && problem.parikshaa.status !== 'disabled' &&
+      {!showRecall && problem.parikshaa && problem.parikshaa.status !== 'disabled' &&
         problem.parikshaa.status !== 'synced' && (
           <div className="card__hint">
             {problem.parikshaa.status === 'skipped' &&
@@ -344,6 +402,78 @@ function ProblemCard({
 
       {editing && !showRecall && <DetailsEditor problem={problem} onSave={onSaveDetails} />}
     </div>
+  );
+}
+
+const DIFFICULTY_ORDER: Difficulty[] = ['easy', 'medium', 'hard', 'unknown'];
+
+/**
+ * One judge's problems, as a folder.
+ *
+ * Grouping is by platform rather than by topic or difficulty because that is
+ * the axis the repository already uses, so what the panel shows and what got
+ * committed line up.
+ */
+function PlatformFolder({
+  platform,
+  problems,
+  now,
+  defaultOpen,
+  children,
+}: {
+  platform: string;
+  problems: SolvedProblem[];
+  now: number;
+  defaultOpen: boolean;
+  children: (problem: SolvedProblem) => React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const due = problems.filter((problem) => problem.revision.dueAt <= now).length;
+  const failed = problems.filter((problem) => problem.github.status === 'error').length;
+
+  const counts = DIFFICULTY_ORDER.map((difficulty) => ({
+    difficulty,
+    count: problems.filter((problem) => problem.difficulty === difficulty).length,
+  })).filter((entry) => entry.count > 0);
+
+  return (
+    <section className={`folder ${open ? 'is-open' : ''}`}>
+      <button type="button" className="folder__head" onClick={() => setOpen((value) => !value)}>
+        <ChevronRight size={12} className={`folder__chevron ${open ? 'is-open' : ''}`} />
+        <PlatformMark platform={platform} />
+        <span className="folder__name">
+          {(PLATFORM_LABELS as Record<string, string>)[platform] ?? platform}
+        </span>
+        {due > 0 && <span className="tag tag--due">{due} due</span>}
+        {failed > 0 && (
+          <span className="tag tag--bad" title="Not committed to GitHub">
+            {failed}
+          </span>
+        )}
+        <span className="folder__count">{problems.length}</span>
+      </button>
+
+      {/* The proportions read at a glance in a way four numbers do not. */}
+      <div className="folder__bar" aria-hidden="true">
+        {counts.map(({ difficulty, count }) => (
+          <span
+            key={difficulty}
+            className={`folder__seg folder__seg--${difficulty}`}
+            style={{ flexGrow: count }}
+          />
+        ))}
+      </div>
+
+      {open && (
+        <div className="folder__body">
+          {problems.length === 0 ? (
+            <div className="folder__empty">Nothing here yet.</div>
+          ) : (
+            problems.map((problem) => children(problem))
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -423,6 +553,7 @@ export function App() {
   const [contests, setContests] = useState<ContestsResponse | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [retryingAll, setRetryingAll] = useState(false);
+  const [query, setQuery] = useState('');
   const [tab, setTab] = useState<Tab>('due');
 
   const load = useCallback(async () => {
@@ -531,9 +662,49 @@ export function App() {
     }
   }, [failedSyncs, load]);
 
+  /** Title, tag and language, because those are the three ways people look. */
+  const matches = useCallback(
+    (problem: SolvedProblem) => {
+      const needle = query.trim().toLowerCase();
+      if (!needle) return true;
+      return (
+        problem.title.toLowerCase().includes(needle) ||
+        problem.slug.toLowerCase().includes(needle) ||
+        problem.language.toLowerCase().includes(needle) ||
+        problem.tags.some((tag) => tag.toLowerCase().includes(needle))
+      );
+    },
+    [query],
+  );
+
+  const folders = useMemo(() => {
+    if (!data) return [];
+    const grouped = new Map<string, SolvedProblem[]>();
+    for (const problem of data.problems) {
+      if (!matches(problem)) continue;
+      grouped.set(problem.platform, [...(grouped.get(problem.platform) ?? []), problem]);
+    }
+    return [...grouped.entries()]
+      .map(([platform, problems]) => ({
+        platform,
+        // Most recently solved first inside a folder; the panel's own sort is
+        // by due date, which is the wrong order for browsing what you have done.
+        problems: [...problems].sort((a, b) => b.solvedAt - a.solvedAt),
+      }))
+      .sort((a, b) => b.problems.length - a.problems.length);
+  }, [data, matches]);
+
   const due = useMemo(
     () => (data ? dueProblems(data.problems, data.now) : []),
     [data],
+  );
+  /** Due yesterday or earlier — the ones actually slipping, not today's queue. */
+  const overdueCount = useMemo(
+    () =>
+      data
+        ? due.filter((problem) => data.now - problem.revision.dueAt > 86_400_000).length
+        : 0,
+    [due, data],
   );
   const upcoming = useMemo(
     () => (data ? upcomingProblems(data.problems, data.now, 3) : []),
@@ -622,9 +793,33 @@ export function App() {
               </Empty>
             ) : (
               <>
-                <div className="banner">
-                  Re-solve each problem on the site first, then rate how it went. Rating adjusts
-                  when you will see it again.
+                <div className="duehead">
+                  <div className="duehead__stats">
+                    <span className="duestat duestat--due">
+                      <ClockIcon size={13} />
+                      <strong>{due.length}</strong> due
+                    </span>
+                    {overdueCount > 0 && (
+                      <span className="duestat duestat--late">
+                        <AlertIcon size={13} />
+                        <strong>{overdueCount}</strong> overdue
+                      </span>
+                    )}
+                    {data.stats.currentStreak > 0 && (
+                      <span className="duestat duestat--streak">
+                        <FlameIcon size={13} />
+                        <strong>{data.stats.currentStreak}</strong> day streak
+                      </span>
+                    )}
+                    <span className="duestat">
+                      <TrophyIcon size={13} />
+                      <strong>{data.stats.reviewsCompleted}</strong> reviews
+                    </span>
+                  </div>
+                  <p className="duehead__hint">
+                    Re-solve each one on the site first, then rate how it went — the rating decides
+                    when you see it again.
+                  </p>
                 </div>
                 {due.map((problem) => (
                   <ProblemCard
@@ -676,19 +871,53 @@ export function App() {
                 Solve something on LeetCode or Codeforces with the extension installed.
               </Empty>
             ) : (
-              data.problems.map((problem) => (
-                <ProblemCard
-                  key={problem.id}
-                  problem={problem}
-                  now={data.now}
-                  onReview={(id, recall) => void handleReview(id, recall)}
-                  onResync={(id) => void handleResync(id)}
-                    onResyncParikshaa={(id) => void handleResyncParikshaa(id)}
-                  onDelete={(id) => void handleDelete(id)}
-                  onSaveDetails={handleSaveDetails}
-                  showRecall={false}
-                />
-              ))
+              <>
+                <div className="search">
+                  <SearchIcon size={13} />
+                  <input
+                    type="text"
+                    value={query}
+                    placeholder="Filter by title, tag or language"
+                    onChange={(event) => setQuery(event.target.value)}
+                  />
+                  {query && (
+                    <button type="button" className="ghost" onClick={() => setQuery('')}>
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                {folders.length === 0 ? (
+                  <Empty title="Nothing matches">Try a different word, or clear the filter.</Empty>
+                ) : (
+                  folders.map(({ platform, problems }) => (
+                    <PlatformFolder
+                      key={platform}
+                      platform={platform}
+                      problems={problems}
+                      now={data.now}
+                      // A filter is a search: opening the folders is the answer.
+                      // Otherwise only the busiest judge starts open.
+                      defaultOpen={query.length > 0 || platform === folders[0]?.platform}
+                    >
+                      {(problem) => (
+                        <ProblemCard
+                          key={problem.id}
+                          problem={problem}
+                          now={data.now}
+                          onReview={(id, recall) => void handleReview(id, recall)}
+                          onResync={(id) => void handleResync(id)}
+                          onResyncParikshaa={(id) => void handleResyncParikshaa(id)}
+                          onDelete={(id) => void handleDelete(id)}
+                          onSaveDetails={handleSaveDetails}
+                          showRecall={false}
+                          collapsible
+                        />
+                      )}
+                    </PlatformFolder>
+                  ))
+                )}
+              </>
             )}
           </>
         )}
