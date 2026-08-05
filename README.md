@@ -30,6 +30,9 @@ Solving is the easy part. Remembering three months later is the part nothing els
   LeetCode, so an accepted submission saves your solution against the matching problem and
   records an accepted submission — which is what marks it solved across your sheets and
   dashboards. Off by default.
+- **Flags due problems inside Parikshaa.** Browsing a sheet, roadmap or recommendation strip,
+  anything due for revision gets a `revise` badge next to its title; opening one brings up the
+  rating panel right there. This works whether or not sync is switched on.
 - **Ranks your weak topics.** Mastery per tag is computed from how far each problem has climbed
   the ladder, how often you forgot it on review, and how many attempts it took to get accepted
   the first time — so "dynamic programming: 34" is a claim backed by your own history.
@@ -81,7 +84,16 @@ Two rows are written per accepted problem:
 - `code_submissions` — an `Accepted` row, which is what Parikshaa reads to mark a problem
   solved everywhere it appears.
 
-Details worth knowing:
+### Due problems, marked in place
+
+Separately from sync — and without it being switched on — every Parikshaa list that links to
+`/library/problems/<slug>` gets its due problems badged. That covers sheets, the curriculum
+sidebar, recommendation strips and roadmaps at once, because the badge keys off the route
+rather than any one component's markup, and a card's "Solve" button is skipped so only the
+title carries it. Opening a due problem shows the four rating buttons in the corner, so a
+revision can be closed out without leaving the page.
+
+### Details worth knowing
 
 - **LeetCode only.** Parikshaa problems are matched by LeetCode slug, so Codeforces
   submissions are marked `skipped` rather than sent on a lookup that cannot match.

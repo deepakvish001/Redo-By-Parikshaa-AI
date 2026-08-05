@@ -189,6 +189,20 @@ async function handle(request: Request): Promise<unknown> {
       return { accepted: true, flushed };
     }
 
+    case 'due:list': {
+      const problems = await getProblemList();
+      return {
+        problems: dueProblems(problems, Date.now()).map((problem) => ({
+          id: problem.id,
+          slug: problem.slug,
+          title: problem.title,
+          platform: problem.platform,
+          dueAt: problem.revision.dueAt,
+          stage: problem.revision.stage,
+        })),
+      };
+    }
+
     case 'parikshaa:status': {
       const [credentials, problems] = await Promise.all([
         getParikshaaCredentials(),

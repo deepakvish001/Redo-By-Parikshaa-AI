@@ -25,7 +25,8 @@ export type Request =
   | { type: 'settings:save'; patch: Partial<Settings> }
   | { type: 'github:verify'; config: Settings['github'] }
   | { type: 'parikshaa:credentials'; credentials: ParikshaaCredentials }
-  | { type: 'parikshaa:status' };
+  | { type: 'parikshaa:status' }
+  | { type: 'due:list' };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -40,6 +41,17 @@ export interface ResponseMap {
   'github:verify': RepoInfo;
   'parikshaa:credentials': { accepted: boolean; flushed: number };
   'parikshaa:status': ParikshaaStatus;
+  'due:list': { problems: DueProblem[] };
+}
+
+/** Slim view of a due problem, enough to decorate a link on another site. */
+export interface DueProblem {
+  id: string;
+  slug: string;
+  title: string;
+  platform: string;
+  dueAt: number;
+  stage: number;
 }
 
 export interface ParikshaaStatus {

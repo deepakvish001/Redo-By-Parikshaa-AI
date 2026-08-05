@@ -9,6 +9,7 @@
 
 import { credentialsFromSession, readStoredSession } from '../core/parikshaa.ts';
 import { send } from '../core/messages.ts';
+import { startHighlighting } from './parikshaa-highlight.ts';
 
 const CHANNEL = 'dsa-revision-buddy-parikshaa';
 
@@ -44,3 +45,7 @@ window.addEventListener('message', (event: MessageEvent<{ channel?: string; apiK
 setInterval(() => void publish(), 60_000);
 window.addEventListener('focus', () => void publish());
 void publish();
+
+// Independent of the credential bridge: due problems are marked in Parikshaa's
+// own lists whether or not sync is switched on.
+startHighlighting();
