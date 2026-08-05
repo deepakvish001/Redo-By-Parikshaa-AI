@@ -12,17 +12,37 @@
 
 const CHANNEL = 'dsa-revision-buddy-parikshaa';
 
-let relayed = '';
+/**
+ * The last key seen, kept so it can be handed over on request.
+ *
+ * This script starts at `document_start` but the content script that consumes
+ * the key only runs at `document_idle`, and the page's first Supabase call
+ * usually lands in between. Broadcasting once would therefore lose the key to
+ * an audience that does not exist yet, so the value is retained and replayed
+ * whenever the other side asks for it.
+ */
+let lastKey = '';
 
-function relay(apiKey: string): void {
-  if (!apiKey || apiKey === relayed) return;
-  relayed = apiKey;
+function post(apiKey: string): void {
   try {
     window.postMessage({ channel: CHANNEL, kind: 'apikey', apiKey }, window.location.origin);
   } catch {
     /* never break the host page */
   }
 }
+
+function relay(apiKey: string): void {
+  if (!apiKey) return;
+  const changed = apiKey !== lastKey;
+  lastKey = apiKey;
+  if (changed) post(apiKey);
+}
+
+window.addEventListener('message', (event: MessageEvent<{ channel?: string; kind?: string }>) => {
+  if (event.source !== window) return;
+  if (event.data?.channel !== CHANNEL || event.data.kind !== 'request-apikey') return;
+  if (lastKey) post(lastKey);
+});
 
 function readApiKey(headers: HeadersInit | undefined): string {
   if (!headers) return '';

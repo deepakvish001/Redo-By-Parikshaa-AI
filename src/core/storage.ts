@@ -6,6 +6,7 @@ const KEYS = {
   problems: 'problems',
   meta: 'meta',
   parikshaaCredentials: 'parikshaaCredentials',
+  parikshaaApiKey: 'parikshaaApiKey',
 } as const;
 
 /** Aggregate counters that do not belong to any single problem. */
@@ -127,6 +128,20 @@ export async function saveParikshaaCredentials(
 
 export async function clearParikshaaCredentials(): Promise<void> {
   await chrome.storage.local.remove(KEYS.parikshaaCredentials);
+}
+
+/**
+ * Parikshaa's publishable API key, observed once and kept so later visits do
+ * not depend on catching a request in flight. It is public by design — it
+ * ships in the site's own JavaScript — and grants nothing without a user
+ * session alongside it.
+ */
+export async function getParikshaaApiKey(): Promise<string | undefined> {
+  return readKey<string | undefined>(KEYS.parikshaaApiKey, undefined);
+}
+
+export async function saveParikshaaApiKey(apiKey: string): Promise<void> {
+  await chrome.storage.local.set({ [KEYS.parikshaaApiKey]: apiKey });
 }
 
 export async function getMeta(): Promise<Meta> {

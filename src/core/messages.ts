@@ -57,6 +57,13 @@ export interface DueProblem {
 export interface ParikshaaStatus {
   connected: boolean;
   expired: boolean;
+  /**
+   * The two halves are reported separately because they fail for different
+   * reasons: no key means the extension has not seen parikshaa.org load yet,
+   * no session means the user is not signed in there.
+   */
+  hasApiKey: boolean;
+  hasSession: boolean;
   email?: string;
   capturedAt?: number;
   /** Problems waiting on a usable session. */

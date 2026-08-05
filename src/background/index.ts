@@ -6,6 +6,7 @@ import { isExpired } from '../core/parikshaa.ts';
 import {
   deleteProblem,
   getMeta,
+  getParikshaaApiKey,
   getParikshaaCredentials,
   getProblem,
   getProblemList,
@@ -204,13 +205,16 @@ async function handle(request: Request): Promise<unknown> {
     }
 
     case 'parikshaa:status': {
-      const [credentials, problems] = await Promise.all([
+      const [credentials, apiKey, problems] = await Promise.all([
         getParikshaaCredentials(),
+        getParikshaaApiKey(),
         getProblemList(),
       ]);
       return {
         connected: Boolean(credentials),
         expired: credentials ? isExpired(credentials, Date.now()) : false,
+        hasApiKey: Boolean(apiKey),
+        hasSession: Boolean(credentials?.accessToken),
         email: credentials?.email,
         capturedAt: credentials?.capturedAt,
         pending: problems.filter((problem) => problem.parikshaa?.status === 'pending').length,

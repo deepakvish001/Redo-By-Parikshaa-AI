@@ -106,6 +106,11 @@ revision can be closed out without leaving the page.
 - **No project keys ship in this extension.** The REST endpoint and your user id are read
   from the session token's own claims, and the publishable API key is observed from a request
   the site already makes. Nothing Parikshaa-specific is hard-coded beyond the domain name.
+  That key is cached after the first visit, so later sessions do not depend on catching a
+  request while the tab happens to be open.
+- **If "Check connection" says nothing has arrived**, reload a parikshaa.org tab while signed
+  in. The message distinguishes the two failures: not having seen the site at all, versus
+  having seen it but finding no signed-in session.
 - Only languages Parikshaa's editor supports (Python, C++, Java, JavaScript, TypeScript, C,
   Go, SQL) can be stored; anything else is skipped with a reason shown in the popup.
 

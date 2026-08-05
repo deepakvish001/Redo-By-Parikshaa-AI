@@ -83,10 +83,15 @@ export function App() {
   const refreshParikshaa = async () => {
     try {
       const status = await send({ type: 'parikshaa:status' });
+
+      // The two halves arrive from the same content script but fail for
+      // different reasons, so say which one is actually missing.
       if (!status.connected) {
         setParikshaaStatus({
           tone: 'error',
-          message: 'No Parikshaa session yet. Open parikshaa.org, sign in, and check again.',
+          message: status.hasApiKey
+            ? 'Parikshaa is reachable, but no signed-in session was found. Sign in at parikshaa.org, then check again.'
+            : 'Nothing from parikshaa.org yet. Open (or reload) a parikshaa.org tab while signed in, then check again.',
         });
         return;
       }
