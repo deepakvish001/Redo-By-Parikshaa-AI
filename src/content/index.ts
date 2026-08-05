@@ -65,7 +65,7 @@ function main(): void {
       // accepted submission; nothing to show for a failed verdict.
     },
     onError: (message) => {
-      showToast({ title: 'DSA Revision Buddy', body: message, tone: 'error' });
+      showToast({ title: 'Smriti', body: message, tone: 'error' });
     },
   });
 

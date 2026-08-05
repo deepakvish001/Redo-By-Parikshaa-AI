@@ -13,7 +13,7 @@ import { showReviewPanel } from './review-panel.ts';
 import { showToast } from './toast.ts';
 
 const PROBLEM_HREF = /\/library\/problems\/([^/?#]+)/;
-const MARKER = 'data-drb-due';
+const MARKER = 'data-smriti-due';
 
 /**
  * Links whose text is a call to action rather than the problem's name — a card
@@ -57,7 +57,7 @@ function badgeFor(problem: DueProblem, now: number): HTMLSpanElement {
   badge.setAttribute('style', BADGE_STYLE);
   const overdue = problem.dueAt <= now;
   badge.textContent = overdue ? 'revise' : 'due soon';
-  badge.title = `DSA Revision Buddy — ${formatDueIn(problem.dueAt, now)} (stage ${problem.stage + 1})`;
+  badge.title = `Smriti — ${formatDueIn(problem.dueAt, now)} (stage ${problem.stage + 1})`;
   return badge;
 }
 

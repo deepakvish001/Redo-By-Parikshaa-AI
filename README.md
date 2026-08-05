@@ -1,6 +1,6 @@
-# DSA Revision Buddy
+# Smriti
 
-A Chrome extension for people who grind DSA and then forget it.
+**स्मृति — memory.** A Chrome extension for people who grind DSA and then forget it.
 
 When a submission is accepted on **LeetCode, Codeforces, AtCoder, CodeChef, HackerRank** or
 **GeeksforGeeks**, the extension commits the solution to a GitHub repository you own, ticks the
@@ -46,6 +46,16 @@ Solving is the easy part. Remembering three months later is the part nothing els
   programming: 34" is a claim backed by your own history.
 - **Runs entirely locally.** No backend, no account, no telemetry. The only network calls are to
   the sites you are already on and to the GitHub repository you configured.
+
+## Contest Radar
+
+Upcoming contests from **Codeforces, LeetCode, CodeChef** and **AtCoder** are gathered into one
+list in the popup, each with a countdown, its duration, a link to the contest and a one-click
+Google Calendar entry. A notification fires a configurable number of minutes before the start.
+
+Each source is fetched independently, so a judge being down costs you that judge's contests and
+nothing else — the popup says which one it could not reach. Listings refresh every few hours
+rather than being polled, and reminders are checked every quarter hour.
 
 ## Install
 
@@ -255,16 +265,30 @@ watches — it never alters a request.
 ## Development
 
 ```bash
-npm run dev        # rebuild on change
-npm run typecheck  # tsc --noEmit
-npm test           # unit tests for the scheduler, paths, analytics and markdown
-npm run build      # production build into dist/
-npm run icons      # regenerate the PNG icons from scripts/generate-icons.mjs
+npm run dev          # rebuild on change
+npm run typecheck    # tsc --noEmit
+npm test             # unit tests: scheduler, adapters, analytics, hints, contests, markdown
+npm run build        # production build into dist/
+npm run package      # build, validate against the store's rules, and zip for upload
+npm run screenshots  # regenerate the 1280x800 store screenshots
+npm run icons        # regenerate the PNG icons
 ```
+
+## Publishing
+
+`docs/store-listing.md` holds the listing copy, the single-purpose statement and a
+justification for every permission, ready to paste into the developer console.
+`npm run package` refuses to build a zip the store would reject — mismatched versions, an
+over-long description, a missing icon, or a manifest referencing a file that is not in the
+package.
+
+The privacy policy lives in [`PRIVACY.md`](PRIVACY.md). The short version: no server, no
+account, no analytics, and the only data that leaves the browser goes to the GitHub repository
+you name and, optionally, your own Parikshaa account.
 
 ```
 src/
-├── core/        # pure logic: SRS scheduler, analytics, GitHub + Parikshaa clients, storage
+├── core/        # pure logic: scheduler, analytics, hints, contests, GitHub + Parikshaa clients
 ├── adapters/    # one file per platform, behind a shared interface
 ├── content/     # shared submission observer, Parikshaa bridge, in-page UI
 ├── background/  # service worker: message routing, sync queues, badge, alarms

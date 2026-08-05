@@ -1,10 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "DSA Revision Buddy",
-  "version": "0.1.0",
-  "description": "Auto-commits your accepted LeetCode/Codeforces solutions to GitHub and schedules them for spaced-repetition revision.",
+  "name": "Smriti \u2014 DSA revision that sticks",
+  "version": "1.0.0",
+  "description": "Commit your accepted DSA solutions to GitHub, then actually remember them with spaced repetition and weak-topic analytics.",
   "minimum_chrome_version": "111",
-  "permissions": ["storage", "alarms", "notifications"],
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications"
+  ],
   "host_permissions": [
     "https://leetcode.com/*",
     "https://leetcode.cn/*",
@@ -24,7 +28,7 @@
   },
   "action": {
     "default_popup": "popup/index.html",
-    "default_title": "DSA Revision Buddy",
+    "default_title": "Smriti",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",
@@ -48,7 +52,9 @@
         "https://www.hackerrank.com/*",
         "https://www.geeksforgeeks.org/problems/*"
       ],
-      "js": ["observer.js"],
+      "js": [
+        "observer.js"
+      ],
       "world": "MAIN",
       "run_at": "document_start",
       "all_frames": false
@@ -63,22 +69,35 @@
         "https://www.hackerrank.com/*",
         "https://www.geeksforgeeks.org/problems/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     },
     {
-      "matches": ["https://parikshaa.org/*", "https://www.parikshaa.org/*"],
-      "js": ["parikshaa-injected.js"],
+      "matches": [
+        "https://parikshaa.org/*",
+        "https://www.parikshaa.org/*"
+      ],
+      "js": [
+        "parikshaa-injected.js"
+      ],
       "world": "MAIN",
       "run_at": "document_start",
       "all_frames": false
     },
     {
-      "matches": ["https://parikshaa.org/*", "https://www.parikshaa.org/*"],
-      "js": ["parikshaa.js"],
+      "matches": [
+        "https://parikshaa.org/*",
+        "https://www.parikshaa.org/*"
+      ],
+      "js": [
+        "parikshaa.js"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     }
-  ]
+  ],
+  "short_name": "Smriti"
 }

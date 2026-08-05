@@ -30,6 +30,11 @@ export const DEFAULT_SETTINGS: Settings = {
   parikshaa: {
     enabled: false,
   },
+  contests: {
+    remind: true,
+    leadMinutes: 60,
+    platforms: { codeforces: true, leetcode: true, codechef: true, atcoder: true },
+  },
   revision: {
     intervals: [1, 3, 7, 21, 45, 90],
     skipEasy: false,
@@ -61,6 +66,11 @@ export async function getSettings(): Promise<Settings> {
   return {
     github: { ...DEFAULT_SETTINGS.github, ...stored.github },
     parikshaa: { ...DEFAULT_SETTINGS.parikshaa, ...stored.parikshaa },
+    contests: {
+      ...DEFAULT_SETTINGS.contests,
+      ...stored.contests,
+      platforms: { ...DEFAULT_SETTINGS.contests.platforms, ...stored.contests?.platforms },
+    },
     revision: { ...DEFAULT_SETTINGS.revision, ...stored.revision },
     platforms: { ...DEFAULT_SETTINGS.platforms, ...stored.platforms } as Record<Platform, boolean>,
   };
@@ -71,6 +81,7 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
   const next: Settings = {
     github: { ...current.github, ...patch.github },
     parikshaa: { ...current.parikshaa, ...patch.parikshaa },
+    contests: { ...current.contests, ...patch.contests },
     revision: { ...current.revision, ...patch.revision },
     platforms: { ...current.platforms, ...patch.platforms },
   };

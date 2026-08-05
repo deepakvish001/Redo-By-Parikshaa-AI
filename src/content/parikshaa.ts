@@ -12,7 +12,7 @@ import { getParikshaaApi, saveParikshaaApi } from '../core/storage.ts';
 import { send } from '../core/messages.ts';
 import { startHighlighting } from './parikshaa-highlight.ts';
 
-const CHANNEL = 'dsa-revision-buddy-parikshaa';
+const CHANNEL = 'smriti-parikshaa';
 
 let apiKey = '';
 /** Supabase origin the page uses — decides which stored session is the right one. */

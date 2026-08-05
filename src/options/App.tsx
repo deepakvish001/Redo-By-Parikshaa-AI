@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react';
 import { send } from '../core/messages.ts';
 import type { SessionDiagnostic } from '../core/parikshaa.ts';
 import { DEFAULT_SETTINGS } from '../core/storage.ts';
-import { PLATFORMS, PLATFORM_LABELS, type Settings } from '../core/types.ts';
+import { PLATFORMS, PLATFORM_LABELS, type Platform, type Settings } from '../core/types.ts';
 
 type Status = { tone: 'ok' | 'error'; message: string } | null;
+
+/** The judges that publish a contest schedule we can read. */
+const CONTEST_PLATFORMS: Platform[] = ['codeforces', 'leetcode', 'codechef', 'atcoder'];
 
 /** Accepts "1, 3, 7" and similar, dropping anything that is not a positive day count. */
 function parseIntervals(text: string): number[] {
@@ -76,6 +79,7 @@ function Toggle({
 export function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [intervalsText, setIntervalsText] = useState('');
+  const [leadText, setLeadText] = useState('');
   const [saveStatus, setSaveStatus] = useState<Status>(null);
   const [verifyStatus, setVerifyStatus] = useState<Status>(null);
   const [parikshaaStatus, setParikshaaStatus] = useState<Status>(null);
@@ -86,6 +90,7 @@ export function App() {
       const loaded = await send({ type: 'settings:get' });
       setSettings(loaded);
       setIntervalsText(loaded.revision.intervals.join(', '));
+      setLeadText(String(loaded.contests.leadMinutes));
     })();
   }, []);
 
@@ -103,12 +108,22 @@ export function App() {
       return;
     }
     try {
+      const lead = Number.parseInt(leadText, 10);
       const saved = await send({
         type: 'settings:save',
-        patch: { ...settings, revision: { ...settings.revision, intervals } },
+        patch: {
+          ...settings,
+          revision: { ...settings.revision, intervals },
+          contests: {
+            ...settings.contests,
+            // An unreadable value keeps the current setting rather than becoming NaN.
+            leadMinutes: Number.isFinite(lead) && lead > 0 ? lead : settings.contests.leadMinutes,
+          },
+        },
       });
       setSettings(saved);
       setIntervalsText(saved.revision.intervals.join(', '));
+      setLeadText(String(saved.contests.leadMinutes));
       setSaveStatus({ tone: 'ok', message: 'Saved.' });
     } catch (error) {
       setSaveStatus({
@@ -181,7 +196,7 @@ export function App() {
   return (
     <div className="page">
       <header>
-        <h1>DSA Revision Buddy</h1>
+        <h1>Smriti</h1>
         <p className="page__intro">
           Accepted solutions on LeetCode and Codeforces get committed to a GitHub repository,
           ticked off on Parikshaa, and scheduled for spaced-repetition revision. Everything is
@@ -356,6 +371,53 @@ export function App() {
           label="Show a notification when problems are due"
           hint="Checked twice a day. The toolbar badge always shows the count."
         />
+      </section>
+
+      <section className="panel">
+        <h2 className="panel__title">Contests</h2>
+        <p className="panel__hint">
+          Upcoming contests from Codeforces, LeetCode, CodeChef and AtCoder are gathered into one
+          list in the popup, with a link to add any of them to your calendar. Listings are
+          re-fetched every few hours, not polled.
+        </p>
+
+        <Toggle
+          checked={settings.contests.remind}
+          onChange={(remind) =>
+            setSettings({ ...settings, contests: { ...settings.contests, remind } })
+          }
+          label="Notify me before a contest starts"
+        />
+
+        <div className="field">
+          <label className="field__label" htmlFor="lead">
+            Warn me this many minutes ahead
+          </label>
+          <input
+            id="lead"
+            type="text"
+            value={leadText}
+            onChange={(event) => setLeadText(event.target.value)}
+            placeholder="60"
+          />
+        </div>
+
+        {CONTEST_PLATFORMS.map((platform) => (
+          <Toggle
+            key={platform}
+            checked={settings.contests.platforms[platform] !== false}
+            onChange={(value) =>
+              setSettings({
+                ...settings,
+                contests: {
+                  ...settings.contests,
+                  platforms: { ...settings.contests.platforms, [platform]: value },
+                },
+              })
+            }
+            label={PLATFORM_LABELS[platform]}
+          />
+        ))}
       </section>
 
       <section className="panel">

@@ -1,9 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { send, type DashboardData } from '../core/messages.ts';
+import {
+  calendarUrl,
+  formatDuration,
+  formatStartsIn,
+  type Contest,
+} from '../core/contests.ts';
+import { send, type ContestsResponse, type DashboardData } from '../core/messages.ts';
 import { dueProblems, formatDueIn, upcomingProblems } from '../core/srs.ts';
 import type { Difficulty, Recall, SolvedProblem, TopicStat } from '../core/types.ts';
 
-type Tab = 'due' | 'all' | 'stats';
+type Tab = 'due' | 'all' | 'contests' | 'stats';
+
+const PLATFORM_SHORT: Record<string, string> = {
+  codeforces: 'CF',
+  leetcode: 'LC',
+  codechef: 'CC',
+  atcoder: 'AC',
+};
 
 const RECALLS: Array<{ recall: Recall; label: string; primary?: boolean }> = [
   { recall: 'forgot', label: 'Forgot' },
@@ -261,6 +274,40 @@ function ProblemCard({
   );
 }
 
+function ContestRow({ contest, now }: { contest: Contest; now: number }) {
+  const start = new Date(contest.startAt);
+  return (
+    <div className="card">
+      <div className="card__top">
+        <div className="card__title">{contest.name}</div>
+        <span className="chip">{PLATFORM_SHORT[contest.platform] ?? contest.platform}</span>
+      </div>
+      <div className="card__meta">
+        <span className="chip chip--ok">{formatStartsIn(contest.startAt, now)}</span>
+        <span>
+          {start.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
+          {', '}
+          {start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+        </span>
+        {contest.durationMs > 0 && (
+          <>
+            <span>·</span>
+            <span>{formatDuration(contest.durationMs)}</span>
+          </>
+        )}
+      </div>
+      <div className="card__actions">
+        <button type="button" onClick={() => openUrl(contest.url)}>
+          Open
+        </button>
+        <button type="button" onClick={() => openUrl(calendarUrl(contest))}>
+          Add to calendar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** The signals behind a topic's score, so the number is never a black box. */
 function describeTopic(topic: TopicStat): string {
   const parts = [
@@ -300,6 +347,8 @@ function TopicBars({ topics, title }: { topics: TopicStat[]; title: string }) {
 export function App() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [contests, setContests] = useState<ContestsResponse | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<Tab>('due');
 
   const load = useCallback(async () => {
@@ -314,6 +363,16 @@ export function App() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Contests are fetched only when their tab is first opened, so the popup
+  // does not wait on four judges just to show the due list.
+  useEffect(() => {
+    if (tab !== 'contests' || contests) return;
+    void send({ type: 'contests:get' })
+      .then(setContests)
+      // An unreachable service worker still needs to end the loading state.
+      .catch(() => setContests({ contests: [], fetchedAt: 0, failed: [], now: Date.now() }));
+  }, [tab, contests]);
 
   const handleReview = useCallback(
     async (id: string, recall: Recall) => {
@@ -382,7 +441,7 @@ export function App() {
   return (
     <div className="shell">
       <header className="shell__header">
-        <span className="shell__title">DSA Revision Buddy</span>
+        <span className="shell__title">Smriti</span>
         <span className="shell__spacer" />
         <button type="button" className="ghost" onClick={() => void chrome.runtime.openOptionsPage()}>
           Options
@@ -394,6 +453,7 @@ export function App() {
           [
             ['due', `Due${due.length > 0 ? ` (${due.length})` : ''}`],
             ['all', `Solved (${data.stats.total})`],
+            ['contests', 'Contests'],
             ['stats', 'Stats'],
           ] as Array<[Tab, string]>
         ).map(([value, label]) => (
@@ -481,6 +541,48 @@ export function App() {
                 />
               ))
             )}
+          </>
+        )}
+
+        {tab === 'contests' && (
+          <>
+            {!contests ? (
+              <div className="empty">Loading contests…</div>
+            ) : contests.contests.length === 0 ? (
+              <Empty title="No upcoming contests found">
+                {contests.failed.length > 0
+                  ? `Could not reach ${contests.failed.join(', ')}. Try refreshing.`
+                  : 'Nothing scheduled in the next 30 days on the judges you follow.'}
+              </Empty>
+            ) : (
+              <>
+                {contests.failed.length > 0 && (
+                  <div className="banner banner--error">
+                    Could not reach {contests.failed.join(', ')} — that judge's contests are
+                    missing from this list.
+                  </div>
+                )}
+                {contests.contests.map((contest) => (
+                  <ContestRow key={contest.id} contest={contest} now={contests.now} />
+                ))}
+              </>
+            )}
+            <div className="card__actions" style={{ marginTop: 4 }}>
+              <button
+                type="button"
+                disabled={refreshing}
+                onClick={async () => {
+                  setRefreshing(true);
+                  try {
+                    setContests(await send({ type: 'contests:refresh' }));
+                  } finally {
+                    setRefreshing(false);
+                  }
+                }}
+              >
+                {refreshing ? 'Refreshing…' : 'Refresh'}
+              </button>
+            </div>
           </>
         )}
 

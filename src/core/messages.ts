@@ -1,4 +1,5 @@
 import type { RepoInfo } from './github.ts';
+import type { Contest } from './contests.ts';
 import type { ParikshaaCredentials, SessionDiagnostic } from './parikshaa.ts';
 import type { AcceptedSubmission, Recall, Settings, SolvedProblem, Stats } from './types.ts';
 
@@ -35,7 +36,9 @@ export type Request =
   | { type: 'parikshaa:credentials'; credentials: ParikshaaCredentials }
   | { type: 'parikshaa:status' }
   | { type: 'parikshaa:diagnostic'; diagnostic: SessionDiagnostic; hasApiKey: boolean }
-  | { type: 'due:list' };
+  | { type: 'due:list' }
+  | { type: 'contests:get' }
+  | { type: 'contests:refresh' };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -55,6 +58,8 @@ export interface ResponseMap {
   'parikshaa:status': ParikshaaStatus;
   'parikshaa:diagnostic': { recorded: true };
   'due:list': { problems: DueProblem[] };
+  'contests:get': ContestsResponse;
+  'contests:refresh': ContestsResponse;
 }
 
 /** Slim view of a due problem, enough to decorate a link on another site. */
@@ -65,6 +70,14 @@ export interface DueProblem {
   platform: string;
   dueAt: number;
   stage: number;
+}
+
+export interface ContestsResponse {
+  contests: Contest[];
+  fetchedAt: number;
+  /** Sources that failed on the last refresh, so the UI can say which. */
+  failed: string[];
+  now: number;
 }
 
 export interface ParikshaaStatus {

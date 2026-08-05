@@ -116,6 +116,14 @@ export interface Settings {
     /** Mark matching problems solved on parikshaa.org. */
     enabled: boolean;
   };
+  contests: {
+    /** Show upcoming contests and notify before they start. */
+    remind: boolean;
+    /** How many minutes before the start to notify. */
+    leadMinutes: number;
+    /** Which judges' contests to gather. */
+    platforms: Partial<Record<Platform, boolean>>;
+  };
   revision: {
     /** Interval ladder in days. Stage n schedules `intervals[n]` days out. */
     intervals: number[];

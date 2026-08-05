@@ -6,7 +6,7 @@
  * the host page.
  */
 
-const HOST_ID = 'dsa-revision-buddy-root';
+const HOST_ID = 'smriti-root';
 
 const STYLES = `
 :host { all: initial; }

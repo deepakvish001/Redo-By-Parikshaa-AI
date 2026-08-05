@@ -19,11 +19,13 @@ import {
 } from '../core/storage.ts';
 import { applyRecall, dueProblems, initialRevision, isDue } from '../core/srs.ts';
 import type { AcceptedSubmission, Recall, SolvedProblem } from '../core/types.ts';
+import { getCachedContests, refreshContests, sendContestReminders } from './contests.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
 
 const BADGE_ALARM = 'refresh-badge';
 const DIGEST_ALARM = 'daily-digest';
+const CONTEST_ALARM = 'refresh-contests';
 
 /* ------------------------------------------------------------------ badge */
 
@@ -263,6 +265,21 @@ async function handle(request: Request): Promise<unknown> {
       return { accepted: true, flushed };
     }
 
+    case 'contests:get': {
+      const [cache, settings] = await Promise.all([getCachedContests(), getSettings()]);
+      // A cold or stale cache is refreshed on demand so the first open is not empty.
+      const fresh =
+        Date.now() - cache.fetchedAt > 3 * 60 * 60 * 1000
+          ? await refreshContests(settings)
+          : cache;
+      return { ...fresh, now: Date.now() };
+    }
+
+    case 'contests:refresh': {
+      const cache = await refreshContests(await getSettings());
+      return { ...cache, now: Date.now() };
+    }
+
     case 'due:list': {
       const problems = await getProblemList();
       return {
@@ -349,6 +366,8 @@ chrome.runtime.onMessage.addListener((request: Request, _sender, sendResponse) =
 chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create(BADGE_ALARM, { periodInMinutes: 30 });
   chrome.alarms.create(DIGEST_ALARM, { periodInMinutes: 60 * 12 });
+  // Contests move slowly, but reminders need a tighter tick than the refresh.
+  chrome.alarms.create(CONTEST_ALARM, { periodInMinutes: 15 });
   void refreshBadge();
   if (details.reason === 'install') void chrome.runtime.openOptionsPage();
 });
@@ -360,9 +379,32 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === BADGE_ALARM) void refreshBadge();
   if (alarm.name === DIGEST_ALARM) void sendDigest();
+  if (alarm.name === CONTEST_ALARM) void tickContests();
 });
 
-chrome.notifications.onClicked.addListener(() => {
+/**
+ * Reminders are checked every quarter hour, but the sources themselves are
+ * only re-fetched every few hours — contest listings do not change often, and
+ * four judges do not need polling.
+ */
+async function tickContests(): Promise<void> {
+  const settings = await getSettings();
+  const cache = await getCachedContests();
+  if (Date.now() - cache.fetchedAt > 3 * 60 * 60 * 1000) {
+    await refreshContests(settings);
+  }
+  await sendContestReminders(settings);
+}
+
+chrome.notifications.onClicked.addListener((notificationId) => {
+  // Contest notifications carry their own destination.
+  if (notificationId.startsWith('contest:')) {
+    void getCachedContests().then((cache) => {
+      const contest = cache.contests.find((entry) => `contest:${entry.id}` === notificationId);
+      if (contest) void chrome.tabs.create({ url: contest.url });
+    });
+    return;
+  }
   void chrome.runtime.openOptionsPage();
 });
 

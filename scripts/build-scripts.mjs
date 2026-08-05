@@ -31,7 +31,7 @@ for (const entry of entries) {
       lib: {
         entry: resolve(root, entry.file),
         formats: ['iife'],
-        name: `dsaRevisionBuddy_${entry.name}`,
+        name: `smriti_${entry.name}`,
         fileName: () => `${entry.name}.js`,
       },
       rollupOptions: {

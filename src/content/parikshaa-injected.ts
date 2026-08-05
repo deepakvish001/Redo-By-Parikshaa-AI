@@ -10,7 +10,7 @@
  * This observes; it never modifies, delays or blocks a request.
  */
 
-const CHANNEL = 'dsa-revision-buddy-parikshaa';
+const CHANNEL = 'smriti-parikshaa';
 
 /**
  * The last key seen, kept so it can be handed over on request.
