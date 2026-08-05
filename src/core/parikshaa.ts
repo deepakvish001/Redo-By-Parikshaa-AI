@@ -75,8 +75,13 @@ export interface StoredSession {
   user?: { id?: string; email?: string };
 }
 
-/** supabase-js stores the session under `sb-<project-ref>-auth-token`. */
-const SESSION_KEY = /^sb-.+-auth-token(\.\d+)?$/;
+/**
+ * supabase-js stores the session under `sb-<project-ref>-auth-token`; older
+ * releases used the literal `supabase.auth.token`. Both may be split across
+ * numbered chunks. Sibling keys like `…-auth-token-user` and
+ * `…-auth-token-code-verifier` are deliberately not matched.
+ */
+const SESSION_KEY = /^(sb-.+-auth-token|supabase\.auth\.token)(\.\d+)?$/;
 
 /**
  * Reads the session supabase-js keeps in the site's `localStorage`,
@@ -112,6 +117,53 @@ export function readStoredSession(storage: Storage): StoredSession | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Why the session read did or did not produce credentials.
+ *
+ * Deliberately carries no token, no key and no email — only the names of the
+ * storage keys involved, a handful of booleans, and the token issuer's origin
+ * (which is a public API endpoint). It exists so a failure explains itself
+ * instead of being guessed at from the outside.
+ */
+export interface SessionDiagnostic {
+  /** Names of localStorage keys that looked like a Supabase session. */
+  matchedKeys: string[];
+  /** Every key present, when nothing matched — the fastest way to spot a rename. */
+  sampleKeys?: string[];
+  parsed: boolean;
+  hasAccessToken: boolean;
+  hasIssuer: boolean;
+  hasUserId: boolean;
+  issuer?: string;
+}
+
+export function diagnoseSession(storage: Storage): SessionDiagnostic {
+  const matchedKeys: string[] = [];
+  const allKeys: string[] = [];
+
+  for (let index = 0; index < storage.length; index++) {
+    const key = storage.key(index);
+    if (!key) continue;
+    allKeys.push(key);
+    if (SESSION_KEY.test(key)) matchedKeys.push(key);
+  }
+
+  const session = readStoredSession(storage);
+  const claims = session?.access_token ? decodeJwtPayload(session.access_token) : undefined;
+  const issuer = typeof claims?.iss === 'string' ? claims.iss : undefined;
+
+  return {
+    matchedKeys,
+    // Only listed when nothing matched, and capped — this is a hint, not a dump.
+    ...(matchedKeys.length === 0 ? { sampleKeys: allKeys.slice(0, 25) } : {}),
+    parsed: Boolean(session),
+    hasAccessToken: Boolean(session?.access_token),
+    hasIssuer: Boolean(issuer),
+    hasUserId: Boolean(session?.user?.id ?? (typeof claims?.sub === 'string' ? claims.sub : '')),
+    issuer: issuer ? issuer.replace(/\/auth\/v1\/?$/, '') : undefined,
+  };
 }
 
 /** Decodes a JWT payload without verifying it — we only need its claims. */

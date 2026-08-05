@@ -7,7 +7,7 @@
  * if the user is signed in to Parikshaa, sync works; if not, it does not.
  */
 
-import { credentialsFromSession, readStoredSession } from '../core/parikshaa.ts';
+import { credentialsFromSession, diagnoseSession, readStoredSession } from '../core/parikshaa.ts';
 import { getParikshaaApiKey, saveParikshaaApiKey } from '../core/storage.ts';
 import { send } from '../core/messages.ts';
 import { startHighlighting } from './parikshaa-highlight.ts';
@@ -17,13 +17,31 @@ const CHANNEL = 'dsa-revision-buddy-parikshaa';
 let apiKey = '';
 let lastSentToken = '';
 
-async function publish(): Promise<void> {
-  if (!apiKey) return;
-  const session = readStoredSession(window.localStorage);
-  if (!session?.access_token || session.access_token === lastSentToken) return;
+/**
+ * Reports what the session read found, so a failure is diagnosable from the
+ * options page rather than from guesswork. Carries no token or key.
+ */
+async function reportDiagnostic(): Promise<void> {
+  try {
+    await send({
+      type: 'parikshaa:diagnostic',
+      diagnostic: diagnoseSession(window.localStorage),
+      hasApiKey: Boolean(apiKey),
+    });
+  } catch {
+    /* the service worker may be asleep */
+  }
+}
 
-  const credentials = credentialsFromSession(session, apiKey, Date.now());
-  if (!credentials) return;
+async function publish(): Promise<void> {
+  const session = readStoredSession(window.localStorage);
+  const credentials = session ? credentialsFromSession(session, apiKey, Date.now()) : undefined;
+
+  if (!credentials) {
+    await reportDiagnostic();
+    return;
+  }
+  if (credentials.accessToken === lastSentToken) return;
 
   try {
     await send({ type: 'parikshaa:credentials', credentials });
@@ -68,6 +86,11 @@ async function start(): Promise<void> {
     setTimeout(() => {
       if (!apiKey) requestApiKey();
     }, delay);
+  }
+
+  // Sign-in happens after load, so re-read for a while rather than once.
+  for (const delay of [1000, 3000, 8000, 20_000]) {
+    setTimeout(() => void publish(), delay);
   }
 }
 

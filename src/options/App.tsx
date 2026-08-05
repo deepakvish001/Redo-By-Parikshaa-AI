@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { send } from '../core/messages.ts';
+import type { SessionDiagnostic } from '../core/parikshaa.ts';
 import { DEFAULT_SETTINGS } from '../core/storage.ts';
 import { PLATFORMS, PLATFORM_LABELS, type Settings } from '../core/types.ts';
 
@@ -11,6 +12,35 @@ function parseIntervals(text: string): number[] {
     .split(/[,\s]+/)
     .map((part) => Number.parseInt(part, 10))
     .filter((value) => Number.isFinite(value) && value > 0);
+}
+
+/**
+ * Turns the content script's report into something actionable. Each branch is
+ * a genuinely different failure with a genuinely different fix.
+ */
+function describeSessionRead(diagnostic: SessionDiagnostic | undefined): string {
+  if (!diagnostic) {
+    return 'The parikshaa.org page has not reported in yet — reload that tab and check again.';
+  }
+  if (diagnostic.matchedKeys.length === 0) {
+    const sample = diagnostic.sampleKeys?.slice(0, 6).join(', ');
+    return `No Supabase session was stored on the page${
+      sample ? ` (it holds: ${sample}…)` : ''
+    }. If you are signed in there, you may be signed in on a different parikshaa.org subdomain than the tab that was open.`;
+  }
+  if (!diagnostic.parsed) {
+    return `Found ${diagnostic.matchedKeys.join(', ')}, but its contents could not be read.`;
+  }
+  if (!diagnostic.hasAccessToken) {
+    return `Found ${diagnostic.matchedKeys.join(', ')}, but it holds no access token — the session has been signed out.`;
+  }
+  if (!diagnostic.hasIssuer) {
+    return 'The stored token carries no issuer claim, so the API endpoint cannot be derived from it.';
+  }
+  if (!diagnostic.hasUserId) {
+    return 'The stored token carries no user id.';
+  }
+  return 'The session looked complete but was not accepted — please report this.';
 }
 
 function Toggle({
@@ -85,12 +115,13 @@ export function App() {
       const status = await send({ type: 'parikshaa:status' });
 
       // The two halves arrive from the same content script but fail for
-      // different reasons, so say which one is actually missing.
+      // different reasons, so say which one is actually missing — and when the
+      // session is the missing half, say what the read actually found.
       if (!status.connected) {
         setParikshaaStatus({
           tone: 'error',
           message: status.hasApiKey
-            ? 'Parikshaa is reachable, but no signed-in session was found. Sign in at parikshaa.org, then check again.'
+            ? `No signed-in session found. ${describeSessionRead(status.diagnostic)}`
             : 'Nothing from parikshaa.org yet. Open (or reload) a parikshaa.org tab while signed in, then check again.',
         });
         return;

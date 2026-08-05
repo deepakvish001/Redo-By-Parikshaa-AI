@@ -1,5 +1,5 @@
 import type { RepoInfo } from './github.ts';
-import type { ParikshaaCredentials } from './parikshaa.ts';
+import type { ParikshaaCredentials, SessionDiagnostic } from './parikshaa.ts';
 import type { AcceptedSubmission, Recall, Settings, SolvedProblem, Stats } from './types.ts';
 
 export interface DashboardData {
@@ -26,6 +26,7 @@ export type Request =
   | { type: 'github:verify'; config: Settings['github'] }
   | { type: 'parikshaa:credentials'; credentials: ParikshaaCredentials }
   | { type: 'parikshaa:status' }
+  | { type: 'parikshaa:diagnostic'; diagnostic: SessionDiagnostic; hasApiKey: boolean }
   | { type: 'due:list' };
 
 export interface ResponseMap {
@@ -41,6 +42,7 @@ export interface ResponseMap {
   'github:verify': RepoInfo;
   'parikshaa:credentials': { accepted: boolean; flushed: number };
   'parikshaa:status': ParikshaaStatus;
+  'parikshaa:diagnostic': { recorded: true };
   'due:list': { problems: DueProblem[] };
 }
 
@@ -68,6 +70,9 @@ export interface ParikshaaStatus {
   capturedAt?: number;
   /** Problems waiting on a usable session. */
   pending: number;
+  /** Last report from the parikshaa.org content script, when one has run. */
+  diagnostic?: SessionDiagnostic;
+  diagnosticAt?: number;
 }
 
 export type Response<T extends Request['type']> =

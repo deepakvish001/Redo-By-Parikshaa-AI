@@ -2,7 +2,7 @@ import { computeStats, dayKey } from '../core/analytics.ts';
 import { verifyAccess } from '../core/github.ts';
 import type { Request, Response, ResponseMap } from '../core/messages.ts';
 import { problemKey } from '../core/paths.ts';
-import { isExpired } from '../core/parikshaa.ts';
+import { isExpired, type SessionDiagnostic } from '../core/parikshaa.ts';
 import {
   deleteProblem,
   getMeta,
@@ -204,13 +204,26 @@ async function handle(request: Request): Promise<unknown> {
       };
     }
 
+    case 'parikshaa:diagnostic': {
+      await chrome.storage.local.set({
+        parikshaaDiagnostic: { ...request.diagnostic, at: Date.now() },
+      });
+      return { recorded: true };
+    }
+
     case 'parikshaa:status': {
-      const [credentials, apiKey, problems] = await Promise.all([
+      const [credentials, apiKey, problems, stored] = await Promise.all([
         getParikshaaCredentials(),
         getParikshaaApiKey(),
         getProblemList(),
+        chrome.storage.local.get('parikshaaDiagnostic'),
       ]);
+      const recorded = stored.parikshaaDiagnostic as
+        | (SessionDiagnostic & { at: number })
+        | undefined;
       return {
+        diagnostic: recorded,
+        diagnosticAt: recorded?.at,
         connected: Boolean(credentials),
         expired: credentials ? isExpired(credentials, Date.now()) : false,
         hasApiKey: Boolean(apiKey),
