@@ -28,6 +28,39 @@ export function isObserved(url: string): boolean {
 
 export const OBSERVER_CHANNEL = 'redo-observer';
 
+/**
+ * A request the observer saw but did not relay in full.
+ *
+ * Only the origin and path travel — never the query, never a body. It exists
+ * so a user can tell us which endpoints their judge actually calls when
+ * detection fails, without that turning into a traffic dump.
+ */
+export interface ObservedGlimpse {
+  channel: typeof OBSERVER_CHANNEL;
+  kind: 'seen';
+  method: string;
+  path: string;
+  matched: boolean;
+  at: number;
+}
+
+/** Turns the observer's path reporting on or off from the isolated world. */
+export interface DiagnosticsToggle {
+  channel: typeof OBSERVER_CHANNEL;
+  kind: 'diagnostics';
+  enabled: boolean;
+}
+
+/** Origin + path only — the query string can carry identifiers. */
+export function summarisePath(url: string, base: string): string {
+  try {
+    const parsed = new URL(url, base);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return url.split('?')[0] ?? url;
+  }
+}
+
 /** One request/response pair seen by the observer. */
 export interface ObservedExchange {
   channel: typeof OBSERVER_CHANNEL;

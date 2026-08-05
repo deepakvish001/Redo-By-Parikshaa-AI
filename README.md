@@ -236,6 +236,18 @@ registering it in `src/adapters/index.ts` — the rest of the pipeline is platfo
 the judge polls an API, add its URL to `OBSERVED_URLS` and the adapter only has to interpret
 the payload.
 
+### When a submission is not detected
+
+LeetCode is watched two ways at once: the API observer above, and the verdict the page renders
+(`[data-e2e-locator="submission-result"]`). The second route exists because the first depends on
+LeetCode continuing to poll the endpoint it polls today, and that has changed before — the
+rendered verdict has to exist however the site fetches it. When the DOM route fires, the
+submission id is recovered from LeetCode's own submission list.
+
+If something still slips through, turn on **Diagnostics** in options, solve a problem, and copy
+the log. It lists which requests the page made and whether any matched, which turns "it did not
+work" into a specific endpoint. The log carries paths only — no bodies, no code.
+
 ### How much to trust each adapter
 
 The LeetCode and Codeforces paths follow long-stable, widely-documented endpoints. The

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { send } from '../core/messages.ts';
+import { send, type DiagnosticEntry } from '../core/messages.ts';
 import type { SessionDiagnostic } from '../core/parikshaa.ts';
 import { DEFAULT_SETTINGS } from '../core/storage.ts';
 import { PLATFORMS, PLATFORM_LABELS, type Platform, type Settings } from '../core/types.ts';
@@ -54,6 +54,17 @@ function describeSessionRead(diagnostic: SessionDiagnostic | undefined): string 
   return 'The session looked complete but was not accepted — please report this.';
 }
 
+/** One line per event, oldest first — readable when pasted into a message. */
+function formatLog(entries: DiagnosticEntry[]): string {
+  return entries
+    .map((entry) => {
+      const time = new Date(entry.at).toLocaleTimeString();
+      const flag = entry.kind === 'seen' ? (entry.matched ? '[match] ' : '        ') : '';
+      return `${time}  ${entry.platform.padEnd(14)} ${entry.kind.padEnd(9)} ${flag}${entry.detail}`;
+    })
+    .join('\n');
+}
+
 function Toggle({
   checked,
   onChange,
@@ -84,6 +95,16 @@ export function App() {
   const [verifyStatus, setVerifyStatus] = useState<Status>(null);
   const [parikshaaStatus, setParikshaaStatus] = useState<Status>(null);
   const [verifying, setVerifying] = useState(false);
+  const [log, setLog] = useState<DiagnosticEntry[]>([]);
+
+  const loadLog = async () => {
+    try {
+      const { entries } = await send({ type: 'diagnostics:get' });
+      setLog(entries);
+    } catch {
+      /* the service worker may be starting up */
+    }
+  };
 
   useEffect(() => {
     void (async () => {
@@ -91,6 +112,7 @@ export function App() {
       setSettings(loaded);
       setIntervalsText(loaded.revision.intervals.join(', '));
       setLeadText(String(loaded.contests.leadMinutes));
+      if (loaded.diagnostics.enabled) await loadLog();
     })();
   }, []);
 
@@ -374,6 +396,50 @@ export function App() {
           label="Show a notification when problems are due"
           hint="Checked twice a day. The toolbar badge always shows the count."
         />
+      </section>
+
+      <section className="section-card">
+        <h2 className="section-card__title">Diagnostics</h2>
+        <p className="section-card__hint">
+          If a solved problem does not show up, turn this on, solve one, then copy the log below
+          and send it over. It records which requests the judge made and whether any of them
+          matched — <strong>paths only</strong>, never a request body, a response or your code.
+        </p>
+
+        <Toggle
+          checked={settings.diagnostics.enabled}
+          onChange={(enabled) => setSettings({ ...settings, diagnostics: { enabled } })}
+          label="Record what the extension sees on the judges"
+          hint="Save, then reload the judge's tab for it to take effect."
+        />
+
+        <div className="actions">
+          <button type="button" onClick={() => void loadLog()}>
+            Refresh log
+          </button>
+          <button
+            type="button"
+            disabled={log.length === 0}
+            onClick={() => void navigator.clipboard.writeText(formatLog(log))}
+          >
+            Copy {log.length > 0 ? `(${log.length} lines)` : ''}
+          </button>
+          <button
+            type="button"
+            className="ghost danger"
+            disabled={log.length === 0}
+            onClick={async () => {
+              await send({ type: 'diagnostics:clear' });
+              setLog([]);
+            }}
+          >
+            Clear
+          </button>
+        </div>
+
+        {log.length > 0 && (
+          <pre className="log">{formatLog(log.slice(-60))}</pre>
+        )}
       </section>
 
       <section className="section-card">

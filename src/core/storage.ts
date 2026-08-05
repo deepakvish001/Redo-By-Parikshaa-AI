@@ -30,6 +30,9 @@ export const DEFAULT_SETTINGS: Settings = {
   parikshaa: {
     enabled: false,
   },
+  diagnostics: {
+    enabled: false,
+  },
   contests: {
     remind: true,
     leadMinutes: 60,
@@ -66,6 +69,7 @@ export async function getSettings(): Promise<Settings> {
   return {
     github: { ...DEFAULT_SETTINGS.github, ...stored.github },
     parikshaa: { ...DEFAULT_SETTINGS.parikshaa, ...stored.parikshaa },
+    diagnostics: { ...DEFAULT_SETTINGS.diagnostics, ...stored.diagnostics },
     contests: {
       ...DEFAULT_SETTINGS.contests,
       ...stored.contests,
@@ -81,6 +85,7 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
   const next: Settings = {
     github: { ...current.github, ...patch.github },
     parikshaa: { ...current.parikshaa, ...patch.parikshaa },
+    diagnostics: { ...current.diagnostics, ...patch.diagnostics },
     contests: { ...current.contests, ...patch.contests },
     revision: { ...current.revision, ...patch.revision },
     platforms: { ...current.platforms, ...patch.platforms },

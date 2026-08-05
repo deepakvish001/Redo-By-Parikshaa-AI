@@ -64,6 +64,15 @@ Redo observes network requests on the supported judges to learn when a submissio
 The observed URLs are restricted to each judge's submission endpoints. It never modifies,
 blocks or delays a request, and it does not read pages on any other site.
 
+## Diagnostics (off by default)
+
+If a solved problem is not detected, you can turn on **Diagnostics** in options. While it is on,
+Redo records a log of the requests the judge's page made and whether any of them matched what it
+watches for. The log holds **only the origin and path** of each request — never a query string, a
+request body, a response, or your source code — plus the events the extension itself produced.
+It lives in your browser, is shown in options with a Copy button so you choose whether to share
+it, and can be cleared at any time. It is not sent anywhere automatically.
+
 ## Deleting your data
 
 - Remove a single problem with **Remove** in the extension popup.

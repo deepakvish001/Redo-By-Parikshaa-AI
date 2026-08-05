@@ -657,3 +657,20 @@ button:focus-visible {
     transition: none !important;
   }
 }
+
+/* --------------------------------------------------------------- diagnostics */
+
+.log {
+  margin: 14px 0 0;
+  padding: 12px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre;
+}

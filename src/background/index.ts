@@ -1,6 +1,6 @@
 import { computeStats, dayKey } from '../core/analytics.ts';
 import { verifyAccess } from '../core/github.ts';
-import type { Request, Response, ResponseMap } from '../core/messages.ts';
+import type { DiagnosticEntry, Request, Response, ResponseMap } from '../core/messages.ts';
 import { problemKey } from '../core/paths.ts';
 import { isExpired, type SessionDiagnostic } from '../core/parikshaa.ts';
 import {
@@ -26,6 +26,10 @@ import { syncProblem } from './sync.ts';
 const BADGE_ALARM = 'refresh-badge';
 const DIGEST_ALARM = 'daily-digest';
 const CONTEST_ALARM = 'refresh-contests';
+
+const DIAGNOSTIC_KEY = 'detectionLog';
+/** Enough to cover a submission flow, small enough to stay in storage. */
+const DIAGNOSTIC_LIMIT = 300;
 
 /* ------------------------------------------------------------------ badge */
 
@@ -293,6 +297,30 @@ async function handle(request: Request): Promise<unknown> {
         })),
       };
     }
+
+    case 'diagnostics:record': {
+      const stored = await chrome.storage.local.get(DIAGNOSTIC_KEY);
+      const existing = (stored[DIAGNOSTIC_KEY] as DiagnosticEntry[] | undefined) ?? [];
+      // A ring buffer — a judge that polls every second must not fill storage.
+      const next = [...existing, ...request.entries].slice(-DIAGNOSTIC_LIMIT);
+      await chrome.storage.local.set({ [DIAGNOSTIC_KEY]: next });
+      return { recorded: request.entries.length };
+    }
+
+    case 'diagnostics:get': {
+      const [stored, settings] = await Promise.all([
+        chrome.storage.local.get(DIAGNOSTIC_KEY),
+        getSettings(),
+      ]);
+      return {
+        entries: (stored[DIAGNOSTIC_KEY] as DiagnosticEntry[] | undefined) ?? [],
+        enabled: settings.diagnostics.enabled,
+      };
+    }
+
+    case 'diagnostics:clear':
+      await chrome.storage.local.remove(DIAGNOSTIC_KEY);
+      return { ok: true };
 
     case 'parikshaa:diagnostic': {
       await chrome.storage.local.set({

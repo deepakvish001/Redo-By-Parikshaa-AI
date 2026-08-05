@@ -38,7 +38,10 @@ export type Request =
   | { type: 'parikshaa:diagnostic'; diagnostic: SessionDiagnostic; hasApiKey: boolean }
   | { type: 'due:list' }
   | { type: 'contests:get' }
-  | { type: 'contests:refresh' };
+  | { type: 'contests:refresh' }
+  | { type: 'diagnostics:record'; entries: DiagnosticEntry[] }
+  | { type: 'diagnostics:get' }
+  | { type: 'diagnostics:clear' };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -60,6 +63,19 @@ export interface ResponseMap {
   'due:list': { problems: DueProblem[] };
   'contests:get': ContestsResponse;
   'contests:refresh': ContestsResponse;
+  'diagnostics:record': { recorded: number };
+  'diagnostics:get': { entries: DiagnosticEntry[]; enabled: boolean };
+  'diagnostics:clear': { ok: true };
+}
+
+/** One line in the diagnostics log. Carries no request or response body. */
+export interface DiagnosticEntry {
+  at: number;
+  platform: string;
+  kind: 'page' | 'seen' | 'accepted' | 'attempt' | 'error';
+  detail: string;
+  /** For `seen`: whether the URL is one the extension acts on. */
+  matched?: boolean;
 }
 
 /** Slim view of a due problem, enough to decorate a link on another site. */

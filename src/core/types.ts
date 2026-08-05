@@ -116,6 +116,13 @@ export interface Settings {
     /** Mark matching problems solved on parikshaa.org. */
     enabled: boolean;
   };
+  diagnostics: {
+    /**
+     * Records what the observer sees on each judge, so a detection failure can
+     * be identified rather than guessed at. Off by default.
+     */
+    enabled: boolean;
+  };
   contests: {
     /** Show upcoming contests and notify before they start. */
     remind: boolean;

@@ -11,7 +11,46 @@
  * the host page working exactly as it would without the extension.
  */
 
-import { OBSERVER_CHANNEL, isObserved, type ObservedExchange } from '../adapters/observed.ts';
+import {
+  OBSERVER_CHANNEL,
+  isObserved,
+  summarisePath,
+  type DiagnosticsToggle,
+  type ObservedExchange,
+  type ObservedGlimpse,
+} from '../adapters/observed.ts';
+
+/**
+ * Off unless the user turns diagnostics on in options. When on, the observer
+ * additionally reports the path of every request it sees — which is how a
+ * judge that changed its endpoints gets identified instead of guessed at.
+ */
+let reportPaths = false;
+
+window.addEventListener('message', (event: MessageEvent<DiagnosticsToggle>) => {
+  if (event.source !== window) return;
+  if (event.data?.channel !== OBSERVER_CHANNEL || event.data.kind !== 'diagnostics') return;
+  reportPaths = event.data.enabled;
+});
+
+function glimpse(url: string, method: string, matched: boolean): void {
+  if (!reportPaths) return;
+  try {
+    window.postMessage(
+      {
+        channel: OBSERVER_CHANNEL,
+        kind: 'seen',
+        method,
+        path: summarisePath(url, window.location.href),
+        matched,
+        at: Date.now(),
+      } satisfies ObservedGlimpse,
+      window.location.origin,
+    );
+  } catch {
+    /* observation only */
+  }
+}
 
 interface EditorLike {
   getValue?: () => string;
@@ -102,7 +141,10 @@ window.fetch = async function patchedFetch(
           ? input.url
           : String(input);
 
-    if (isObserved(url)) {
+    const observed = isObserved(url);
+    glimpse(url, init?.method ?? 'GET', observed);
+
+    if (observed) {
       const method = init?.method ?? (input instanceof Request ? input.method : 'GET');
       const requestBody = bodyToString(init?.body);
       // Cloning keeps the page's own copy of the body intact.
@@ -143,6 +185,7 @@ XMLHttpRequest.prototype.open = function patchedOpen(
 
 XMLHttpRequest.prototype.send = function patchedSend(this: XMLHttpRequest, ...args: unknown[]) {
   const request = pending.get(this);
+  if (request) glimpse(request.url, request.method, isObserved(request.url));
   if (request && isObserved(request.url)) {
     request.body = bodyToString(args[0]);
     this.addEventListener('load', () => {

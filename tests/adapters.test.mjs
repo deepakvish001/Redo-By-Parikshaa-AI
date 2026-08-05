@@ -10,7 +10,7 @@ import {
   readSubmitted as readGfgSubmitted,
 } from '../src/adapters/geeksforgeeks.ts';
 import { readVerdict } from '../src/adapters/leetcode.ts';
-import { isObserved } from '../src/adapters/observed.ts';
+import { isObserved, summarisePath } from '../src/adapters/observed.ts';
 import { firstString, parseJson, pick } from '../src/adapters/exchange.ts';
 
 /* --------------------------------------------------------- shared observer */
@@ -258,4 +258,26 @@ test('GeeksforGeeks: difficulty is read from the header text', () => {
 test('GeeksforGeeks: the submit body supplies the source', () => {
   assert.equal(readGfgSubmitted(JSON.stringify({ code: 'def f(): pass' })).code, 'def f(): pass');
   assert.equal(readGfgSubmitted('code=x%3D1').code, 'x=1');
+});
+
+/* ------------------------------------------------------- diagnostic paths */
+
+test('the diagnostic report keeps the path and drops the query', () => {
+  // A query string can carry session ids and submission payloads, so only the
+  // origin and path may travel into a log the user is asked to share.
+  assert.equal(
+    summarisePath('https://leetcode.com/submissions/detail/9/check/?token=secret', 'https://leetcode.com/'),
+    'https://leetcode.com/submissions/detail/9/check/',
+  );
+  assert.equal(
+    summarisePath('/graphql/?opname=submit&sid=abc', 'https://leetcode.com/problems/two-sum/'),
+    'https://leetcode.com/graphql/',
+  );
+  // A relative path still resolves against the page it was requested from.
+  assert.equal(
+    summarisePath('/api/ide/submit', 'https://www.codechef.com/problems/FLOW001'),
+    'https://www.codechef.com/api/ide/submit',
+  );
+  // Junk must not throw — this runs inside the page's own fetch.
+  assert.equal(summarisePath('::::', 'not a url'), '::::');
 });

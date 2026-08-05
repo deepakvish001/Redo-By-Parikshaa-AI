@@ -75,6 +75,34 @@ const QUESTION_QUERY = `query questionData($titleSlug: String!) {
   }
 }`;
 
+/**
+ * The user's own recent submissions for one problem. Used by the DOM fallback,
+ * which knows a submission was accepted but not which id it was.
+ */
+const SUBMISSION_LIST_QUERY = `query submissionList($questionSlug: String!, $offset: Int!, $limit: Int!) {
+  questionSubmissionList(questionSlug: $questionSlug, offset: $offset, limit: $limit) {
+    submissions { id statusDisplay lang runtimeDisplay memoryDisplay timestamp }
+  }
+}`;
+
+/**
+ * Where LeetCode renders the verdict. The locator attribute is a test hook the
+ * site has kept stable across several redesigns, which makes it a better
+ * anchor than any class name.
+ */
+const RESULT_SELECTORS = [
+  '[data-e2e-locator="submission-result"]',
+  '[data-e2e-locator="console-result"]',
+];
+
+interface SubmissionSummary {
+  id?: string | number;
+  statusDisplay?: string;
+  lang?: string;
+  runtimeDisplay?: string;
+  memoryDisplay?: string;
+}
+
 function readCookie(name: string): string {
   const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
   return match?.[1] ? decodeURIComponent(match[1]) : '';
@@ -190,6 +218,9 @@ export class LeetCodeAdapter implements PlatformAdapter {
   private readonly attempts = new Map<string, number>();
   /** Verdict polling repeats, so each submission is only acted on once. */
   private readonly seen = new Set<string>();
+  /** The verdict currently rendered, so a re-render is not a new event. */
+  private seenDom = '';
+  private domTimer: ReturnType<typeof setTimeout> | undefined;
 
   matches(url: URL): boolean {
     return url.hostname === 'leetcode.com' || url.hostname === 'leetcode.cn';
@@ -199,8 +230,92 @@ export class LeetCodeAdapter implements PlatformAdapter {
     return slugFromHref(url.pathname);
   }
 
+  /**
+   * Watches the page for a verdict.
+   *
+   * The API observer only fires if LeetCode polls the endpoint it knows about,
+   * and LeetCode has changed that flow before. The rendered verdict is the one
+   * thing that must exist however the site fetches it, so this runs alongside
+   * as a second, independent route to the same event.
+   */
+  private watchDom(context: AdapterContext): () => void {
+    const read = () => {
+      const text = RESULT_SELECTORS.map(
+        (selector) => document.querySelector(selector)?.textContent?.trim() ?? '',
+      ).find(Boolean);
+      if (!text) return;
+
+      const slug = slugFromHref(window.location.pathname);
+      if (!slug) return;
+
+      if (!/^accepted$/i.test(text)) {
+        // Only count a verdict once per render of that verdict.
+        const key = `${slug}:${text}`;
+        if (this.seenDom === key) return;
+        this.seenDom = key;
+        this.attempts.set(slug, (this.attempts.get(slug) ?? 0) + 1);
+        context.onAttempt(`leetcode:${slug}`);
+        return;
+      }
+
+      if (this.seenDom === `${slug}:accepted`) return;
+      this.seenDom = `${slug}:accepted`;
+      void this.resolveFromList(slug, context);
+    };
+
+    const observer = new MutationObserver(() => {
+      if (this.domTimer) clearTimeout(this.domTimer);
+      // The verdict area re-renders several times as it settles.
+      this.domTimer = setTimeout(read, 350);
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    read();
+
+    return () => observer.disconnect();
+  }
+
+  /**
+   * Resolves an accepted verdict seen in the DOM by asking LeetCode which
+   * submission it was — the page does not put the id anywhere readable.
+   */
+  private async resolveFromList(slug: string, context: AdapterContext): Promise<void> {
+    try {
+      const data = await graphql<{
+        questionSubmissionList?: { submissions?: SubmissionSummary[] };
+      }>(SUBMISSION_LIST_QUERY, { questionSlug: slug, offset: 0, limit: 5 });
+
+      const accepted = data.questionSubmissionList?.submissions?.find((submission) =>
+        /^accepted$/i.test(submission.statusDisplay ?? ''),
+      );
+      if (!accepted?.id) return;
+
+      const submissionId = String(accepted.id);
+      if (this.seen.has(submissionId)) return;
+      this.seen.add(submissionId);
+
+      await this.resolve(
+        {
+          submissionId,
+          questionId: '',
+          language: accepted.lang ?? '',
+          runtimeNote: accepted.runtimeDisplay && `Runtime ${accepted.runtimeDisplay}`,
+          memoryNote: accepted.memoryDisplay && `Memory ${accepted.memoryDisplay}`,
+          href: window.location.href,
+        },
+        context,
+      );
+    } catch (error) {
+      context.onError(
+        error instanceof Error
+          ? `Accepted on LeetCode, but the submission could not be read: ${error.message}`
+          : 'Accepted on LeetCode, but the submission could not be read.',
+      );
+    }
+  }
+
   start(context: AdapterContext): () => void {
-    return onExchange((exchange) => {
+    const stopDom = this.watchDom(context);
+    const stopExchange = onExchange((exchange) => {
       const result = readVerdict(
         exchange.url,
         exchange.responseBody,
@@ -223,6 +338,11 @@ export class LeetCodeAdapter implements PlatformAdapter {
 
       void this.resolve(result.verdict, context);
     });
+
+    return () => {
+      stopDom();
+      stopExchange();
+    };
   }
 
   private async resolve(relay: AcceptedVerdict, context: AdapterContext): Promise<void> {
