@@ -232,6 +232,10 @@ export interface Settings {
     /** Which judges' contests to gather. */
     platforms: Partial<Record<Platform, boolean>>;
   };
+  wrapped: {
+    /** Nudge once a week that the shareable recap is ready. */
+    notify: boolean;
+  };
   revision: {
     /** Interval ladder in days. Stage n schedules `intervals[n]` days out. */
     intervals: number[];

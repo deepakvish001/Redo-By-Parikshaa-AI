@@ -673,6 +673,54 @@ button:focus-visible {
   overflow: hidden;
 }
 
+/* ----------------------------------------------------------- weekly wrapped */
+
+.wrapped {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.wrapped__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-soft);
+  margin-bottom: 10px;
+}
+
+.wrapped__range {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+/* The card has a fixed aspect ratio; the panel does not, so it scales. */
+.wrapped__card {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.wrapped__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.wrapped__status {
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
 /* A button that carries an icon beside its label. */
 .iconbtn {
   display: inline-flex;

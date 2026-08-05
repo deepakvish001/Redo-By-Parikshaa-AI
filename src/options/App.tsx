@@ -425,6 +425,12 @@ export function App() {
         </div>
 
         <Toggle
+          checked={settings.wrapped.notify}
+          onChange={(notify) => setSettings({ ...settings, wrapped: { notify } })}
+          label="Nudge me once a week with a shareable recap"
+          hint="Stays quiet in a week where nothing was solved."
+        />
+        <Toggle
           checked={settings.revision.notify}
           onChange={(notify) =>
             setSettings({ ...settings, revision: { ...settings.revision, notify } })

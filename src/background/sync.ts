@@ -5,6 +5,7 @@ import { buildIndexReadme, buildProblemReadme } from '../core/markdown.ts';
 import { notesPath, solutionPath } from '../core/paths.ts';
 import { buildProfileReadme, buildProfileSvg } from '../core/profile.ts';
 import { getProblemList } from '../core/storage.ts';
+import { buildWrappedSvg, summariseWeek } from '../core/wrapped.ts';
 import type { GithubSyncState, Settings, SolvedProblem } from '../core/types.ts';
 
 /**
@@ -97,6 +98,16 @@ export async function syncProblem(
         'PROFILE.md',
         buildProfileReadme(withCurrent, stats, now),
         'docs: update coding profile',
+      );
+
+      // The week's card, animated here because it is embedded in markdown
+      // rather than rasterised.
+      const recap = summariseWeek(withCurrent, now, stats.currentStreak);
+      await putFile(
+        config,
+        'assets/week.svg',
+        buildWrappedSvg(recap, { animate: true }),
+        'docs: update weekly recap',
       );
 
       return {

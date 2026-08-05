@@ -4,6 +4,7 @@ import type { DiagnosticEntry, Request, Response, ResponseMap } from '../core/me
 import { problemKey } from '../core/paths.ts';
 import { isExpired, type SessionDiagnostic } from '../core/parikshaa.ts';
 import { appendActivity, struggleScore } from '../core/journal.ts';
+import { WEEK_MS, summariseWeek, wrappedCaption } from '../core/wrapped.ts';
 import {
   appendJournalEvents,
   deleteJournal,
@@ -36,6 +37,7 @@ import { syncProblem } from './sync.ts';
 const BADGE_ALARM = 'refresh-badge';
 const DIGEST_ALARM = 'daily-digest';
 const CONTEST_ALARM = 'refresh-contests';
+const WRAPPED_ALARM = 'weekly-wrapped';
 
 const DIAGNOSTIC_KEY = 'detectionLog';
 /** Enough to cover a submission flow, small enough to stay in storage. */
@@ -557,6 +559,8 @@ chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create(DIGEST_ALARM, { periodInMinutes: 60 * 12 });
   // Contests move slowly, but reminders need a tighter tick than the refresh.
   chrome.alarms.create(CONTEST_ALARM, { periodInMinutes: 15 });
+  // Checked daily; the nudge itself only fires once a week (see below).
+  chrome.alarms.create(WRAPPED_ALARM, { periodInMinutes: 60 * 24 });
   void refreshBadge();
   if (details.reason === 'install') void chrome.runtime.openOptionsPage();
 });
@@ -569,7 +573,42 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === BADGE_ALARM) void refreshBadge();
   if (alarm.name === DIGEST_ALARM) void sendDigest();
   if (alarm.name === CONTEST_ALARM) void tickContests();
+  if (alarm.name === WRAPPED_ALARM) void offerWrapped();
 });
+
+const WRAPPED_SENT_KEY = 'wrappedSentAt';
+
+/**
+ * Nudges once a week, on the day the alarm happens to land after seven days
+ * have passed — not on a fixed weekday, because a Sunday alarm is missed
+ * entirely if the browser is closed that day, and a recap is not worth a
+ * scheduling apparatus.
+ *
+ * Stays quiet in a week where nothing was solved: a card that says zero is not
+ * something anyone wants shown to them, let alone shared.
+ */
+async function offerWrapped(): Promise<void> {
+  const settings = await getSettings();
+  if (!settings.wrapped.notify) return;
+
+  const now = Date.now();
+  const stored = await chrome.storage.local.get(WRAPPED_SENT_KEY);
+  const sentAt = (stored[WRAPPED_SENT_KEY] as number | undefined) ?? 0;
+  if (now - sentAt < WEEK_MS) return;
+
+  const [problems, meta] = await Promise.all([getProblemList(), getMeta()]);
+  const recap = summariseWeek(problems, now, meta.currentStreak);
+  if (recap.solved === 0 && recap.reviews === 0) return;
+
+  await chrome.storage.local.set({ [WRAPPED_SENT_KEY]: now });
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
+    title: 'Your week in code is ready',
+    message: wrappedCaption(recap),
+    priority: 0,
+  });
+}
 
 /**
  * Reminders are checked every quarter hour, but the sources themselves are

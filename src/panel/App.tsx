@@ -15,6 +15,7 @@ import {
   summarise,
 } from '../core/journal.ts';
 import { PARIKSHAA_URL, parikshaaProblemUrl } from '../core/brand.ts';
+import { buildWrappedSvg, summariseWeek, wrappedCaption } from '../core/wrapped.ts';
 import { send, type ContestsResponse, type DashboardData } from '../core/messages.ts';
 import { dueProblems, formatDueIn, upcomingProblems } from '../core/srs.ts';
 import { PLATFORM_LABELS, type Difficulty, type Recall, type SolvedProblem, type TopicStat } from '../core/types.ts';
@@ -29,6 +30,7 @@ import {
   SparkIcon,
   TrophyIcon,
 } from './icons.tsx';
+import { copyPng, downloadPng } from './share.ts';
 
 type Tab = 'due' | 'all' | 'contests' | 'stats';
 
@@ -548,6 +550,92 @@ function PlatformFolder({
   );
 }
 
+/**
+ * The week's recap, as a card that leaves the browser.
+ *
+ * This is the one thing here designed to be seen by people who have not
+ * installed the extension, so the export has to be one click and the result has
+ * to be an image — a screenshot of a side panel is not something anyone posts.
+ */
+function WrappedCard({
+  problems,
+  now,
+  streak,
+}: {
+  problems: SolvedProblem[];
+  now: number;
+  streak: number;
+}) {
+  const [status, setStatus] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const recap = useMemo(() => summariseWeek(problems, now, streak), [problems, now, streak]);
+  // The preview animates; the export does not, because a rasteriser catches the
+  // first frame and a bar mid-animation is invisible.
+  const preview = useMemo(() => buildWrappedSvg(recap, { animate: true }), [recap]);
+  const exportable = useMemo(() => buildWrappedSvg(recap, { animate: false }), [recap]);
+
+  const filename = `week-in-code-${new Date(now).toISOString().slice(0, 10)}`;
+
+  const run = async (label: string, action: () => Promise<void> | void) => {
+    setBusy(true);
+    setStatus(null);
+    try {
+      await action();
+      setStatus(label);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="wrapped">
+      <div className="wrapped__head">
+        <SparkIcon size={13} />
+        <span>Your week</span>
+        <span className="wrapped__range">{recap.range.label}</span>
+      </div>
+
+      <img
+        className="wrapped__card"
+        src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(preview)}`}
+        alt={wrappedCaption(recap)}
+      />
+
+      <div className="wrapped__actions">
+        <button
+          type="button"
+          className="primary"
+          disabled={busy}
+          onClick={() => void run('Copied — paste it into a post.', () => copyPng(exportable))}
+        >
+          Copy image
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void run('Saved to Downloads.', () => downloadPng(exportable, `${filename}.png`))}
+        >
+          Download PNG
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            void run('Caption copied.', () => navigator.clipboard.writeText(wrappedCaption(recap)))
+          }
+        >
+          Copy caption
+        </button>
+      </div>
+
+      {status && <div className="wrapped__status">{status}</div>}
+    </section>
+  );
+}
+
 function ContestRow({ contest, now }: { contest: Contest; now: number }) {
   const start = new Date(contest.startAt);
   return (
@@ -1050,6 +1138,7 @@ export function App() {
 
         {tab === 'stats' && (
           <>
+            <WrappedCard problems={data.problems} now={data.now} streak={data.stats.currentStreak} />
             <div className="stat-grid">
               <div className="stat">
                 <div className="stat__value">{data.stats.total}</div>

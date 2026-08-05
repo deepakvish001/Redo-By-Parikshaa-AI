@@ -46,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
     leadMinutes: 60,
     platforms: { codeforces: true, leetcode: true, codechef: true, atcoder: true },
   },
+  wrapped: { notify: true },
   revision: {
     intervals: [1, 3, 7, 21, 45, 90],
     skipEasy: false,
@@ -83,6 +84,7 @@ export async function getSettings(): Promise<Settings> {
       ...stored.contests,
       platforms: { ...DEFAULT_SETTINGS.contests.platforms, ...stored.contests?.platforms },
     },
+    wrapped: { ...DEFAULT_SETTINGS.wrapped, ...stored.wrapped },
     revision: { ...DEFAULT_SETTINGS.revision, ...stored.revision },
     platforms: { ...DEFAULT_SETTINGS.platforms, ...stored.platforms } as Record<Platform, boolean>,
   };
@@ -95,6 +97,7 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
     parikshaa: { ...current.parikshaa, ...patch.parikshaa },
     diagnostics: { ...current.diagnostics, ...patch.diagnostics },
     contests: { ...current.contests, ...patch.contests },
+    wrapped: { ...current.wrapped, ...patch.wrapped },
     revision: { ...current.revision, ...patch.revision },
     platforms: { ...current.platforms, ...patch.platforms },
   };

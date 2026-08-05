@@ -45,6 +45,10 @@ Solving is the easy part. Remembering three months later is the part nothing els
 - **Publishes an animated coding profile.** `PROFILE.md` and `assets/profile.svg` are rebuilt
   on every sync: totals, streak, difficulty and platform breakdowns, topic mastery, the
   problems you fought hardest for, and the revision queue.
+- **Gives you something to post.** A weekly card — problems solved, revisions, the difficulty
+  mix, your topics and the problem you fought hardest for — copied to the clipboard as a PNG
+  in one click, with a caption to go with it. Rendered locally; nothing is uploaded. It is
+  also committed to the repository as `assets/week.svg`.
 - **Keeps the whole record, not just the outcome.** Every open, solve, review, hint and sync
   is logged with a timestamp, an outcome and a reason — "GitHub denied the request",
   "stage 3 → 1, next in 1d" — and counted, so a problem's card can say
@@ -225,7 +229,8 @@ your-solutions-repo/
 ├── README.md                              # generated index of everything solved
 ├── PROFILE.md                             # coding profile: stats, weak topics, revision queue
 ├── assets/
-│   └── profile.svg                        # the animated card PROFILE.md embeds
+│   ├── profile.svg                        # the animated card PROFILE.md embeds
+│   └── week.svg                           # this week's shareable recap
 ├── leetcode/
 │   └── medium/
 │       └── 0011-container-with-most-water/
