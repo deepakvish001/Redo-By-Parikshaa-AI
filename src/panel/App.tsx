@@ -371,6 +371,25 @@ export function App() {
     void load();
   }, [load]);
 
+  /**
+   * The side panel stays open across navigation, so without this it shows
+   * whatever was true when it was opened — a problem solved while it is on
+   * screen never appears, which reads exactly like the solve was not recorded.
+   */
+  useEffect(() => {
+    const onChanged = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      area: string,
+    ) => {
+      if (area !== 'local') return;
+      if (!('problems' in changes) && !('meta' in changes) && !('settings' in changes)) return;
+      void load();
+    };
+
+    chrome.storage.onChanged.addListener(onChanged);
+    return () => chrome.storage.onChanged.removeListener(onChanged);
+  }, [load]);
+
   // Contests are fetched only when their tab is first opened, so the popup
   // does not wait on four judges just to show the due list.
   useEffect(() => {
