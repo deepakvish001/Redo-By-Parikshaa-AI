@@ -3,8 +3,13 @@ import { verifyAccess } from '../core/github.ts';
 import type { DiagnosticEntry, Request, Response, ResponseMap } from '../core/messages.ts';
 import { problemKey } from '../core/paths.ts';
 import { isExpired, type SessionDiagnostic } from '../core/parikshaa.ts';
+import { struggleScore } from '../core/journal.ts';
 import {
+  appendJournalEvents,
+  deleteJournal,
   deleteProblem,
+  getJournal,
+  getJournals,
   getMeta,
   getParikshaaApi,
   getParikshaaCredentials,
@@ -113,6 +118,17 @@ async function recordSubmission(
   const existing = await getProblem(id);
   const now = Date.now();
 
+  // Everything the judge said on the way here, including the runs and the
+  // failed submits, which is what decides how hard this problem was.
+  const events = await getJournal(id);
+  const solveTimeMs = (await takeSolveTime(id)) ?? existing?.solveTimeMs;
+  const struggle = struggleScore({
+    events,
+    attempts: submission.attempts,
+    solveTimeMs,
+    difficulty: submission.difficulty,
+  });
+
   const problem: SolvedProblem = {
     id,
     platform: submission.platform,
@@ -131,11 +147,12 @@ async function recordSubmission(
     memoryNote: submission.memoryNote,
     note: existing?.note,
     complexity: existing?.complexity,
-    solveTimeMs: (await takeSolveTime(id)) ?? existing?.solveTimeMs,
+    solveTimeMs,
+    events,
     github: { status: 'pending' },
     parikshaa: { status: 'pending' },
     // A re-solve keeps its place on the ladder; only new problems start over.
-    revision: existing?.revision ?? initialRevision(settings.revision.intervals, now),
+    revision: existing?.revision ?? initialRevision(settings.revision.intervals, now, struggle),
   };
 
   await putProblem(problem);
@@ -200,14 +217,48 @@ async function handle(request: Request): Promise<unknown> {
     }
 
     case 'dashboard:get': {
-      const [problems, settings] = await Promise.all([getProblemList(), getSettings()]);
+      const [problems, settings, journals] = await Promise.all([
+        getProblemList(),
+        getSettings(),
+        getJournals(),
+      ]);
       const now = Date.now();
+      const solved = new Set(problems.map((problem) => problem.id));
+
+      // Problems still being worked on have a journal but no record yet; the
+      // panel shows those as work in progress.
+      const openJournals: Record<string, typeof journals[string]> = {};
+      for (const [id, events] of Object.entries(journals)) {
+        if (!solved.has(id)) openJournals[id] = events;
+      }
+
       return {
         problems: problems.sort((a, b) => a.revision.dueAt - b.revision.dueAt),
         stats: computeStats(problems, settings.revision.intervals, now),
         settings,
         now,
+        openJournals,
       };
+    }
+
+    case 'attempt:record': {
+      // The platform comes off the wire as a string; the key is the same shape
+      // either way, and an unknown platform simply never matches a problem.
+      const id = `${request.platform}:${request.slug}`;
+      const events = await appendJournalEvents(id, request.events);
+      // A problem already solved keeps its journal on the record too, so a
+      // re-solve's attempts are not lost when the journal is pruned.
+      await updateProblem(id, (problem) => ({ ...problem, events }));
+      return { recorded: events.length };
+    }
+
+    case 'problem:resync-parikshaa': {
+      const [problem, settings] = await Promise.all([getProblem(request.id), getSettings()]);
+      if (!problem) return { problem: undefined };
+      const parikshaa = await syncToParikshaa(problem, settings);
+      const updated = { ...problem, parikshaa };
+      await putProblem(updated);
+      return { problem: updated };
     }
 
     case 'problem:review':
@@ -354,6 +405,7 @@ async function handle(request: Request): Promise<unknown> {
 
     case 'problem:delete':
       await deleteProblem(request.id);
+      await deleteJournal(request.id);
       await refreshBadge();
       return { ok: true };
 

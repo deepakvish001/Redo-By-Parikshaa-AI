@@ -5,6 +5,9 @@ import {
   formatStartsIn,
   type Contest,
 } from '../core/contests.ts';
+// `formatDuration` also exists in contests.ts for contest lengths; this one
+// phrases a solve time, so it is aliased rather than shadowing the other.
+import { describeStruggle, formatDuration as formatSpan, summarise } from '../core/journal.ts';
 import { send, type ContestsResponse, type DashboardData } from '../core/messages.ts';
 import { dueProblems, formatDueIn, upcomingProblems } from '../core/srs.ts';
 import type { Difficulty, Recall, SolvedProblem, TopicStat } from '../core/types.ts';
@@ -73,9 +76,12 @@ function ParikshaaChip({ problem }: { problem: SolvedProblem }) {
     );
   }
   if (state.status === 'skipped') {
+    // "Not on Parikshaa" is the common case and is not a failure, so it says so
+    // rather than hiding behind an "n/a" whose reason lives in a tooltip.
+    const notThere = /no parikshaa problem uses this slug/i.test(state.reason ?? '');
     return (
       <span className="chip" title={state.reason}>
-        parikshaa n/a
+        {notThere ? 'not on parikshaa' : 'parikshaa n/a'}
       </span>
     );
   }
@@ -191,6 +197,7 @@ function ProblemCard({
   now,
   onReview,
   onResync,
+  onResyncParikshaa,
   onDelete,
   onSaveDetails,
   showRecall,
@@ -199,6 +206,7 @@ function ProblemCard({
   now: number;
   onReview: (id: string, recall: Recall) => void;
   onResync: (id: string) => void;
+  onResyncParikshaa: (id: string) => void;
   onDelete: (id: string) => void;
   onSaveDetails: (
     id: string,
@@ -208,7 +216,11 @@ function ProblemCard({
   showRecall: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  const [showAttempts, setShowAttempts] = useState(false);
   const overdue = problem.revision.dueAt <= now;
+  const events = problem.events ?? [];
+  const journal = summarise(events);
+  const struggle = problem.revision.struggle;
 
   return (
     <div className="card">
@@ -227,14 +239,64 @@ function ProblemCard({
           {[
             problem.platform,
             `stage ${problem.revision.stage + 1}`,
+            problem.revision.targetReviews &&
+              `${problem.revision.reviewCount}/${problem.revision.targetReviews} reviews`,
             problem.revision.lapses > 0 &&
               `${problem.revision.lapses} lapse${problem.revision.lapses === 1 ? '' : 's'}`,
-            problem.solveTimeMs && `${Math.max(1, Math.round(problem.solveTimeMs / 60_000))} min`,
+            problem.solveTimeMs && formatSpan(problem.solveTimeMs),
           ]
             .filter(Boolean)
             .join(' · ')}
         </span>
       </div>
+
+      {(events.length > 0 || struggle !== undefined) && (
+        <button
+          type="button"
+          className="journal__toggle"
+          onClick={() => setShowAttempts((open) => !open)}
+        >
+          {[
+            struggle !== undefined && describeStruggle(struggle),
+            journal.submits > 0 && `${journal.submits} submit${journal.submits === 1 ? '' : 's'}`,
+            journal.runs > 0 && `${journal.runs} run${journal.runs === 1 ? '' : 's'}`,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+          {events.length > 0 && <span aria-hidden="true">{showAttempts ? ' ▾' : ' ▸'}</span>}
+        </button>
+      )}
+
+      {showAttempts && events.length > 0 && (
+        <div className="journal">
+          {events.map((event, index) => (
+            <div className="journal__row" key={`${event.at}-${index}`}>
+              <span className={`journal__dot ${event.accepted ? 'is-ok' : 'is-bad'}`} />
+              <span className="journal__kind">{event.kind}</span>
+              <span className="journal__verdict">{event.verdict}</span>
+              <span className="journal__detail">
+                {[
+                  event.testsTotal && `${event.testsPassed ?? 0}/${event.testsTotal}`,
+                  event.runtime,
+                  event.errorText?.split('\n')[0],
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {problem.parikshaa && problem.parikshaa.status !== 'disabled' &&
+        problem.parikshaa.status !== 'synced' && (
+          <div className="card__hint">
+            {problem.parikshaa.status === 'skipped' &&
+            /no parikshaa problem uses this slug/i.test(problem.parikshaa.reason ?? '')
+              ? 'This problem is not on Parikshaa yet. When it is added, press "Parikshaa sync".'
+              : problem.parikshaa.reason ?? problem.parikshaa.error ?? 'Waiting to sync to Parikshaa.'}
+          </div>
+        )}
 
       {showRecall && (
         <div className="card__ratings">
@@ -268,6 +330,11 @@ function ProblemCard({
             <button type="button" onClick={() => onResync(problem.id)}>
               {problem.github.status === 'synced' ? 'Re-sync' : 'Sync now'}
             </button>
+            {problem.parikshaa && problem.parikshaa.status !== 'disabled' && (
+              <button type="button" onClick={() => onResyncParikshaa(problem.id)}>
+                {problem.parikshaa.status === 'synced' ? 'Re-tick Parikshaa' : 'Parikshaa sync'}
+              </button>
+            )}
             <button type="button" className="ghost danger" onClick={() => onDelete(problem.id)}>
               Remove
             </button>
@@ -416,6 +483,14 @@ export function App() {
     [load],
   );
 
+  const handleResyncParikshaa = useCallback(
+    async (id: string) => {
+      await send({ type: 'problem:resync-parikshaa', id });
+      await load();
+    },
+    [load],
+  );
+
   const handleDelete = useCallback(
     async (id: string) => {
       await send({ type: 'problem:delete', id });
@@ -558,6 +633,7 @@ export function App() {
                     now={data.now}
                     onReview={(id, recall) => void handleReview(id, recall)}
                     onResync={(id) => void handleResync(id)}
+                    onResyncParikshaa={(id) => void handleResyncParikshaa(id)}
                     onDelete={(id) => void handleDelete(id)}
                     onSaveDetails={handleSaveDetails}
                     showRecall
@@ -607,6 +683,7 @@ export function App() {
                   now={data.now}
                   onReview={(id, recall) => void handleReview(id, recall)}
                   onResync={(id) => void handleResync(id)}
+                    onResyncParikshaa={(id) => void handleResyncParikshaa(id)}
                   onDelete={(id) => void handleDelete(id)}
                   onSaveDetails={handleSaveDetails}
                   showRecall={false}

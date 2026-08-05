@@ -1,8 +1,17 @@
-import type { AcceptedSubmission, Difficulty } from '../core/types.ts';
+import type { AcceptedSubmission, AttemptEvent, Difficulty } from '../core/types.ts';
 import { onExchange, requestEditorCode } from './exchange.ts';
 import type { AdapterContext, PlatformAdapter } from './types.ts';
 
-const CHECK_URL = /\/submissions\/detail\/(\d+)\/check\/?/;
+/**
+ * Both a run and a submit poll this endpoint. The id tells them apart — a
+ * submit's is numeric, a run's is `runcode_<timestamp>_<nonce>` — and the path
+ * gained a `/v2/` segment without the payload changing.
+ */
+const CHECK_URL = /\/submissions\/detail\/(\d+|runcode_[^/]+)\/(?:v\d+\/)?check\/?/;
+
+function isRunId(id: string): boolean {
+  return id.startsWith('runcode_');
+}
 
 /** The payload LeetCode's verdict-polling endpoint returns. */
 interface CheckPayload {
@@ -17,6 +26,19 @@ interface CheckPayload {
   runtime_percentile?: number;
   memory_percentile?: number;
   code?: string;
+  total_correct?: number | null;
+  total_testcases?: number | null;
+  compile_error?: string;
+  full_compile_error?: string;
+  runtime_error?: string;
+  full_runtime_error?: string;
+  last_testcase?: string;
+  input_formatted?: string;
+  input?: string;
+  expected_output?: string;
+  code_output?: string | string[];
+  expected_code_answer?: string[];
+  code_answer?: string[];
 }
 
 /** What one accepted verdict tells us before metadata is fetched. */
@@ -86,14 +108,16 @@ const SUBMISSION_LIST_QUERY = `query submissionList($questionSlug: String!, $off
 }`;
 
 /**
- * Where LeetCode renders the verdict. The locator attribute is a test hook the
- * site has kept stable across several redesigns, which makes it a better
- * anchor than any class name.
+ * Where LeetCode renders a *submission's* verdict. The locator attribute is a
+ * test hook the site has kept stable across several redesigns, which makes it a
+ * better anchor than any class name.
+ *
+ * `console-result` deliberately is not here. That is the Run panel, which says
+ * "Accepted" when the sample cases pass — including for code that then fails on
+ * submit. Watching it recorded a solve the moment someone pressed Run, and the
+ * dedupe then swallowed the real submission that followed.
  */
-const RESULT_SELECTORS = [
-  '[data-e2e-locator="submission-result"]',
-  '[data-e2e-locator="console-result"]',
-];
+const RESULT_SELECTORS = ['[data-e2e-locator="submission-result"]'];
 
 interface SubmissionSummary {
   id?: string | number;
@@ -180,6 +204,65 @@ function titleFromSlug(slug: string): string {
  * the submission failed, or the accepted details when it passed. Exported so
  * the shape can be tested against recorded payloads.
  */
+/** Trims judge output to something worth keeping in a journal. */
+function trim(text: string | undefined, limit = 400): string | undefined {
+  const value = text?.trim();
+  if (!value) return undefined;
+  return value.length > limit ? `${value.slice(0, limit)}…` : value;
+}
+
+function joinOutput(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return trim(value.join('\n'));
+  return trim(value);
+}
+
+/**
+ * Turns one finished verdict poll into a journal entry, for runs and submits
+ * alike.
+ *
+ * Exported so the shape can be checked against recorded payloads — the field
+ * names differ between a run and a submit in ways that are easy to get wrong.
+ */
+export function readAttempt(url: string, responseBody: string, at: number): AttemptEvent | undefined {
+  const match = CHECK_URL.exec(url);
+  if (!match?.[1]) return undefined;
+
+  let payload: CheckPayload;
+  try {
+    payload = JSON.parse(responseBody) as CheckPayload;
+  } catch {
+    return undefined;
+  }
+
+  if (payload.state && payload.state !== 'SUCCESS') return undefined;
+  if (!payload.status_msg) return undefined;
+
+  const id = match[1];
+  const run = isRunId(id);
+  const errorText =
+    trim(payload.full_compile_error) ??
+    trim(payload.compile_error) ??
+    trim(payload.full_runtime_error) ??
+    trim(payload.runtime_error);
+
+  return {
+    at,
+    kind: run ? 'run' : 'submit',
+    verdict: payload.status_msg,
+    accepted: payload.status_msg === 'Accepted',
+    language: payload.pretty_lang || payload.lang || undefined,
+    runtime: payload.status_runtime || undefined,
+    memory: payload.status_memory || undefined,
+    testsPassed: payload.total_correct ?? undefined,
+    testsTotal: payload.total_testcases ?? undefined,
+    errorText,
+    failedInput: trim(payload.input_formatted ?? payload.last_testcase ?? payload.input),
+    expectedOutput: joinOutput(payload.expected_code_answer ?? payload.expected_output),
+    actualOutput: joinOutput(payload.code_answer ?? payload.code_output),
+    submissionId: run ? undefined : String(payload.submission_id ?? id),
+  };
+}
+
 export function readVerdict(
   url: string,
   responseBody: string,
@@ -187,7 +270,11 @@ export function readVerdict(
   editorCode?: string,
 ): { kind: 'accepted'; verdict: AcceptedVerdict } | { kind: 'failed'; verdict: string } | undefined {
   const match = CHECK_URL.exec(url);
-  if (!match) return undefined;
+  if (!match?.[1]) return undefined;
+
+  // A run only ever checks the sample cases. Passing them is not a solve, and
+  // failing them is not a failed submission either.
+  if (isRunId(match[1])) return undefined;
 
   let payload: CheckPayload;
   try {
@@ -315,6 +402,19 @@ export class LeetCodeAdapter implements PlatformAdapter {
       this.seen.add(submissionId);
     }
 
+    // Carries the id so the journal can tell this apart from the API's report
+    // of the same submission.
+    context.onEvent(slug, {
+      at: Date.now(),
+      kind: 'submit',
+      verdict: 'Accepted',
+      accepted: true,
+      language: summary?.lang ?? editor.language,
+      runtime: summary?.runtimeDisplay,
+      memory: summary?.memoryDisplay,
+      submissionId,
+    });
+
     await this.resolve(
       {
         submissionId: submissionId ?? '',
@@ -351,6 +451,13 @@ export class LeetCodeAdapter implements PlatformAdapter {
   start(context: AdapterContext): () => void {
     const stopDom = this.watchDom(context);
     const stopExchange = onExchange((exchange) => {
+      // Journalled first and unconditionally: a run, a compile error and a
+      // wrong answer all say something about the problem even though none of
+      // them is a solve.
+      const event = readAttempt(exchange.url, exchange.responseBody, Date.now());
+      const eventSlug = slugFromHref(exchange.href);
+      if (event && eventSlug) context.onEvent(eventSlug, event);
+
       const result = readVerdict(
         exchange.url,
         exchange.responseBody,

@@ -1,8 +1,33 @@
 import type { AcceptedSubmission, Difficulty } from '../core/types.ts';
 import { parseHtml, type AdapterContext, type PlatformAdapter } from './types.ts';
 
-const LANGUAGE_HINT =
-  /(GNU|Clang|MS |Mono|Delphi|FPC|PyPy|Python|Java|Kotlin|Rust|Go\b|Node|JavaScript|Haskell|OCaml|Scala|Ruby|Perl|C#|C\+\+|Pascal|D\b|Q#|Secret)/i;
+/**
+ * Words that only appear in Codeforces' language column.
+ *
+ * Matched as whole tokens, never as substrings: an earlier version accepted
+ * `D\b`, which matches the "d" ending "Threshold", so the problem-title cell
+ * was read as the language for "2250A - Threshold Movement".
+ */
+const LANGUAGE_TOKENS = new Set(
+  [
+    'gnu', 'clang', 'ms', 'mono', 'delphi', 'fpc', 'pypy', 'python', 'java',
+    'kotlin', 'rust', 'go', 'node', 'nodejs', 'javascript', 'haskell', 'ocaml',
+    'scala', 'ruby', 'perl', 'c#', 'c++', 'pascal', 'd', 'q#', 'secret', 'gcc',
+    'msvc', 'pypy3', 'py', 'cpp',
+  ],
+);
+
+/** True when a table cell reads like a language, not like a problem title. */
+export function looksLikeLanguage(text: string): boolean {
+  if (!text || text.length >= 40) return false;
+  // Split on everything that is not part of a language name; `c++` and `c#`
+  // keep their trailing punctuation because the token set carries them too.
+  return text
+    .toLowerCase()
+    .split(/[\s(),/]+/)
+    .filter(Boolean)
+    .some((token) => LANGUAGE_TOKENS.has(token.replace(/[.:;]+$/, '')));
+}
 
 interface ProblemMeta {
   title: string;
@@ -90,8 +115,24 @@ export class CodeforcesAdapter implements PlatformAdapter {
 
       const key = `${parsed.contestId}${parsed.index.toUpperCase()}`;
       this.processed.add(submissionId);
+      const language = this.languageFromRow(row);
+      const accepted = /^accepted/i.test(verdict);
 
-      if (!/^accepted/i.test(verdict)) {
+      // Codeforces has no run/submit split — every row in the status table is a
+      // real submission, and the verdict cell names the test it died on.
+      context.onEvent(key, {
+        at: Date.now(),
+        kind: 'submit',
+        verdict,
+        accepted,
+        language: language || undefined,
+        testsPassed: /on test (\d+)/i.exec(verdict)?.[1]
+          ? Number(/on test (\d+)/i.exec(verdict)?.[1]) - 1
+          : undefined,
+        submissionId,
+      });
+
+      if (!accepted) {
         this.attempts.set(key, (this.attempts.get(key) ?? 0) + 1);
         context.onAttempt(`codeforces:${key}`);
         continue;
@@ -100,7 +141,6 @@ export class CodeforcesAdapter implements PlatformAdapter {
       const sourceHref =
         row.querySelector<HTMLAnchorElement>('a[href*="/submission/"]')?.getAttribute('href') ??
         `/contest/${parsed.contestId}/submission/${submissionId}`;
-      const language = this.languageFromRow(row);
 
       void this.resolve(context, {
         key,
@@ -115,7 +155,7 @@ export class CodeforcesAdapter implements PlatformAdapter {
   private languageFromRow(row: HTMLTableRowElement): string {
     for (const cell of row.querySelectorAll('td')) {
       const text = cell.textContent?.trim() ?? '';
-      if (text && text.length < 40 && LANGUAGE_HINT.test(text)) return text;
+      if (looksLikeLanguage(text)) return text;
     }
     return '';
   }

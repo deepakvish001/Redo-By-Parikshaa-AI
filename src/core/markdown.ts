@@ -1,10 +1,76 @@
+import { describeStruggle, formatDuration, summarise } from './journal.ts';
 import { normalizeProblemId, solutionPath } from './paths.ts';
-import type { SolvedProblem } from './types.ts';
+import { PLATFORM_LABELS, type AttemptEvent, type SolvedProblem } from './types.ts';
 
-const PLATFORM_LABEL: Record<string, string> = {
-  leetcode: 'LeetCode',
-  codeforces: 'Codeforces',
-};
+const PLATFORM_LABEL: Record<string, string> = PLATFORM_LABELS;
+
+function clockTime(timestamp: number): string {
+  return new Date(timestamp).toISOString().slice(11, 16);
+}
+
+/** Keeps judge output from breaking out of a table cell or a code fence. */
+function inlineCode(text: string): string {
+  return `\`${text.replace(/`/g, "'").replace(/\s+/g, ' ').slice(0, 80)}\``;
+}
+
+/**
+ * The run-by-run record of getting the problem accepted.
+ *
+ * This is the part that is worth re-reading months later: which verdict came
+ * back, on which test, and how long the whole thing took.
+ */
+function attemptSection(events: AttemptEvent[]): string[] {
+  if (events.length === 0) return [];
+
+  const summary = summarise(events);
+  const lines = ['', '## How it went', ''];
+
+  const parts = [
+    `${summary.submits} submit${summary.submits === 1 ? '' : 's'}`,
+    `${summary.runs} run${summary.runs === 1 ? '' : 's'}`,
+  ];
+  if (summary.spanMs) parts.push(`${formatDuration(summary.spanMs)} from first attempt to accepted`);
+  lines.push(parts.join(' · '), '');
+
+  lines.push('| # | Time | Kind | Verdict | Detail |', '| --- | --- | --- | --- | --- |');
+  events.forEach((event, index) => {
+    const detail: string[] = [];
+    if (event.testsTotal) detail.push(`${event.testsPassed ?? 0}/${event.testsTotal} tests`);
+    if (event.runtime) detail.push(event.runtime);
+    if (event.memory) detail.push(event.memory);
+    if (event.errorText) detail.push(inlineCode(event.errorText));
+    else if (!event.accepted && event.failedInput) {
+      detail.push(`on ${inlineCode(event.failedInput)}`);
+    }
+
+    lines.push(
+      `| ${index + 1} | ${clockTime(event.at)} | ${event.kind} | ${
+        event.accepted ? `**${event.verdict}**` : escapeCell(event.verdict)
+      } | ${detail.join(' · ') || '—'} |`,
+    );
+  });
+
+  // The first failure is usually the interesting one — it is where the
+  // original approach was wrong.
+  const firstWrong = events.find(
+    (event) => !event.accepted && (event.failedInput || event.expectedOutput),
+  );
+  if (firstWrong) {
+    lines.push('', '<details><summary>First failing case</summary>', '');
+    if (firstWrong.failedInput) lines.push('```', 'Input:', firstWrong.failedInput, '```');
+    if (firstWrong.expectedOutput || firstWrong.actualOutput) {
+      lines.push(
+        '```',
+        `Expected: ${firstWrong.expectedOutput ?? '—'}`,
+        `Got:      ${firstWrong.actualOutput ?? '—'}`,
+        '```',
+      );
+    }
+    lines.push('', '</details>');
+  }
+
+  return lines;
+}
 
 function isoDate(timestamp: number): string {
   return new Date(timestamp).toISOString().slice(0, 10);
@@ -37,7 +103,17 @@ export function buildProblemReadme(problem: SolvedProblem): string {
   }
 
   if (problem.solveTimeMs) {
-    lines.push('', `**Time to solve:** ${Math.max(1, Math.round(problem.solveTimeMs / 60_000))} min`);
+    lines.push('', `**Time to solve:** ${formatDuration(problem.solveTimeMs)}`);
+  }
+
+  if (problem.revision.struggle !== undefined) {
+    lines.push(
+      '',
+      `**Cost:** ${describeStruggle(problem.revision.struggle)} (${Math.round(
+        problem.revision.struggle * 100,
+      )}/100)  `,
+      `**Revisions planned:** ${problem.revision.targetReviews ?? '—'}`,
+    );
   }
 
   // The user's own analysis, kept separate from the judge's measurements.
@@ -49,8 +125,9 @@ export function buildProblemReadme(problem: SolvedProblem): string {
     lines.push('', '## Complexity', '', complexity.join('  \n'));
   }
 
-  lines.push('', '## Approach', '', problem.note?.trim() || '_Add your notes here._', '');
-  lines.push('---', '', '<sub>Committed by Redo.</sub>', '');
+  lines.push('', '## Approach', '', problem.note?.trim() || '_Add your notes here._');
+  lines.push(...attemptSection(problem.events ?? []));
+  lines.push('', '---', '', '<sub>Committed by Redo.</sub>', '');
 
   return lines.join('\n');
 }

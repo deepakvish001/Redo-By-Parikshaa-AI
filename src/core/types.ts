@@ -27,6 +27,55 @@ export const PLATFORM_LABELS: Record<Platform, string> = {
 
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'unknown';
 
+/**
+ * A run is the judge checking sample cases only; a submit is the real thing.
+ * They are counted separately because they mean different things — ten runs is
+ * someone iterating, ten submits is someone stuck.
+ */
+export type AttemptKind = 'run' | 'submit';
+
+/**
+ * One run or submit, as the judge reported it.
+ *
+ * Kept for every attempt, not just the accepted one: what a problem cost is
+ * only visible in the failures, and that cost is what decides how soon and how
+ * often it needs revising.
+ */
+export interface AttemptEvent {
+  at: number;
+  kind: AttemptKind;
+  /** Verdict as the judge worded it, e.g. `Wrong Answer`, `Compile Error`. */
+  verdict: string;
+  accepted: boolean;
+  language?: string;
+  runtime?: string;
+  memory?: string;
+  testsPassed?: number;
+  testsTotal?: number;
+  /** Compile or runtime error text, trimmed to something readable. */
+  errorText?: string;
+  /** The case it failed on, when the judge discloses it. */
+  failedInput?: string;
+  expectedOutput?: string;
+  actualOutput?: string;
+  submissionId?: string;
+  /** ms between opening the problem and this attempt, when known. */
+  elapsedMs?: number;
+}
+
+/** Rolled-up view of one problem's attempt journal. */
+export interface AttemptSummary {
+  runs: number;
+  submits: number;
+  failedSubmits: number;
+  /** Distinct non-accepted verdicts seen, most frequent first. */
+  verdicts: Array<{ verdict: string; count: number }>;
+  firstAt?: number;
+  acceptedAt?: number;
+  /** Wall-clock span from the first attempt to the accepted one. */
+  spanMs?: number;
+}
+
 /** How well the user felt they recalled a problem during a revision. */
 export type Recall = 'forgot' | 'hard' | 'good' | 'easy';
 
@@ -62,6 +111,11 @@ export interface SolvedProblem {
    * Absent when the span was implausible (a tab left open overnight).
    */
   solveTimeMs?: number;
+  /**
+   * Every run and submit seen for this problem, oldest first. Capped, because
+   * a long debugging session can produce a great many runs.
+   */
+  events?: AttemptEvent[];
   github: GithubSyncState;
   parikshaa: ParikshaaSyncState;
   revision: RevisionState;
@@ -100,6 +154,17 @@ export interface RevisionState {
   lapses: number;
   /** Hint levels revealed across all revisions of this problem. */
   hintsUsed: number;
+  /**
+   * 0–1, how much the problem cost when it was first solved. Derived from the
+   * attempt journal at solve time and kept, so the schedule stays shaped by how
+   * hard the problem actually was rather than only by later recall ratings.
+   */
+  struggle?: number;
+  /**
+   * How many clean reviews this problem should get before it is considered
+   * settled. A problem that fought back earns more of them.
+   */
+  targetReviews?: number;
 }
 
 export interface Settings {

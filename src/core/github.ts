@@ -198,14 +198,27 @@ export async function putFile(
     return { path, commitUrl: json.commit?.html_url ?? '' };
   };
 
-  try {
-    return await commit();
-  } catch (error) {
-    if (error instanceof GithubError && error.status === 409) {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      return commit();
+  // A 409 means someone else moved the branch between our read of the sha and
+  // our write. Re-reading and writing again is the whole fix, so it is worth
+  // several tries — the previous single retry gave up and then claimed "the
+  // next sync will retry", which nothing did.
+  const delays = [600, 1500, 3000];
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await commit();
+    } catch (error) {
+      const conflict = error instanceof GithubError && error.status === 409;
+      if (!conflict) throw error;
+      if (attempt >= delays.length) {
+        throw new GithubError(
+          `The branch kept moving while committing ${path}; gave up after ${
+            delays.length + 1
+          } tries. Use "Retry these" to try again.`,
+          409,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
     }
-    throw error;
   }
 }
 

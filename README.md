@@ -38,6 +38,13 @@ Solving is the easy part. Remembering three months later is the part nothing els
 - **Gives hints instead of the answer.** Stuck on a revision? The ladder climbs from a nudge
   about the shape of the problem, to the approach (your own saved notes, or the technique for
   its topic), to your own previous solution. Reaching for hints is counted against the topic.
+- **Records every run and every submit.** Not just the one that passed — each attempt is kept
+  with its verdict, how many tests it got through, the compile or runtime error, the case it
+  failed on, and the time. That journal is what the schedule is built from, and it goes into
+  the problem's committed README as a timeline.
+- **Publishes an animated coding profile.** `PROFILE.md` and `assets/profile.svg` are rebuilt
+  on every sync: totals, streak, difficulty and platform breakdowns, topic mastery, the
+  problems you fought hardest for, and the revision queue.
 - **Keeps your reasoning, not just the code.** Notes and your own time/space complexity are
   editable from the popup and go into the problem's committed README.
 - **Ranks your weak topics.** Mastery per tag is computed from how far each problem has climbed
@@ -187,16 +194,38 @@ clamped to `[0.6, 1.8]`. A problem you keep struggling with therefore tightens i
 even at the same rung, and one you find trivial spreads out faster than the ladder alone
 would. The ladder is editable in options.
 
+### Where the starting ease comes from
+
+Ease does not start at 1.0 for everything. It starts from what the problem actually cost you,
+scored 0 (walked it) to 1 (fought for it) from the attempt journal:
+
+| Signal                                              | Weight |
+| --------------------------------------------------- | ------ |
+| Failed submits before the accepted one               | 0.40   |
+| Runs beyond the first couple                         | 0.20   |
+| Wrong answers, TLEs and runtime errors               | 0.20   |
+| Time spent, against a baseline for the difficulty    | 0.20   |
+
+That score sets the opening ease (`1 − 0.4 × struggle`, so a full fight opens at 0.6) and the
+number of clean reviews the problem is expected to earn before it is settled — the ladder
+length, plus up to three more. Each `Forgot` adds another. Three separate signals, because
+each can be missing on its own: some judges never show us a failure, some problems are solved
+first-try after an hour of thinking, and a long run of runs means iteration even when every
+submit passed.
+
 ## Repository layout it produces
 
 ```
 your-solutions-repo/
 ├── README.md                              # generated index of everything solved
+├── PROFILE.md                             # coding profile: stats, weak topics, revision queue
+├── assets/
+│   └── profile.svg                        # the animated card PROFILE.md embeds
 ├── leetcode/
 │   └── medium/
 │       └── 0011-container-with-most-water/
 │           ├── solution.py
-│           └── README.md                  # link, tags, judge stats, your notes
+│           └── README.md                  # link, tags, judge stats, attempt timeline, notes
 └── codeforces/
     └── 1352A-sum-of-round-numbers/
         ├── solution.cpp

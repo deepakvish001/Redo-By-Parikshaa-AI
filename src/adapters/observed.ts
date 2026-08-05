@@ -11,8 +11,10 @@
  * user's source code.
  */
 export const OBSERVED_URLS: RegExp[] = [
-  // LeetCode polls this until the judge finishes.
-  /\/submissions\/detail\/\d+\/check\/?/,
+  // LeetCode polls this until the judge finishes. The id is numeric for a
+  // submit and `runcode_…` for a run, and the path picked up a `/v2/` segment
+  // at some point without the payload changing shape.
+  /\/submissions\/detail\/(?:\d+|runcode_[^/]+)\/(?:v\d+\/)?check\/?/,
   // HackerRank posts the submission, then polls the same path with an id.
   /hackerrank\.com\/rest\/.*\/submissions(\/\d+)?(\?|$)/i,
   // CodeChef's IDE submits and polls through its api/ide endpoints.

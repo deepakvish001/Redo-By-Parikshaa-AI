@@ -1,10 +1,18 @@
+import { appendEvent } from './journal.ts';
 import type { ParikshaaCredentials } from './parikshaa.ts';
-import { PLATFORMS, type Platform, type Settings, type SolvedProblem } from './types.ts';
+import {
+  PLATFORMS,
+  type AttemptEvent,
+  type Platform,
+  type Settings,
+  type SolvedProblem,
+} from './types.ts';
 
 const KEYS = {
   settings: 'settings',
   problems: 'problems',
   meta: 'meta',
+  journal: 'journal',
   parikshaaCredentials: 'parikshaaCredentials',
   parikshaaApi: 'parikshaaApiKey',
 } as const;
@@ -129,6 +137,58 @@ export async function deleteProblem(id: string): Promise<void> {
   const problems = await getProblems();
   delete problems[id];
   await chrome.storage.local.set({ [KEYS.problems]: problems });
+}
+
+/* ------------------------------------------------------- attempt journal */
+
+/**
+ * Runs and submits are recorded before a problem is ever solved — that is the
+ * whole point — so they live in their own map keyed by `<platform>:<slug>`
+ * rather than on the problem record.
+ */
+export async function getJournals(): Promise<Record<string, AttemptEvent[]>> {
+  return readKey<Record<string, AttemptEvent[]>>(KEYS.journal, {});
+}
+
+export async function getJournal(id: string): Promise<AttemptEvent[]> {
+  return (await getJournals())[id] ?? [];
+}
+
+export async function appendJournalEvents(
+  id: string,
+  events: AttemptEvent[],
+): Promise<AttemptEvent[]> {
+  const journals = await getJournals();
+  let entries = journals[id] ?? [];
+  for (const event of events) entries = appendEvent(entries, event);
+  journals[id] = entries;
+  await chrome.storage.local.set({ [KEYS.journal]: pruneJournals(journals, Date.now()) });
+  return entries;
+}
+
+/**
+ * Journals for problems that were never solved are only interesting while the
+ * attempt is recent — otherwise every abandoned problem accumulates forever.
+ */
+export function pruneJournals(
+  journals: Record<string, AttemptEvent[]>,
+  now: number,
+  solvedIds: Set<string> = new Set(),
+  maxAgeMs = 30 * 86_400_000,
+): Record<string, AttemptEvent[]> {
+  const kept: Record<string, AttemptEvent[]> = {};
+  for (const [id, events] of Object.entries(journals)) {
+    if (events.length === 0) continue;
+    const last = events[events.length - 1]?.at ?? 0;
+    if (solvedIds.has(id) || now - last <= maxAgeMs) kept[id] = events;
+  }
+  return kept;
+}
+
+export async function deleteJournal(id: string): Promise<void> {
+  const journals = await getJournals();
+  delete journals[id];
+  await chrome.storage.local.set({ [KEYS.journal]: journals });
 }
 
 export async function getParikshaaCredentials(): Promise<ParikshaaCredentials | undefined> {

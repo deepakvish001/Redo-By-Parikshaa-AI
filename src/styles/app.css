@@ -324,6 +324,91 @@ button:focus-visible {
   white-space: normal;
 }
 
+.card__hint {
+  margin-top: 8px;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+/* -------------------------------------------------------- attempt journal */
+
+.journal__toggle {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.journal__toggle:hover {
+  color: var(--text);
+}
+
+.journal {
+  margin-top: 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.journal__row {
+  display: grid;
+  grid-template-columns: 10px 42px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 9px;
+  font-size: 10.5px;
+  border-top: 1px solid var(--border);
+}
+
+.journal__row:first-child {
+  border-top: 0;
+}
+
+.journal__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+
+.journal__dot.is-ok {
+  background: var(--ok);
+}
+
+.journal__kind {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+
+.journal__verdict {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* The detail is the least important part of the row, so it is the part that
+   gets clipped when the panel is narrow. */
+.journal__detail {
+  grid-column: 3;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
