@@ -9,7 +9,7 @@ import {
   readResult as readGfg,
   readSubmitted as readGfgSubmitted,
 } from '../src/adapters/geeksforgeeks.ts';
-import { readVerdict } from '../src/adapters/leetcode.ts';
+import { readVerdict, submissionIdFromPath } from '../src/adapters/leetcode.ts';
 import { isObserved, summarisePath } from '../src/adapters/observed.ts';
 import { firstString, parseJson, pick } from '../src/adapters/exchange.ts';
 
@@ -280,4 +280,19 @@ test('the diagnostic report keeps the path and drops the query', () => {
   );
   // Junk must not throw — this runs inside the page's own fetch.
   assert.equal(summarisePath('::::', 'not a url'), '::::');
+});
+
+test('LeetCode: the submission id is read from the URL after a submit', () => {
+  // LeetCode navigates here once the verdict is in, which is cheaper and more
+  // reliable than asking the API which submission was the accepted one.
+  assert.equal(
+    submissionIdFromPath('/problems/two-sum/submissions/2095756933/'),
+    '2095756933',
+  );
+  assert.equal(submissionIdFromPath('/problems/two-sum/submissions/123'), '123');
+
+  // A plain problem page carries no id, and neither does the submissions list.
+  assert.equal(submissionIdFromPath('/problems/two-sum/'), null);
+  assert.equal(submissionIdFromPath('/submissions/'), null);
+  assert.equal(submissionIdFromPath('/problems/two-sum/submissions/'), null);
 });

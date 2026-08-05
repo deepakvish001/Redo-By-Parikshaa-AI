@@ -1,5 +1,5 @@
 import type { AcceptedSubmission, Difficulty } from '../core/types.ts';
-import { onExchange } from './exchange.ts';
+import { onExchange, requestEditorCode } from './exchange.ts';
 import type { AdapterContext, PlatformAdapter } from './types.ts';
 
 const CHECK_URL = /\/submissions\/detail\/(\d+)\/check\/?/;
@@ -109,6 +109,18 @@ function readCookie(name: string): string {
 }
 
 async function graphql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+  try {
+    return await graphqlOnce<T>(query, variables);
+  } catch (error) {
+    // "Failed to fetch" is a transient network condition often enough — a page
+    // mid-navigation, a connection reused as it closed — to be worth one retry.
+    if (!(error instanceof TypeError)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    return graphqlOnce<T>(query, variables);
+  }
+}
+
+async function graphqlOnce<T>(query: string, variables: Record<string, unknown>): Promise<T> {
   const csrf = readCookie('csrftoken');
   const response = await fetch(`${window.location.origin}/graphql/`, {
     method: 'POST',
@@ -142,6 +154,15 @@ function normalizeDifficulty(value: string | undefined): Difficulty {
 function slugFromHref(href: string): string | null {
   const match = /\/problems\/([^/?#]+)/.exec(href);
   return match?.[1] ?? null;
+}
+
+/**
+ * After a submission LeetCode navigates to
+ * `/problems/<slug>/submissions/<id>/`, so the id is usually sitting in the
+ * URL — cheaper and more reliable than asking the API which submission it was.
+ */
+export function submissionIdFromPath(pathname: string): string | null {
+  return /\/problems\/[^/]+\/submissions\/(\d+)/.exec(pathname)?.[1] ?? null;
 }
 
 function titleFromSlug(slug: string): string {
@@ -260,7 +281,7 @@ export class LeetCodeAdapter implements PlatformAdapter {
 
       if (this.seenDom === `${slug}:accepted`) return;
       this.seenDom = `${slug}:accepted`;
-      void this.resolveFromList(slug, context);
+      void this.resolveFromDom(slug, context);
     };
 
     const observer = new MutationObserver(() => {
@@ -275,41 +296,55 @@ export class LeetCodeAdapter implements PlatformAdapter {
   }
 
   /**
-   * Resolves an accepted verdict seen in the DOM by asking LeetCode which
-   * submission it was — the page does not put the id anywhere readable.
+   * Turns an accepted verdict seen in the DOM into a submission to record.
+   *
+   * The id comes from the URL when LeetCode has navigated to the submission,
+   * and only falls back to the API when it has not. The editor's contents are
+   * fetched in parallel so that a failing API call costs metadata, not the
+   * capture itself.
    */
-  private async resolveFromList(slug: string, context: AdapterContext): Promise<void> {
+  private async resolveFromDom(slug: string, context: AdapterContext): Promise<void> {
+    const [editor, summary] = await Promise.all([
+      requestEditorCode(),
+      this.findSubmission(slug),
+    ]);
+
+    const submissionId = summary?.id ? String(summary.id) : undefined;
+    if (submissionId) {
+      if (this.seen.has(submissionId)) return;
+      this.seen.add(submissionId);
+    }
+
+    await this.resolve(
+      {
+        submissionId: submissionId ?? '',
+        questionId: '',
+        language: summary?.lang ?? editor.language ?? '',
+        runtimeNote: summary?.runtimeDisplay && `Runtime ${summary.runtimeDisplay}`,
+        memoryNote: summary?.memoryDisplay && `Memory ${summary.memoryDisplay}`,
+        fallbackCode: editor.code,
+        href: window.location.href,
+      },
+      context,
+    );
+  }
+
+  /** The accepted submission's id and judge stats, by whichever route works. */
+  private async findSubmission(slug: string): Promise<SubmissionSummary | undefined> {
+    const fromUrl = submissionIdFromPath(window.location.pathname);
+    if (fromUrl) return { id: fromUrl };
+
     try {
       const data = await graphql<{
         questionSubmissionList?: { submissions?: SubmissionSummary[] };
       }>(SUBMISSION_LIST_QUERY, { questionSlug: slug, offset: 0, limit: 5 });
 
-      const accepted = data.questionSubmissionList?.submissions?.find((submission) =>
+      return data.questionSubmissionList?.submissions?.find((submission) =>
         /^accepted$/i.test(submission.statusDisplay ?? ''),
       );
-      if (!accepted?.id) return;
-
-      const submissionId = String(accepted.id);
-      if (this.seen.has(submissionId)) return;
-      this.seen.add(submissionId);
-
-      await this.resolve(
-        {
-          submissionId,
-          questionId: '',
-          language: accepted.lang ?? '',
-          runtimeNote: accepted.runtimeDisplay && `Runtime ${accepted.runtimeDisplay}`,
-          memoryNote: accepted.memoryDisplay && `Memory ${accepted.memoryDisplay}`,
-          href: window.location.href,
-        },
-        context,
-      );
-    } catch (error) {
-      context.onError(
-        error instanceof Error
-          ? `Accepted on LeetCode, but the submission could not be read: ${error.message}`
-          : 'Accepted on LeetCode, but the submission could not be read.',
-      );
+    } catch {
+      // No id is survivable: the editor still holds the code.
+      return undefined;
     }
   }
 
@@ -380,7 +415,9 @@ export class LeetCodeAdapter implements PlatformAdapter {
 
     const code = details?.code ?? relay.fallbackCode;
     if (!code) {
-      context.onError('Accepted, but the solution source could not be read from LeetCode.');
+      context.onError(
+        'Accepted on LeetCode, but the solution source could not be read from either the API or the editor.',
+      );
       return;
     }
 
@@ -399,7 +436,7 @@ export class LeetCodeAdapter implements PlatformAdapter {
       tags: (question?.topicTags ?? [])
         .map((tag) => tag.name?.trim() ?? '')
         .filter((name): name is string => name.length > 0),
-      language: details?.lang?.verboseName ?? details?.lang?.name ?? relay.language,
+      language: details?.lang?.verboseName ?? details?.lang?.name ?? relay.language ?? 'Unknown',
       code,
       runtimeNote:
         relay.runtimeNote ??
