@@ -6,7 +6,7 @@ const KEYS = {
   problems: 'problems',
   meta: 'meta',
   parikshaaCredentials: 'parikshaaCredentials',
-  parikshaaApiKey: 'parikshaaApiKey',
+  parikshaaApi: 'parikshaaApiKey',
 } as const;
 
 /** Aggregate counters that do not belong to any single problem. */
@@ -130,18 +130,31 @@ export async function clearParikshaaCredentials(): Promise<void> {
   await chrome.storage.local.remove(KEYS.parikshaaCredentials);
 }
 
-/**
- * Parikshaa's publishable API key, observed once and kept so later visits do
- * not depend on catching a request in flight. It is public by design — it
- * ships in the site's own JavaScript — and grants nothing without a user
- * session alongside it.
- */
-export async function getParikshaaApiKey(): Promise<string | undefined> {
-  return readKey<string | undefined>(KEYS.parikshaaApiKey, undefined);
+export interface ParikshaaApi {
+  /**
+   * Parikshaa's publishable API key, observed once and kept so later visits do
+   * not depend on catching a request in flight. It is public by design — it
+   * ships in the site's own JavaScript — and grants nothing without a user
+   * session alongside it.
+   */
+  apiKey: string;
+  /**
+   * The Supabase origin the site talks to. Kept because a browser profile can
+   * hold sessions for several projects, and this is what says which one is
+   * Parikshaa's.
+   */
+  origin?: string;
 }
 
-export async function saveParikshaaApiKey(apiKey: string): Promise<void> {
-  await chrome.storage.local.set({ [KEYS.parikshaaApiKey]: apiKey });
+export async function getParikshaaApi(): Promise<ParikshaaApi | undefined> {
+  const stored = await readKey<ParikshaaApi | string | undefined>(KEYS.parikshaaApi, undefined);
+  if (!stored) return undefined;
+  // An earlier version stored the bare key string.
+  return typeof stored === 'string' ? { apiKey: stored } : stored;
+}
+
+export async function saveParikshaaApi(apiKey: string, origin?: string): Promise<void> {
+  await chrome.storage.local.set({ [KEYS.parikshaaApi]: { apiKey, origin } });
 }
 
 export async function getMeta(): Promise<Meta> {

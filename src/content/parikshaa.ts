@@ -8,13 +8,15 @@
  */
 
 import { credentialsFromSession, diagnoseSession, readStoredSession } from '../core/parikshaa.ts';
-import { getParikshaaApiKey, saveParikshaaApiKey } from '../core/storage.ts';
+import { getParikshaaApi, saveParikshaaApi } from '../core/storage.ts';
 import { send } from '../core/messages.ts';
 import { startHighlighting } from './parikshaa-highlight.ts';
 
 const CHANNEL = 'dsa-revision-buddy-parikshaa';
 
 let apiKey = '';
+/** Supabase origin the page uses — decides which stored session is the right one. */
+let apiOrigin = '';
 let lastSentToken = '';
 
 /**
@@ -25,7 +27,7 @@ async function reportDiagnostic(): Promise<void> {
   try {
     await send({
       type: 'parikshaa:diagnostic',
-      diagnostic: diagnoseSession(window.localStorage),
+      diagnostic: diagnoseSession(window.localStorage, apiOrigin || undefined),
       hasApiKey: Boolean(apiKey),
     });
   } catch {
@@ -34,7 +36,7 @@ async function reportDiagnostic(): Promise<void> {
 }
 
 async function publish(): Promise<void> {
-  const session = readStoredSession(window.localStorage);
+  const session = readStoredSession(window.localStorage, apiOrigin || undefined);
   const credentials = session ? credentialsFromSession(session, apiKey, Date.now()) : undefined;
 
   if (!credentials) {
@@ -51,19 +53,26 @@ async function publish(): Promise<void> {
   }
 }
 
-async function useApiKey(next: string): Promise<void> {
-  if (!next || next === apiKey) return;
+async function useApiKey(next: string, origin: string): Promise<void> {
+  if (!next) return;
+  const unchanged = next === apiKey && (!origin || origin === apiOrigin);
   apiKey = next;
+  if (origin) apiOrigin = origin;
+  if (unchanged) return;
+
   // Persisting means later page loads never have to catch a request in flight.
-  await saveParikshaaApiKey(next).catch(() => undefined);
+  await saveParikshaaApi(apiKey, apiOrigin).catch(() => undefined);
   await publish();
 }
 
-window.addEventListener('message', (event: MessageEvent<{ channel?: string; apiKey?: string }>) => {
-  if (event.source !== window || event.data?.channel !== CHANNEL) return;
-  if (!event.data.apiKey) return;
-  void useApiKey(event.data.apiKey);
-});
+window.addEventListener(
+  'message',
+  (event: MessageEvent<{ channel?: string; apiKey?: string; origin?: string }>) => {
+    if (event.source !== window || event.data?.channel !== CHANNEL) return;
+    if (!event.data.apiKey) return;
+    void useApiKey(event.data.apiKey, event.data.origin ?? '');
+  },
+);
 
 function requestApiKey(): void {
   try {
@@ -76,8 +85,8 @@ function requestApiKey(): void {
 async function start(): Promise<void> {
   // A key captured on a previous visit is enough on its own — the page does not
   // have to make a Supabase call while this tab is open.
-  const stored = await getParikshaaApiKey().catch(() => undefined);
-  if (stored) await useApiKey(stored);
+  const stored = await getParikshaaApi().catch(() => undefined);
+  if (stored?.apiKey) await useApiKey(stored.apiKey, stored.origin ?? '');
 
   // The MAIN-world observer starts before this script and may already have seen
   // the key, so ask for it rather than waiting for the next request. Retried a

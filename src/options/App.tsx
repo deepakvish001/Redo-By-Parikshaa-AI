@@ -29,7 +29,15 @@ function describeSessionRead(diagnostic: SessionDiagnostic | undefined): string 
     }. If you are signed in there, you may be signed in on a different parikshaa.org subdomain than the tab that was open.`;
   }
   if (!diagnostic.parsed) {
-    return `Found ${diagnostic.matchedKeys.join(', ')}, but its contents could not be read.`;
+    return `Found ${diagnostic.matchedKeys.join(', ')}, but no readable session in any of them.`;
+  }
+  if (
+    diagnostic.preferredOrigin &&
+    diagnostic.candidateOrigins.length > 0 &&
+    !diagnostic.candidateOrigins.includes(diagnostic.preferredOrigin)
+  ) {
+    // Several Supabase projects can have sessions here; none is Parikshaa's.
+    return `Sessions were found for ${diagnostic.candidateOrigins.join(', ')}, but the site itself uses ${diagnostic.preferredOrigin}. Sign in again at parikshaa.org so a session for that project is stored.`;
   }
   if (!diagnostic.hasAccessToken) {
     return `Found ${diagnostic.matchedKeys.join(', ')}, but it holds no access token — the session has been signed out.`;

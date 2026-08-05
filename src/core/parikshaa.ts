@@ -83,40 +83,115 @@ export interface StoredSession {
  */
 const SESSION_KEY = /^(sb-.+-auth-token|supabase\.auth\.token)(\.\d+)?$/;
 
-/**
- * Reads the session supabase-js keeps in the site's `localStorage`,
- * reassembling it when a large value has been split across `…-auth-token.0`,
- * `…-auth-token.1`, and so on.
- */
-export function readStoredSession(storage: Storage): StoredSession | undefined {
-  const chunks: Array<[string, string]> = [];
-  for (let index = 0; index < storage.length; index++) {
-    const key = storage.key(index);
-    if (!key || !SESSION_KEY.test(key)) continue;
-    const value = storage.getItem(key);
-    if (value) chunks.push([key, value]);
-  }
-  if (chunks.length === 0) return undefined;
+/** One stored session, and what could be worked out about it. */
+export interface SessionCandidate {
+  /** The localStorage keys it was assembled from. */
+  keys: string[];
+  session?: StoredSession;
+  /** REST origin from the token's issuer claim, e.g. `https://<ref>.supabase.co`. */
+  origin?: string;
+  expiresAt?: number;
+}
 
-  // Numeric ordering matters — a plain sort puts ".10" before ".2".
-  chunks.sort(([a], [b]) => a.localeCompare(b, 'en', { numeric: true }));
-  let raw = chunks.map(([, value]) => value).join('');
+/** `sb-<ref>-auth-token.3` and `sb-<ref>-auth-token` belong to the same session. */
+function baseKey(key: string): string {
+  return key.replace(/\.\d+$/, '');
+}
 
+function parseSessionValue(raw: string): StoredSession | undefined {
+  let text = raw;
   // Newer clients prefix the serialised session with `base64-`.
-  if (raw.startsWith('base64-')) {
+  if (text.startsWith('base64-')) {
     try {
-      raw = atob(raw.slice('base64-'.length));
+      text = atob(text.slice('base64-'.length));
     } catch {
       return undefined;
     }
   }
 
   try {
-    const parsed = JSON.parse(raw) as StoredSession & { currentSession?: StoredSession };
+    const parsed = JSON.parse(text) as StoredSession & { currentSession?: StoredSession };
     return parsed.currentSession ?? parsed;
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Every Supabase session stored on the page.
+ *
+ * A browser profile can hold sessions for several Supabase projects at once —
+ * a project that was migrated away from, another app on the same domain — and
+ * they sit side by side under different `sb-<ref>-auth-token` keys. Grouping by
+ * base key keeps them apart; only the numbered chunks of one key are joined,
+ * because concatenating two separate sessions produces `{…}{…}`, which is not
+ * valid JSON and reads as a corrupt session rather than two good ones.
+ */
+export function readStoredSessions(storage: Storage): SessionCandidate[] {
+  const groups = new Map<string, Array<[string, string]>>();
+
+  for (let index = 0; index < storage.length; index++) {
+    const key = storage.key(index);
+    if (!key || !SESSION_KEY.test(key)) continue;
+    const value = storage.getItem(key);
+    if (!value) continue;
+
+    const group = groups.get(baseKey(key));
+    if (group) group.push([key, value]);
+    else groups.set(baseKey(key), [[key, value]]);
+  }
+
+  const candidates: SessionCandidate[] = [];
+  for (const chunks of groups.values()) {
+    // Numeric ordering matters — a plain sort puts ".10" before ".2".
+    chunks.sort(([a], [b]) => a.localeCompare(b, 'en', { numeric: true }));
+    const keys = chunks.map(([key]) => key);
+    const session = parseSessionValue(chunks.map(([, value]) => value).join(''));
+
+    const claims = session?.access_token ? decodeJwtPayload(session.access_token) : undefined;
+    const issuer = typeof claims?.iss === 'string' ? claims.iss : undefined;
+    const exp = typeof claims?.exp === 'number' ? claims.exp * 1000 : undefined;
+
+    candidates.push({
+      keys,
+      session,
+      origin: issuer ? issuer.replace(/\/auth\/v1\/?$/, '') : undefined,
+      expiresAt: session?.expires_at ? session.expires_at * 1000 : exp,
+    });
+  }
+
+  return candidates;
+}
+
+/**
+ * Chooses which stored session to use.
+ *
+ * When the page talks to a known Supabase origin, the session issued by that
+ * same project is the only correct answer — picking another project's session
+ * would authenticate against a database that knows nothing about it. Without
+ * that hint, the longest-lived session is the best available guess.
+ */
+export function pickSession(
+  candidates: SessionCandidate[],
+  preferredOrigin?: string,
+): SessionCandidate | undefined {
+  const usable = candidates.filter((candidate) => candidate.session?.access_token);
+  if (usable.length === 0) return undefined;
+
+  if (preferredOrigin) {
+    const matching = usable.find((candidate) => candidate.origin === preferredOrigin);
+    if (matching) return matching;
+  }
+
+  return [...usable].sort((a, b) => (b.expiresAt ?? 0) - (a.expiresAt ?? 0))[0];
+}
+
+/** The session to authenticate with, preferring the project the page uses. */
+export function readStoredSession(
+  storage: Storage,
+  preferredOrigin?: string,
+): StoredSession | undefined {
+  return pickSession(readStoredSessions(storage), preferredOrigin)?.session;
 }
 
 /**
@@ -132,6 +207,12 @@ export interface SessionDiagnostic {
   matchedKeys: string[];
   /** Every key present, when nothing matched — the fastest way to spot a rename. */
   sampleKeys?: string[];
+  /** How many distinct Supabase projects have a session stored here. */
+  candidateCount: number;
+  /** Their REST origins, so a mismatch with the page's project is visible. */
+  candidateOrigins: string[];
+  /** The origin the page itself talks to, when the observer has seen it. */
+  preferredOrigin?: string;
   parsed: boolean;
   hasAccessToken: boolean;
   hasIssuer: boolean;
@@ -139,7 +220,7 @@ export interface SessionDiagnostic {
   issuer?: string;
 }
 
-export function diagnoseSession(storage: Storage): SessionDiagnostic {
+export function diagnoseSession(storage: Storage, preferredOrigin?: string): SessionDiagnostic {
   const matchedKeys: string[] = [];
   const allKeys: string[] = [];
 
@@ -150,7 +231,9 @@ export function diagnoseSession(storage: Storage): SessionDiagnostic {
     if (SESSION_KEY.test(key)) matchedKeys.push(key);
   }
 
-  const session = readStoredSession(storage);
+  const candidates = readStoredSessions(storage);
+  const chosen = pickSession(candidates, preferredOrigin);
+  const session = chosen?.session;
   const claims = session?.access_token ? decodeJwtPayload(session.access_token) : undefined;
   const issuer = typeof claims?.iss === 'string' ? claims.iss : undefined;
 
@@ -158,7 +241,12 @@ export function diagnoseSession(storage: Storage): SessionDiagnostic {
     matchedKeys,
     // Only listed when nothing matched, and capped — this is a hint, not a dump.
     ...(matchedKeys.length === 0 ? { sampleKeys: allKeys.slice(0, 25) } : {}),
-    parsed: Boolean(session),
+    candidateCount: candidates.length,
+    candidateOrigins: candidates
+      .map((candidate) => candidate.origin)
+      .filter((origin): origin is string => Boolean(origin)),
+    preferredOrigin,
+    parsed: candidates.some((candidate) => candidate.session),
     hasAccessToken: Boolean(session?.access_token),
     hasIssuer: Boolean(issuer),
     hasUserId: Boolean(session?.user?.id ?? (typeof claims?.sub === 'string' ? claims.sub : '')),

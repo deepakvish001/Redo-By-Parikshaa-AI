@@ -6,7 +6,7 @@ import { isExpired, type SessionDiagnostic } from '../core/parikshaa.ts';
 import {
   deleteProblem,
   getMeta,
-  getParikshaaApiKey,
+  getParikshaaApi,
   getParikshaaCredentials,
   getProblem,
   getProblemList,
@@ -212,9 +212,9 @@ async function handle(request: Request): Promise<unknown> {
     }
 
     case 'parikshaa:status': {
-      const [credentials, apiKey, problems, stored] = await Promise.all([
+      const [credentials, api, problems, stored] = await Promise.all([
         getParikshaaCredentials(),
-        getParikshaaApiKey(),
+        getParikshaaApi(),
         getProblemList(),
         chrome.storage.local.get('parikshaaDiagnostic'),
       ]);
@@ -226,7 +226,7 @@ async function handle(request: Request): Promise<unknown> {
         diagnosticAt: recorded?.at,
         connected: Boolean(credentials),
         expired: credentials ? isExpired(credentials, Date.now()) : false,
-        hasApiKey: Boolean(apiKey),
+        hasApiKey: Boolean(api?.apiKey),
         hasSession: Boolean(credentials?.accessToken),
         email: credentials?.email,
         capturedAt: credentials?.capturedAt,

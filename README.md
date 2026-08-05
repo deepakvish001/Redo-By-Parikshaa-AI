@@ -111,6 +111,10 @@ revision can be closed out without leaving the page.
 - **If "Check connection" says nothing has arrived**, reload a parikshaa.org tab while signed
   in. The message distinguishes the two failures: not having seen the site at all, versus
   having seen it but finding no signed-in session.
+- **More than one Supabase project can have a session in the same browser** — a project the
+  app was migrated away from leaves its own `sb-<ref>-auth-token` behind. Each is read
+  separately and the one issued by the project the site actually calls is the one used, which
+  is why the observer records that origin alongside the API key.
 - Only languages Parikshaa's editor supports (Python, C++, Java, JavaScript, TypeScript, C,
   Go, SQL) can be stored; anything else is skipped with a reason shown in the popup.
 
