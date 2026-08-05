@@ -45,6 +45,11 @@ Solving is the easy part. Remembering three months later is the part nothing els
 - **Publishes an animated coding profile.** `PROFILE.md` and `assets/profile.svg` are rebuilt
   on every sync: totals, streak, difficulty and platform breakdowns, topic mastery, the
   problems you fought hardest for, and the revision queue.
+- **Keeps the whole record, not just the outcome.** Every open, solve, review, hint and sync
+  is logged with a timestamp, an outcome and a reason — "GitHub denied the request",
+  "stage 3 → 1, next in 1d" — and counted, so a problem's card can say
+  "opened 4× · revised 2× · hints 1×" and expand into the log. The same table is committed
+  into the problem's README.
 - **Keeps your reasoning, not just the code.** Notes and your own time/space complexity are
   editable from the popup and go into the problem's committed README.
 - **Ranks your weak topics.** Mastery per tag is computed from how far each problem has climbed
@@ -225,7 +230,8 @@ your-solutions-repo/
 │   └── medium/
 │       └── 0011-container-with-most-water/
 │           ├── solution.py
-│           └── README.md                  # link, tags, judge stats, attempt timeline, notes
+│           └── README.md                  # link, tags, judge stats, attempt timeline,
+│                                           #   the full activity record, and your notes
 └── codeforces/
     └── 1352A-sum-of-round-numbers/
         ├── solution.cpp

@@ -14,6 +14,7 @@ import {
   formatDuration as formatSpan,
   summarise,
 } from '../core/journal.ts';
+import { PARIKSHAA_URL, parikshaaProblemUrl } from '../core/brand.ts';
 import { send, type ContestsResponse, type DashboardData } from '../core/messages.ts';
 import { dueProblems, formatDueIn, upcomingProblems } from '../core/srs.ts';
 import { PLATFORM_LABELS, type Difficulty, type Recall, type SolvedProblem, type TopicStat } from '../core/types.ts';
@@ -25,6 +26,7 @@ import {
   GearIcon,
   PlatformMark,
   SearchIcon,
+  SparkIcon,
   TrophyIcon,
 } from './icons.tsx';
 
@@ -430,6 +432,20 @@ function ProblemCard({
         <button type="button" onClick={() => openUrl(problem.url)}>
           Open problem
         </button>
+        {/* Only when we know the problem is there — a guessed URL that 404s is
+            worse than no link at all. */}
+        {problem.parikshaa?.status === 'synced' && (
+          <button
+            type="button"
+            className="iconbtn"
+            onClick={() =>
+              openUrl(problem.parikshaa?.url ?? parikshaaProblemUrl(problem.slug))
+            }
+          >
+            <SparkIcon size={12} />
+            On Parikshaa
+          </button>
+        )}
         {!showRecall && (
           <>
             <button type="button" onClick={() => setEditing((open) => !open)}>
@@ -837,6 +853,14 @@ export function App() {
                 {data.stats.total === 0
                   ? 'Solve a problem on LeetCode or Codeforces and it will show up here.'
                   : 'Come back when the next problem comes around.'}
+                {/* The one moment there is genuinely nothing to do here. */}
+                <div style={{ marginTop: 12 }}>
+                  Want something to solve?{' '}
+                  <a href={PARIKSHAA_URL} target="_blank" rel="noreferrer">
+                    Pick a sheet on Parikshaa
+                  </a>{' '}
+                  — solves there get ticked off automatically.
+                </div>
                 {upcoming.length > 0 && (
                   <div style={{ marginTop: 16, textAlign: 'left' }}>
                     <div className="section-title">Coming up</div>
