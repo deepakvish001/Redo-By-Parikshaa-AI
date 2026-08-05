@@ -199,12 +199,26 @@ export function App() {
     setVerifyStatus(null);
     try {
       const info = await send({ type: 'github:verify', config: settings.github });
-      setVerifyStatus({
-        tone: info.canPush ? 'ok' : 'error',
-        message: info.canPush
-          ? `Connected as ${info.login} — ${info.fullName} (default branch: ${info.defaultBranch}).`
-          : `Reached ${info.fullName}, but this token cannot write to it. Grant "Contents: read and write".`,
-      });
+      const branch = settings.github.branch || info.defaultBranch;
+
+      if (!info.canPush) {
+        setVerifyStatus({
+          tone: 'error',
+          message: `Reached ${info.fullName} as ${info.login}, but this token cannot write to it. Grant "Contents: read and write" on that repository.`,
+        });
+      } else if (!info.branchExists) {
+        // Read access proves the token works, so the branch is the only thing
+        // left that can still fail — and it fails at commit time, not here.
+        setVerifyStatus({
+          tone: 'error',
+          message: `Token can write to ${info.fullName}, but branch "${branch}" does not exist. Its default branch is "${info.defaultBranch}".`,
+        });
+      } else {
+        setVerifyStatus({
+          tone: 'ok',
+          message: `Connected as ${info.login} — writing to ${info.fullName} on "${branch}".`,
+        });
+      }
     } catch (error) {
       setVerifyStatus({
         tone: 'error',

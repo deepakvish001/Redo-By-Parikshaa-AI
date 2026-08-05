@@ -355,6 +355,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [contests, setContests] = useState<ContestsResponse | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [retryingAll, setRetryingAll] = useState(false);
   const [tab, setTab] = useState<Tab>('due');
 
   const load = useCallback(async () => {
@@ -411,6 +412,30 @@ export function App() {
     },
     [load],
   );
+
+  /**
+   * A sync that failed stays failed — nothing re-drives it. Fixing the token is
+   * the usual remedy, and that happens after the failure, so the problems it
+   * would have covered need a way back.
+   */
+  const failedSyncs = useMemo(
+    () => (data ? data.problems.filter((problem) => problem.github.status === 'error') : []),
+    [data],
+  );
+
+  const handleRetryFailed = useCallback(async () => {
+    setRetryingAll(true);
+    try {
+      // Serially: the service worker already queues commits, and a burst only
+      // multiplies the same failure if the cause has not been fixed.
+      for (const problem of failedSyncs) {
+        await send({ type: 'problem:resync', id: problem.id });
+      }
+      await load();
+    } finally {
+      setRetryingAll(false);
+    }
+  }, [failedSyncs, load]);
 
   const due = useMemo(
     () => (data ? dueProblems(data.problems, data.now) : []),
@@ -530,6 +555,25 @@ export function App() {
               <div className="banner">
                 GitHub sync is off — solutions are only stored in this browser. Turn it on in
                 Options to back them up.
+              </div>
+            )}
+            {failedSyncs.length > 0 && (
+              <div className="banner banner--error">
+                <div>
+                  {failedSyncs.length === 1
+                    ? '1 solution could not reach GitHub.'
+                    : `${failedSyncs.length} solutions could not reach GitHub.`}{' '}
+                  {failedSyncs[0]?.github.error}
+                </div>
+                <button
+                  type="button"
+                  className="ghost"
+                  style={{ marginTop: 8 }}
+                  disabled={retryingAll}
+                  onClick={() => void handleRetryFailed()}
+                >
+                  {retryingAll ? 'Retrying…' : 'Retry these'}
+                </button>
               </div>
             )}
             {data.problems.length === 0 ? (
