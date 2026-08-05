@@ -1,4 +1,29 @@
-export type Platform = 'leetcode' | 'codeforces';
+export type Platform =
+  | 'leetcode'
+  | 'codeforces'
+  | 'atcoder'
+  | 'codechef'
+  | 'hackerrank'
+  | 'geeksforgeeks';
+
+/** Display names, and the order platforms appear in settings and stats. */
+export const PLATFORMS: Platform[] = [
+  'leetcode',
+  'codeforces',
+  'atcoder',
+  'codechef',
+  'hackerrank',
+  'geeksforgeeks',
+];
+
+export const PLATFORM_LABELS: Record<Platform, string> = {
+  leetcode: 'LeetCode',
+  codeforces: 'Codeforces',
+  atcoder: 'AtCoder',
+  codechef: 'CodeChef',
+  hackerrank: 'HackerRank',
+  geeksforgeeks: 'GeeksforGeeks',
+};
 
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'unknown';
 

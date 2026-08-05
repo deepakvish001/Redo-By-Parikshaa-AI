@@ -1,11 +1,26 @@
 import type { AcceptedSubmission, Difficulty } from '../core/types.ts';
+import { onExchange } from './exchange.ts';
 import type { AdapterContext, PlatformAdapter } from './types.ts';
 
-const CHANNEL = 'dsa-revision-buddy';
+const CHECK_URL = /\/submissions\/detail\/(\d+)\/check\/?/;
 
-interface AcceptedRelay {
-  channel: string;
-  kind: 'accepted';
+/** The payload LeetCode's verdict-polling endpoint returns. */
+interface CheckPayload {
+  state?: string;
+  status_msg?: string;
+  question_id?: string | number;
+  submission_id?: string | number;
+  lang?: string;
+  pretty_lang?: string;
+  status_runtime?: string;
+  status_memory?: string;
+  runtime_percentile?: number;
+  memory_percentile?: number;
+  code?: string;
+}
+
+/** What one accepted verdict tells us before metadata is fetched. */
+interface AcceptedVerdict {
   submissionId: string;
   questionId: string;
   language: string;
@@ -14,15 +29,6 @@ interface AcceptedRelay {
   fallbackCode?: string;
   href: string;
 }
-
-interface AttemptRelay {
-  channel: string;
-  kind: 'attempt';
-  href: string;
-  verdict: string;
-}
-
-type Relay = AcceptedRelay | AttemptRelay;
 
 interface QuestionMeta {
   questionFrontendId?: string;
@@ -118,11 +124,72 @@ function titleFromSlug(slug: string): string {
     .join(' ');
 }
 
+/**
+ * Interprets one verdict poll.
+ *
+ * Returns `undefined` while the judge is still running, the verdict text when
+ * the submission failed, or the accepted details when it passed. Exported so
+ * the shape can be tested against recorded payloads.
+ */
+export function readVerdict(
+  url: string,
+  responseBody: string,
+  href: string,
+  editorCode?: string,
+): { kind: 'accepted'; verdict: AcceptedVerdict } | { kind: 'failed'; verdict: string } | undefined {
+  const match = CHECK_URL.exec(url);
+  if (!match) return undefined;
+
+  let payload: CheckPayload;
+  try {
+    payload = JSON.parse(responseBody) as CheckPayload;
+  } catch {
+    return undefined;
+  }
+
+  // The endpoint is polled until the judge finishes; ignore in-flight states.
+  if (payload.state && payload.state !== 'SUCCESS') return undefined;
+  if (!payload.status_msg) return undefined;
+
+  if (payload.status_msg !== 'Accepted') {
+    return { kind: 'failed', verdict: payload.status_msg };
+  }
+
+  const submissionId = String(payload.submission_id ?? match[1] ?? '');
+  if (!submissionId) return undefined;
+
+  const runtimeNote = payload.status_runtime
+    ? `Runtime ${payload.status_runtime}${
+        payload.runtime_percentile ? ` (beats ${payload.runtime_percentile.toFixed(1)}%)` : ''
+      }`
+    : undefined;
+  const memoryNote = payload.status_memory
+    ? `Memory ${payload.status_memory}${
+        payload.memory_percentile ? ` (beats ${payload.memory_percentile.toFixed(1)}%)` : ''
+      }`
+    : undefined;
+
+  return {
+    kind: 'accepted',
+    verdict: {
+      submissionId,
+      questionId: String(payload.question_id ?? ''),
+      language: payload.pretty_lang || payload.lang || '',
+      runtimeNote,
+      memoryNote,
+      fallbackCode: payload.code ?? editorCode,
+      href,
+    },
+  };
+}
+
 export class LeetCodeAdapter implements PlatformAdapter {
   readonly platform = 'leetcode' as const;
 
   /** Failed verdicts seen this session, per problem slug. */
   private readonly attempts = new Map<string, number>();
+  /** Verdict polling repeats, so each submission is only acted on once. */
+  private readonly seen = new Set<string>();
 
   matches(url: URL): boolean {
     return url.hostname === 'leetcode.com' || url.hostname === 'leetcode.cn';
@@ -133,29 +200,32 @@ export class LeetCodeAdapter implements PlatformAdapter {
   }
 
   start(context: AdapterContext): () => void {
-    const listener = (event: MessageEvent<Relay>) => {
-      if (event.source !== window) return;
-      const data = event.data;
-      if (!data || data.channel !== CHANNEL) return;
+    return onExchange((exchange) => {
+      const result = readVerdict(
+        exchange.url,
+        exchange.responseBody,
+        exchange.href,
+        exchange.editorCode,
+      );
+      if (!result) return;
 
-      if (data.kind === 'attempt') {
-        const slug = slugFromHref(data.href);
+      const key = CHECK_URL.exec(exchange.url)?.[1] ?? exchange.url;
+      if (this.seen.has(key)) return;
+      this.seen.add(key);
+
+      if (result.kind === 'failed') {
+        const slug = slugFromHref(exchange.href);
         if (!slug) return;
         this.attempts.set(slug, (this.attempts.get(slug) ?? 0) + 1);
         context.onAttempt(`leetcode:${slug}`);
         return;
       }
 
-      if (data.kind === 'accepted') {
-        void this.resolve(data, context);
-      }
-    };
-
-    window.addEventListener('message', listener);
-    return () => window.removeEventListener('message', listener);
+      void this.resolve(result.verdict, context);
+    });
   }
 
-  private async resolve(relay: AcceptedRelay, context: AdapterContext): Promise<void> {
+  private async resolve(relay: AcceptedVerdict, context: AdapterContext): Promise<void> {
     const hrefSlug = slugFromHref(relay.href);
     let details: SubmissionDetails | undefined;
 

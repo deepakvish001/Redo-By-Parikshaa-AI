@@ -2,11 +2,11 @@
 
 A Chrome extension for people who grind DSA and then forget it.
 
-When a submission is accepted on **LeetCode** or **Codeforces**, the extension commits the
-solution to a GitHub repository you own, ticks the problem off on [Parikshaa](https://parikshaa.org)
-if it has a match there, and puts it on a spaced-repetition schedule. Days later the toolbar
-badge tells you what is due; you re-solve the problem on the site, rate how it went, and the
-schedule adapts.
+When a submission is accepted on **LeetCode, Codeforces, AtCoder, CodeChef, HackerRank** or
+**GeeksforGeeks**, the extension commits the solution to a GitHub repository you own, ticks the
+problem off on [Parikshaa](https://parikshaa.org) if it has a match there, and puts it on a
+spaced-repetition schedule. Days later the toolbar badge tells you what is due; you re-solve
+the problem on the site, rate how it went, and the schedule adapts.
 
 Solving is the easy part. Remembering three months later is the part nothing else helps with.
 
@@ -14,6 +14,8 @@ Solving is the easy part. Remembering three months later is the part nothing els
 
 ## What it does
 
+- **Tracks six judges** — LeetCode, Codeforces, AtCoder, CodeChef, HackerRank and
+  GeeksforGeeks — behind one adapter interface, each toggleable in options.
 - **Auto-commits accepted solutions** to a repo of your choice, organised as
   `leetcode/medium/0011-container-with-most-water/solution.py`, with a per-problem `README.md`
   holding the link, tags, difficulty, judge stats and your own notes.
@@ -142,19 +144,46 @@ your-solutions-repo/
 
 ## How detection works
 
-**LeetCode** reports verdicts by polling `/submissions/detail/<id>/check/` from the page. A
-`MAIN`-world content script observes that traffic read-only — it never blocks, delays or
-rewrites a request — and relays accepted submissions to the extension, which then pulls the
-source and problem metadata from LeetCode's own GraphQL API. If GraphQL is unavailable it
-falls back to the editor contents and the URL slug.
+Judges fall into two camps, and there is one mechanism for each.
 
-**Codeforces** renders verdicts into the submissions table, so a `MutationObserver` watches for
-rows that reach `Accepted` under your handle, then fetches the submission page for the source
-and the problem page for tags and rating. Ratings map to difficulty: ≤1200 easy, ≤1800 medium,
-above that hard.
+**Judges that render verdicts into HTML** — Codeforces, AtCoder — are watched with a
+`MutationObserver` over the submissions table. When a row reaches an accepted verdict under
+your own handle, the submission page is fetched for the source and, where the site has one,
+the problem page for tags and difficulty.
+
+**Judges that poll their own API** — LeetCode, CodeChef, HackerRank, GeeksforGeeks — are
+watched by a single shared `MAIN`-world observer (`src/content/observer.ts`). It wraps `fetch`
+and `XMLHttpRequest`, and for a narrow allowlist of submission URLs it relays the request body,
+the response body and the current editor contents to the adapter, which decides what they mean.
+It never blocks, delays or rewrites a request.
+
+The allowlist is deliberately narrow (`src/adapters/observed.ts`): the observer relays request
+bodies, and a submission request body contains your source code, so nothing broader than the
+submission endpoints is ever read.
+
+| Platform | Detection | Source of the code | Difficulty | Tags |
+| --- | --- | --- | --- | --- |
+| LeetCode | verdict poll | GraphQL, else the editor | from GraphQL | from GraphQL |
+| Codeforces | submissions table | submission page | from problem rating | from problem page |
+| AtCoder | submissions table | submission page | — | — |
+| CodeChef | `api/ide` poll | submit request, else editor | — | — |
+| HackerRank | submissions poll | response, else submit request | — | — |
+| GeeksforGeeks | practice API poll | submit request, else editor | from the page header | — |
 
 Adding a platform means implementing the `PlatformAdapter` interface in `src/adapters/` and
-registering it — the rest of the pipeline is platform-agnostic.
+registering it in `src/adapters/index.ts` — the rest of the pipeline is platform-agnostic. If
+the judge polls an API, add its URL to `OBSERVED_URLS` and the adapter only has to interpret
+the payload.
+
+### How much to trust each adapter
+
+The LeetCode and Codeforces paths follow long-stable, widely-documented endpoints. The
+AtCoder, CodeChef, HackerRank and GeeksforGeeks adapters were written against those sites'
+published request shapes and are covered by fixture tests, but they have **not** been run
+against a live logged-in session on those sites — the payload interpreters probe a few likely
+field names and give up quietly rather than guessing when nothing matches. If a platform stops
+picking submissions up, that adapter's `read*` function is the one place to look, and its test
+file shows the shape it expects.
 
 **Parikshaa** needs no verdict detection: a separate content script on parikshaa.org reads the
 Supabase session from `localStorage` and captures the publishable key from the site's own
@@ -163,10 +192,14 @@ watches — it never alters a request.
 
 ## Known limits
 
-- Both sites can change their markup or endpoints at any time; detection is best-effort and the
-  adapters are written to fail quietly rather than break the page.
-- Codeforces submissions are only picked up on pages that show the submissions table (the
-  status page you land on after submitting, `/contest/<id>/my`, or a submission page).
+- Any of these sites can change their markup or endpoints at any time; detection is best-effort
+  and every adapter is written to fail quietly rather than break the page.
+- Codeforces and AtCoder submissions are only picked up on pages that show the submissions
+  table (the status page you land on after submitting, `/contest/<id>/my` or
+  `/contests/<id>/submissions/me`, or a submission page).
+- AtCoder, CodeChef and HackerRank expose no difficulty or tags in the paths we read, so those
+  problems land as unrated and untagged — they still schedule and sync, but they contribute
+  nothing to topic mastery.
 - Attempt counts are per browser session, so they reset when you close the tab.
 - Parikshaa sync needs a parikshaa.org tab to have been open at some point in the last hour;
   otherwise problems queue until the session refreshes.
@@ -187,7 +220,7 @@ npm run icons      # regenerate the PNG icons from scripts/generate-icons.mjs
 src/
 ├── core/        # pure logic: SRS scheduler, analytics, GitHub + Parikshaa clients, storage
 ├── adapters/    # one file per platform, behind a shared interface
-├── content/     # injected observers (LeetCode, Parikshaa) + in-page UI
+├── content/     # shared submission observer, Parikshaa bridge, in-page UI
 ├── background/  # service worker: message routing, sync queues, badge, alarms
 ├── popup/       # dashboard (due / solved / stats)
 └── options/     # settings

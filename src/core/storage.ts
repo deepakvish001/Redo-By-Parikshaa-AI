@@ -1,5 +1,5 @@
 import type { ParikshaaCredentials } from './parikshaa.ts';
-import type { Platform, Settings, SolvedProblem } from './types.ts';
+import { PLATFORMS, type Platform, type Settings, type SolvedProblem } from './types.ts';
 
 const KEYS = {
   settings: 'settings',
@@ -34,10 +34,11 @@ export const DEFAULT_SETTINGS: Settings = {
     skipEasy: false,
     notify: true,
   },
-  platforms: {
-    leetcode: true,
-    codeforces: true,
-  },
+  // Every supported judge is tracked unless the user turns one off.
+  platforms: Object.fromEntries(PLATFORMS.map((platform) => [platform, true])) as Record<
+    Platform,
+    boolean
+  >,
 };
 
 const DEFAULT_META: Meta = {

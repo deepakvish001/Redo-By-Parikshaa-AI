@@ -9,6 +9,11 @@
     "https://leetcode.com/*",
     "https://leetcode.cn/*",
     "https://codeforces.com/*",
+    "https://atcoder.jp/*",
+    "https://www.codechef.com/*",
+    "https://www.hackerrank.com/*",
+    "https://www.geeksforgeeks.org/*",
+    "https://practiceapi.geeksforgeeks.org/*",
     "https://api.github.com/*",
     "https://parikshaa.org/*",
     "https://www.parikshaa.org/*",
@@ -36,8 +41,14 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://leetcode.com/*", "https://leetcode.cn/*"],
-      "js": ["injected.js"],
+      "matches": [
+        "https://leetcode.com/*",
+        "https://leetcode.cn/*",
+        "https://www.codechef.com/*",
+        "https://www.hackerrank.com/*",
+        "https://www.geeksforgeeks.org/problems/*"
+      ],
+      "js": ["observer.js"],
       "world": "MAIN",
       "run_at": "document_start",
       "all_frames": false
@@ -46,7 +57,11 @@
       "matches": [
         "https://leetcode.com/*",
         "https://leetcode.cn/*",
-        "https://codeforces.com/*"
+        "https://codeforces.com/*",
+        "https://atcoder.jp/*",
+        "https://www.codechef.com/*",
+        "https://www.hackerrank.com/*",
+        "https://www.geeksforgeeks.org/problems/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle",

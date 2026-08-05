@@ -1,14 +1,9 @@
 import { useEffect, useState } from 'react';
 import { send } from '../core/messages.ts';
 import { DEFAULT_SETTINGS } from '../core/storage.ts';
-import type { Platform, Settings } from '../core/types.ts';
+import { PLATFORMS, PLATFORM_LABELS, type Settings } from '../core/types.ts';
 
 type Status = { tone: 'ok' | 'error'; message: string } | null;
-
-const PLATFORM_LABELS: Record<Platform, string> = {
-  leetcode: 'LeetCode',
-  codeforces: 'Codeforces',
-};
 
 /** Accepts "1, 3, 7" and similar, dropping anything that is not a positive day count. */
 function parseIntervals(text: string): number[] {
@@ -322,10 +317,10 @@ export function App() {
       <section className="panel">
         <h2 className="panel__title">Platforms</h2>
         <p className="panel__hint">Turn off a platform to stop tracking submissions there.</p>
-        {(Object.keys(PLATFORM_LABELS) as Platform[]).map((platform) => (
+        {PLATFORMS.map((platform) => (
           <Toggle
             key={platform}
-            checked={settings.platforms[platform]}
+            checked={settings.platforms[platform] ?? true}
             onChange={(value) =>
               setSettings({
                 ...settings,

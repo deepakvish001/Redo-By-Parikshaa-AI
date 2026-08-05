@@ -1,5 +1,12 @@
 import { DAY_MS, isDue } from './srs.ts';
-import type { Difficulty, Platform, SolvedProblem, Stats, TopicStat } from './types.ts';
+import {
+  PLATFORMS,
+  type Difficulty,
+  type Platform,
+  type SolvedProblem,
+  type Stats,
+  type TopicStat,
+} from './types.ts';
 
 /** Local-timezone `YYYY-MM-DD`, used as the key for streak accounting. */
 export function dayKey(timestamp: number): string {
@@ -99,12 +106,16 @@ export function computeStats(
   now: number,
 ): Stats {
   const byDifficulty: Record<Difficulty, number> = { easy: 0, medium: 0, hard: 0, unknown: 0 };
-  const byPlatform: Record<Platform, number> = { leetcode: 0, codeforces: 0 };
+  const byPlatform = Object.fromEntries(
+    PLATFORMS.map((platform) => [platform, 0]),
+  ) as Record<Platform, number>;
   let reviewsCompleted = 0;
 
   for (const problem of problems) {
     byDifficulty[problem.difficulty] += 1;
-    byPlatform[problem.platform] += 1;
+    // A record stored by an older version may name a platform we no longer
+    // list; counting it would create a key nothing else expects.
+    if (problem.platform in byPlatform) byPlatform[problem.platform] += 1;
     reviewsCompleted += problem.revision.reviewCount;
   }
 
