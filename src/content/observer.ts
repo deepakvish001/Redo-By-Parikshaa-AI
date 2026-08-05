@@ -16,6 +16,8 @@ import {
   isObserved,
   summarisePath,
   type DiagnosticsToggle,
+  type EditorReply,
+  type EditorRequest,
   type ObservedExchange,
   type ObservedGlimpse,
 } from '../adapters/observed.ts';
@@ -52,12 +54,43 @@ function glimpse(url: string, method: string, matched: boolean): void {
   }
 }
 
+/** Hands the editor's contents to the isolated world when it asks. */
+window.addEventListener('message', (event: MessageEvent<EditorRequest>) => {
+  if (event.source !== window) return;
+  if (event.data?.channel !== OBSERVER_CHANNEL || event.data.kind !== 'request-editor') return;
+  try {
+    window.postMessage(
+      {
+        channel: OBSERVER_CHANNEL,
+        kind: 'editor',
+        id: event.data.id,
+        code: readEditorCode(),
+        language: readEditorLanguage(),
+      } satisfies EditorReply,
+      window.location.origin,
+    );
+  } catch {
+    /* observation only */
+  }
+});
+
 interface EditorLike {
   getValue?: () => string;
+  getLanguageId?: () => string;
 }
 
 interface MonacoLike {
   editor?: { getModels?: () => EditorLike[] };
+}
+
+/** The language the editor is set to — free, and better than guessing. */
+function readEditorLanguage(): string | undefined {
+  try {
+    const monaco = (window as unknown as { monaco?: MonacoLike }).monaco;
+    return monaco?.editor?.getModels?.()[0]?.getLanguageId?.();
+  } catch {
+    return undefined;
+  }
 }
 
 interface AceLike {

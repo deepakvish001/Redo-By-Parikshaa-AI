@@ -44,6 +44,27 @@ export interface ObservedGlimpse {
   at: number;
 }
 
+/**
+ * The isolated world asking the MAIN world for the editor's contents.
+ *
+ * Only the page's own world can reach Monaco or Ace, and a verdict noticed in
+ * the DOM arrives with no request to carry the source along with it.
+ */
+export interface EditorRequest {
+  channel: typeof OBSERVER_CHANNEL;
+  kind: 'request-editor';
+  id: string;
+}
+
+export interface EditorReply {
+  channel: typeof OBSERVER_CHANNEL;
+  kind: 'editor';
+  id: string;
+  code?: string;
+  /** The editor's own language id, e.g. `python`, `cpp`. */
+  language?: string;
+}
+
 /** Turns the observer's path reporting on or off from the isolated world. */
 export interface DiagnosticsToggle {
   channel: typeof OBSERVER_CHANNEL;

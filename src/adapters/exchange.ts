@@ -1,4 +1,50 @@
-import { OBSERVER_CHANNEL, type ObservedExchange } from './observed.ts';
+import {
+  OBSERVER_CHANNEL,
+  type EditorReply,
+  type EditorRequest,
+  type ObservedExchange,
+} from './observed.ts';
+
+/**
+ * Asks the MAIN-world observer what is in the page's editor.
+ *
+ * Resolves to undefined rather than rejecting if nothing answers — this is a
+ * best-effort source of the code, not a requirement.
+ */
+export function requestEditorCode(
+  timeoutMs = 1200,
+): Promise<{ code?: string; language?: string }> {
+  return new Promise((resolve) => {
+    const id = `editor-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let settled = false;
+
+    const finish = (reply?: { code?: string; language?: string }) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener('message', listener);
+      resolve(reply ?? {});
+    };
+
+    const listener = (event: MessageEvent<EditorReply>) => {
+      if (event.source !== window) return;
+      if (event.data?.channel !== OBSERVER_CHANNEL || event.data.kind !== 'editor') return;
+      if (event.data.id !== id) return;
+      finish({ code: event.data.code, language: event.data.language });
+    };
+
+    window.addEventListener('message', listener);
+    setTimeout(() => finish(undefined), timeoutMs);
+
+    try {
+      window.postMessage(
+        { channel: OBSERVER_CHANNEL, kind: 'request-editor', id } satisfies EditorRequest,
+        window.location.origin,
+      );
+    } catch {
+      finish(undefined);
+    }
+  });
+}
 
 /** Subscribes to the MAIN-world observer. Returns a teardown function. */
 export function onExchange(handler: (exchange: ObservedExchange) => void): () => void {
