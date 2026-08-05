@@ -56,7 +56,7 @@ function describeFailure(response: Response, body: string): string {
 
   switch (response.status) {
     case 401:
-      return `GitHub rejected the token — it is invalid or expired. Generate a new one and paste it in Options.${quoted}`;
+      return `GitHub rejected the token — it is invalid or expired. Generate a new one and paste it in Settings.${quoted}`;
     case 403: {
       if (response.headers.get('x-ratelimit-remaining') === '0') {
         const reset = Number(response.headers.get('x-ratelimit-reset'));

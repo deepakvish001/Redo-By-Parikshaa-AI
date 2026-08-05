@@ -1,4 +1,65 @@
-import type { AttemptEvent, AttemptSummary, Difficulty } from './types.ts';
+import type {
+  ActivityCounts,
+  ActivityEvent,
+  ActivityKind,
+  AttemptEvent,
+  AttemptSummary,
+  Difficulty,
+} from './types.ts';
+
+/** A history longer than this is trimmed from the front. */
+export const MAX_HISTORY = 120;
+
+export const ACTIVITY_KINDS: ActivityKind[] = [
+  'opened',
+  'solved',
+  'review',
+  'hint',
+  'github',
+  'parikshaa',
+  'note',
+];
+
+export function appendActivity(
+  history: ActivityEvent[],
+  event: ActivityEvent,
+): ActivityEvent[] {
+  // Opening the same problem twice in a minute is one visit, not two — the SPA
+  // fires a navigation for every tab within the problem page.
+  const last = history[history.length - 1];
+  if (
+    last &&
+    last.kind === event.kind &&
+    last.outcome === event.outcome &&
+    last.reason === event.reason &&
+    event.at - last.at < 60_000
+  ) {
+    return history;
+  }
+
+  const next = [...history, event];
+  return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next;
+}
+
+export function countActivity(history: ActivityEvent[] = []): ActivityCounts {
+  const counts = Object.fromEntries(ACTIVITY_KINDS.map((kind) => [kind, 0])) as ActivityCounts;
+  for (const event of history) counts[event.kind] = (counts[event.kind] ?? 0) + 1;
+  return counts;
+}
+
+const ACTIVITY_LABEL: Record<ActivityKind, string> = {
+  opened: 'Opened',
+  solved: 'Solved',
+  review: 'Revised',
+  hint: 'Hint taken',
+  github: 'GitHub sync',
+  parikshaa: 'Parikshaa sync',
+  note: 'Notes edited',
+};
+
+export function activityLabel(kind: ActivityKind): string {
+  return ACTIVITY_LABEL[kind] ?? kind;
+}
 
 /** Beyond this a journal is trimmed from the front — runs pile up fast. */
 export const MAX_EVENTS = 60;

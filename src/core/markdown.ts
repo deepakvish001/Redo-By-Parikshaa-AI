@@ -1,6 +1,18 @@
-import { describeStruggle, formatDuration, summarise } from './journal.ts';
+import {
+  ACTIVITY_KINDS,
+  activityLabel,
+  countActivity,
+  describeStruggle,
+  formatDuration,
+  summarise,
+} from './journal.ts';
 import { normalizeProblemId, solutionPath } from './paths.ts';
-import { PLATFORM_LABELS, type AttemptEvent, type SolvedProblem } from './types.ts';
+import {
+  PLATFORM_LABELS,
+  type ActivityEvent,
+  type AttemptEvent,
+  type SolvedProblem,
+} from './types.ts';
 
 const PLATFORM_LABEL: Record<string, string> = PLATFORM_LABELS;
 
@@ -127,9 +139,41 @@ export function buildProblemReadme(problem: SolvedProblem): string {
 
   lines.push('', '## Approach', '', problem.note?.trim() || '_Add your notes here._');
   lines.push(...attemptSection(problem.events ?? []));
+  lines.push(...historySection(problem.history ?? []));
   lines.push('', '---', '', '<sub>Committed by Redo.</sub>', '');
 
   return lines.join('\n');
+}
+
+function fullStamp(timestamp: number): string {
+  return new Date(timestamp).toISOString().slice(0, 16).replace('T', ' ');
+}
+
+/**
+ * The rest of the record: how many times the problem was opened, revised,
+ * hinted at and synced, and every one of those with its reason and its time.
+ */
+function historySection(history: ActivityEvent[]): string[] {
+  if (history.length === 0) return [];
+
+  const counts = countActivity(history);
+  const summary = ACTIVITY_KINDS.filter((kind) => counts[kind] > 0)
+    .map((kind) => `${activityLabel(kind)} ${counts[kind]}×`)
+    .join(' · ');
+
+  const lines = ['', '## Record', '', summary, ''];
+  lines.push('| When (UTC) | What | Outcome | Reason |', '| --- | --- | --- | --- |');
+
+  // Newest first: the current state of the problem is what a reader wants.
+  for (const event of [...history].reverse()) {
+    lines.push(
+      `| ${fullStamp(event.at)} | ${activityLabel(event.kind)} | ${
+        escapeCell(event.outcome ?? '—')
+      } | ${escapeCell(event.reason ?? '—')} |`,
+    );
+  }
+
+  return lines;
 }
 
 /**

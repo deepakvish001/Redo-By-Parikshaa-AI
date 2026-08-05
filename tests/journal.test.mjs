@@ -4,7 +4,16 @@ import test from 'node:test';
 import { readAttempt, readVerdict } from '../src/adapters/leetcode.ts';
 import { looksLikeLanguage } from '../src/adapters/codeforces.ts';
 import { isObserved } from '../src/adapters/observed.ts';
-import { appendEvent, describeStruggle, struggleScore, summarise } from '../src/core/journal.ts';
+import {
+  MAX_HISTORY,
+  activityLabel,
+  appendActivity,
+  appendEvent,
+  countActivity,
+  describeStruggle,
+  struggleScore,
+  summarise,
+} from '../src/core/journal.ts';
 import { initialRevision, targetReviewsFor } from '../src/core/srs.ts';
 
 const RUN_URL = 'https://leetcode.com/submissions/detail/runcode_1785956329.612122_JxwFLKOc3o/check/';
@@ -233,4 +242,57 @@ test('Codeforces language detection does not read problem titles', () => {
   assert.equal(looksLikeLanguage('PyPy 3-64 (7.3.15)'), true);
   assert.equal(looksLikeLanguage('Java 21 64bit'), true);
   assert.equal(looksLikeLanguage('D'), true);
+});
+
+test('activity is counted per kind, and a repeat open within a minute is one visit', () => {
+  const base = 1_700_000_000_000;
+  let history = [];
+
+  // The problem page fires a navigation for each of its tabs.
+  history = appendActivity(history, { at: base, kind: 'opened' });
+  history = appendActivity(history, { at: base + 5_000, kind: 'opened' });
+  assert.equal(history.length, 1, 'two opens five seconds apart are one visit');
+
+  history = appendActivity(history, { at: base + 120_000, kind: 'opened' });
+  history = appendActivity(history, {
+    at: base + 200_000,
+    kind: 'solved',
+    outcome: 'first time',
+    reason: 'Java, 3 attempt(s)',
+  });
+  history = appendActivity(history, {
+    at: base + 201_000,
+    kind: 'github',
+    outcome: 'error',
+    reason: 'GitHub denied the request.',
+  });
+  history = appendActivity(history, {
+    at: base + 300_000,
+    kind: 'review',
+    outcome: 'forgot',
+    reason: 'stage 3 → 1, next in 1d',
+  });
+
+  const counts = countActivity(history);
+  assert.equal(counts.opened, 2);
+  assert.equal(counts.solved, 1);
+  assert.equal(counts.github, 1);
+  assert.equal(counts.review, 1);
+  assert.equal(counts.hint, 0);
+
+  // Every line keeps its reason and its timestamp — that is the whole point.
+  const failure = history.find((event) => event.kind === 'github');
+  assert.equal(failure.reason, 'GitHub denied the request.');
+  assert.equal(failure.at, base + 201_000);
+  assert.equal(activityLabel('github'), 'GitHub sync');
+});
+
+test('the history is bounded so a much-revisited problem cannot grow forever', () => {
+  let history = [];
+  for (let i = 0; i < MAX_HISTORY + 40; i += 1) {
+    history = appendActivity(history, { at: i * 120_000, kind: 'opened' });
+  }
+  assert.equal(history.length, MAX_HISTORY);
+  // Trimmed from the front, so the most recent activity survives.
+  assert.equal(history[history.length - 1].at, (MAX_HISTORY + 39) * 120_000);
 });

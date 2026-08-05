@@ -57,12 +57,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* The side panel is user-resizable, so nothing may assume a fixed width. The
-   options page's cards are `.section-card`, deliberately not `.panel`, which
-   would also match this element and hand the whole body a card's chrome. */
 /**
  * The panel's height chain, which has to be unbroken from the viewport down to
  * `.scroll` or nothing scrolls at all.
+ *
+ * The panel is user-resizable, so nothing may assume a fixed width. The
+ * settings page's cards are `.section-card`, deliberately not `.panel`, which
+ * would also match this element and hand the whole body a card's chrome.
  *
  * `#root` sits between `body` and `.shell` and had no height of its own, so
  * `.shell { height: 100% }` resolved against `auto`, `.scroll` never became a
@@ -672,6 +673,38 @@ button:focus-visible {
   overflow: hidden;
 }
 
+/* A button that carries an icon beside its label. */
+.iconbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.page__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.section-card__title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.section-card__title svg {
+  color: var(--accent);
+  flex: none;
+}
+
 .journal__row {
   display: grid;
   grid-template-columns: 10px 42px minmax(0, 1fr);
@@ -684,6 +717,17 @@ button:focus-visible {
 
 .journal__row:first-child {
   border-top: 0;
+}
+
+/* The activity log needs the room the attempt list spends on its status dot. */
+.journal__row--wide {
+  grid-template-columns: 52px minmax(0, auto) minmax(0, 1fr);
+}
+
+.journal__when {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  font-size: 9.5px;
 }
 
 .journal__dot {

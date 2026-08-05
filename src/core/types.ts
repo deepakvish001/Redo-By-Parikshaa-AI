@@ -63,6 +63,37 @@ export interface AttemptEvent {
   elapsedMs?: number;
 }
 
+/**
+ * Everything that happens to a problem other than a judge verdict: opening it,
+ * solving it, revising it, taking a hint, a sync succeeding or failing, notes
+ * being edited.
+ *
+ * Kept separately from `AttemptEvent` because the two answer different
+ * questions — attempts say how the problem fought back, activity says what you
+ * and the extension did about it — and because attempts come from the judge
+ * while activity comes from us.
+ */
+export type ActivityKind =
+  | 'opened'
+  | 'solved'
+  | 'review'
+  | 'hint'
+  | 'github'
+  | 'parikshaa'
+  | 'note';
+
+export interface ActivityEvent {
+  at: number;
+  kind: ActivityKind;
+  /** One word for what happened: `synced`, `failed`, `skipped`, `forgot`, … */
+  outcome?: string;
+  /** Why, quoted from whoever said it — the API, the judge, the user's rating. */
+  reason?: string;
+}
+
+/** How many times each kind of thing has happened to one problem. */
+export type ActivityCounts = Record<ActivityKind, number>;
+
 /** Rolled-up view of one problem's attempt journal. */
 export interface AttemptSummary {
   runs: number;
@@ -116,6 +147,11 @@ export interface SolvedProblem {
    * a long debugging session can produce a great many runs.
    */
   events?: AttemptEvent[];
+  /**
+   * Everything else that happened to this problem, oldest first: opens, solves,
+   * reviews, hints, syncs and note edits, each with its reason and timestamp.
+   */
+  history?: ActivityEvent[];
   github: GithubSyncState;
   parikshaa: ParikshaaSyncState;
   revision: RevisionState;

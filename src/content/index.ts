@@ -15,7 +15,7 @@ function describeSync(problem: SolvedProblem): string {
     case 'pending':
       return 'Saved locally. GitHub sync is queued.';
     default:
-      return 'Saved locally. Turn on GitHub sync in the extension options to back it up.';
+      return 'Saved locally. Turn on GitHub sync in Settings to back it up.';
   }
 }
 

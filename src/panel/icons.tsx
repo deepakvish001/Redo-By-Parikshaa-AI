@@ -109,6 +109,52 @@ export function SparkIcon(props: IconProps) {
   );
 }
 
+export function GearIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="8" cy="8" r="2.25" />
+      <path d="M12.9 9.75a1.1 1.1 0 0 0 .22 1.21l.04.04a1.33 1.33 0 1 1-1.88 1.88l-.04-.04a1.1 1.1 0 0 0-1.21-.22 1.1 1.1 0 0 0-.67 1v.11a1.33 1.33 0 1 1-2.66 0v-.06a1.1 1.1 0 0 0-.72-1 1.1 1.1 0 0 0-1.21.22l-.04.04a1.33 1.33 0 1 1-1.88-1.88l.04-.04a1.1 1.1 0 0 0 .22-1.21 1.1 1.1 0 0 0-1-.67h-.11a1.33 1.33 0 1 1 0-2.66h.06a1.1 1.1 0 0 0 1-.72 1.1 1.1 0 0 0-.22-1.21l-.04-.04a1.33 1.33 0 1 1 1.88-1.88l.04.04a1.1 1.1 0 0 0 1.21.22h.05a1.1 1.1 0 0 0 .67-1v-.11a1.33 1.33 0 0 1 2.66 0v.06a1.1 1.1 0 0 0 .67 1 1.1 1.1 0 0 0 1.21-.22l.04-.04a1.33 1.33 0 1 1 1.88 1.88l-.04.04a1.1 1.1 0 0 0-.22 1.21v.05a1.1 1.1 0 0 0 1 .67h.11a1.33 1.33 0 1 1 0 2.66h-.06a1.1 1.1 0 0 0-1 .67Z" />
+    </Svg>
+  );
+}
+
+export function BookIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M2.25 3.25A1 1 0 0 1 3.25 2.25H6a2 2 0 0 1 2 2v9a1.5 1.5 0 0 0-1.5-1.5H3.25a1 1 0 0 1-1-1z" />
+      <path d="M13.75 3.25a1 1 0 0 0-1-1H10a2 2 0 0 0-2 2v9a1.5 1.5 0 0 1 1.5-1.5h3.25a1 1 0 0 0 1-1z" />
+    </Svg>
+  );
+}
+
+export function BugIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="5" y="5.5" width="6" height="8" rx="3" />
+      <path d="M5 8.5H2.5M13.5 8.5H11M5.2 11.5 3 12.75M12.8 11.5 15 12.75M5.2 6.25 3.25 4.75M10.8 6.25 12.75 4.75" />
+      <path d="M6.25 5.25a1.75 1.75 0 0 1 3.5 0" />
+    </Svg>
+  );
+}
+
+export function CalendarIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="2.25" y="3.5" width="11.5" height="10.25" rx="1.5" />
+      <path d="M2.25 6.75h11.5M5.5 2.25v2.5M10.5 2.25v2.5" />
+    </Svg>
+  );
+}
+
+export function LayersIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8 1.75 14.25 5 8 8.25 1.75 5z" />
+      <path d="m1.75 8 6.25 3.25L14.25 8M1.75 11l6.25 3.25L14.25 11" />
+    </Svg>
+  );
+}
+
 export function SearchIcon(props: IconProps) {
   return (
     <Svg {...props}>

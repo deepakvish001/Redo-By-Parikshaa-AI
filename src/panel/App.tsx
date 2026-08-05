@@ -7,7 +7,13 @@ import {
 } from '../core/contests.ts';
 // `formatDuration` also exists in contests.ts for contest lengths; this one
 // phrases a solve time, so it is aliased rather than shadowing the other.
-import { describeStruggle, formatDuration as formatSpan, summarise } from '../core/journal.ts';
+import {
+  activityLabel,
+  countActivity,
+  describeStruggle,
+  formatDuration as formatSpan,
+  summarise,
+} from '../core/journal.ts';
 import { send, type ContestsResponse, type DashboardData } from '../core/messages.ts';
 import { dueProblems, formatDueIn, upcomingProblems } from '../core/srs.ts';
 import { PLATFORM_LABELS, type Difficulty, type Recall, type SolvedProblem, type TopicStat } from '../core/types.ts';
@@ -16,6 +22,7 @@ import {
   ChevronRight,
   ClockIcon,
   FlameIcon,
+  GearIcon,
   PlatformMark,
   SearchIcon,
   TrophyIcon,
@@ -51,6 +58,18 @@ const DIFFICULTY_LABEL: Record<Difficulty, string> = {
 function DifficultyChip({ difficulty }: { difficulty: Difficulty }) {
   if (difficulty === 'unknown') return null;
   return <span className={`chip chip--${difficulty}`}>{DIFFICULTY_LABEL[difficulty]}</span>;
+}
+
+/** `12 Aug 14:03` — a date only where it is not today. */
+function stamp(at: number): string {
+  const date = new Date(at);
+  const today = new Date();
+  const sameDay =
+    date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear();
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return sameDay ? time : `${date.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${time}`;
 }
 
 function sentence(text: string): string {
@@ -246,10 +265,13 @@ function ProblemCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [showAttempts, setShowAttempts] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [open, setOpen] = useState(defaultOpen);
   const overdue = problem.revision.dueAt <= now;
   const events = problem.events ?? [];
   const journal = summarise(events);
+  const history = problem.history ?? [];
+  const counts = countActivity(history);
   const struggle = problem.revision.struggle;
 
   if (collapsible && !open) {
@@ -323,6 +345,39 @@ function ProblemCard({
             .join(' · ')}
           {events.length > 0 && <span aria-hidden="true">{showAttempts ? ' ▾' : ' ▸'}</span>}
         </button>
+      )}
+
+      {history.length > 0 && (
+        <button
+          type="button"
+          className="journal__toggle"
+          onClick={() => setShowHistory((value) => !value)}
+        >
+          {[
+            counts.opened > 0 && `opened ${counts.opened}×`,
+            counts.review > 0 && `revised ${counts.review}×`,
+            counts.hint > 0 && `hints ${counts.hint}×`,
+            counts.github > 0 && `synced ${counts.github}×`,
+          ]
+            .filter(Boolean)
+            .join(' · ') || `${history.length} events`}
+          <span aria-hidden="true">{showHistory ? ' ▾' : ' ▸'}</span>
+        </button>
+      )}
+
+      {showHistory && (
+        <div className="journal">
+          {/* Newest first: what happened last is what you came to check. */}
+          {[...history].reverse().map((event, index) => (
+            <div className="journal__row journal__row--wide" key={`${event.at}-${index}`}>
+              <span className="journal__when">{stamp(event.at)}</span>
+              <span className="journal__verdict">{activityLabel(event.kind)}</span>
+              <span className="journal__detail">
+                {[event.outcome, event.reason].filter(Boolean).join(' — ')}
+              </span>
+            </div>
+          ))}
+        </div>
       )}
 
       {showAttempts && events.length > 0 && (
@@ -742,8 +797,13 @@ export function App() {
           <span className="shell__title">Redo</span>
         </span>
         <span className="shell__spacer" />
-        <button type="button" className="ghost" onClick={() => void chrome.runtime.openOptionsPage()}>
-          Options
+        <button
+          type="button"
+          className="ghost iconbtn"
+          onClick={() => void chrome.runtime.openOptionsPage()}
+        >
+          <GearIcon size={13} />
+          Settings
         </button>
       </header>
 
@@ -844,7 +904,7 @@ export function App() {
             {githubOff && (
               <div className="banner">
                 GitHub sync is off — solutions are only stored in this browser. Turn it on in
-                Options to back them up.
+                Settings to back them up.
               </div>
             )}
             {failedSyncs.length > 0 && (
