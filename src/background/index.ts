@@ -31,6 +31,7 @@ import type {
   SolvedProblem,
 } from '../core/types.ts';
 import { getCachedContests, refreshContests, sendContestReminders } from './contests.ts';
+import { focusState, startPause, watchNavigation } from './focus.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
 
@@ -472,6 +473,12 @@ async function handle(request: Request): Promise<unknown> {
       };
     }
 
+    case 'focus:status':
+      return focusState();
+
+    case 'focus:pause':
+      return startPause();
+
     case 'diagnostics:clear':
       await chrome.storage.local.remove(DIAGNOSTIC_KEY);
       return { ok: true };
@@ -568,6 +575,10 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.runtime.onStartup.addListener(() => {
   void refreshBadge();
 });
+
+// Registered unconditionally: the listener itself checks whether focus mode is
+// on, and a listener added later would miss navigations after a worker restart.
+watchNavigation();
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === BADGE_ALARM) void refreshBadge();

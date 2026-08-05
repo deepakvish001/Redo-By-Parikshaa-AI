@@ -155,6 +155,15 @@ export function LayersIcon(props: IconProps) {
   );
 }
 
+export function ShieldIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8 1.75 13.25 4v4c0 3.2-2.2 5.7-5.25 6.25C4.95 13.7 2.75 11.2 2.75 8V4z" />
+      <path d="M5.75 8.25 7.25 9.75 10.5 6.5" />
+    </Svg>
+  );
+}
+
 export function SearchIcon(props: IconProps) {
   return (
     <Svg {...props}>

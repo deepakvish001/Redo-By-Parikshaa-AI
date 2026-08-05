@@ -1,3 +1,5 @@
+import type { FocusSettings } from './focus.ts';
+
 export type Platform =
   | 'leetcode'
   | 'codeforces'
@@ -236,6 +238,8 @@ export interface Settings {
     /** Nudge once a week that the shareable recap is ready. */
     notify: boolean;
   };
+  /** Gate browsing until today's problem is done. Off by default. */
+  focus: FocusSettings;
   revision: {
     /** Interval ladder in days. Stage n schedules `intervals[n]` days out. */
     intervals: number[];

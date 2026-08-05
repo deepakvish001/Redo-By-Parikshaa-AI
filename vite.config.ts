@@ -3,7 +3,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 /**
- * Builds the extension's HTML pages (side panel + options).
+ * Builds the extension's HTML pages (side panel, settings, focus gate).
  *
  * These run as normal extension pages, so ES modules and code splitting are
  * fine here. Content scripts and the service worker have different constraints
@@ -21,6 +21,7 @@ export default defineConfig({
       input: {
         panel: resolve(import.meta.dirname, 'src/panel/index.html'),
         options: resolve(import.meta.dirname, 'src/options/index.html'),
+        focus: resolve(import.meta.dirname, 'src/focus/index.html'),
       },
     },
   },

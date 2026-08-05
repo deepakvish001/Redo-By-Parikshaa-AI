@@ -1,5 +1,6 @@
 import type { RepoInfo } from './github.ts';
 import type { Contest } from './contests.ts';
+import type { FocusSettings, FocusTarget, GateDecision, PauseState } from './focus.ts';
 import type { ParikshaaCredentials, SessionDiagnostic } from './parikshaa.ts';
 import type {
   AcceptedSubmission,
@@ -55,7 +56,9 @@ export type Request =
   | { type: 'contests:refresh' }
   | { type: 'diagnostics:record'; entries: DiagnosticEntry[] }
   | { type: 'diagnostics:get' }
-  | { type: 'diagnostics:clear' };
+  | { type: 'diagnostics:clear' }
+  | { type: 'focus:status' }
+  | { type: 'focus:pause' };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -82,6 +85,18 @@ export interface ResponseMap {
   'diagnostics:record': { recorded: number };
   'diagnostics:get': { entries: DiagnosticEntry[]; enabled: boolean };
   'diagnostics:clear': { ok: true };
+  'focus:status': FocusStatus;
+  'focus:pause': { started: boolean; until?: number };
+}
+
+/** Everything the focus gate needs to explain itself. */
+export interface FocusStatus {
+  settings: FocusSettings;
+  decision: GateDecision;
+  pause: PauseState;
+  target: FocusTarget;
+  /** Problems due for revision right now, shown as the better thing to do. */
+  dueCount: number;
 }
 
 /** One line in the diagnostics log. Carries no request or response body. */

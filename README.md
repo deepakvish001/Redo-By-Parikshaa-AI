@@ -45,6 +45,11 @@ Solving is the easy part. Remembering three months later is the part nothing els
 - **Publishes an animated coding profile.** `PROFILE.md` and `assets/profile.svg` are rebuilt
   on every sync: totals, streak, difficulty and platform breakdowns, topic mastery, the
   problems you fought hardest for, and the revision queue.
+- **Focus mode: one problem first.** Optional and off by default. With it on, browsing anywhere
+  outside the judges, Parikshaa and GitHub lands on a page that points you at one problem —
+  a revision that is due, LeetCode's daily, or the problem set. One emergency pause a day buys
+  three hours. This is the only feature that needs the browsing-history permission; it reads
+  the address of a tab and never a page's contents.
 - **Gives you something to post.** A weekly card — problems solved, revisions, the difficulty
   mix, your topics and the problem you fought hardest for — copied to the clipboard as a PNG
   in one click, with a caption to go with it. Rendered locally; nothing is uploaded. It is
@@ -62,6 +67,29 @@ Solving is the easy part. Remembering three months later is the part nothing els
   programming: 34" is a claim backed by your own history.
 - **Runs entirely locally.** No backend, no account, no telemetry. The only network calls are to
   the sites you are already on and to the GitHub repository you configured.
+
+## Focus mode
+
+Brian Tracy's *Eat That Frog* as a browser gate: the hardest thing first, and the day stops
+negotiating. Turn it on in Settings and pick where it sends you.
+
+| Mode | Where it points |
+| --- | --- |
+| **A problem due for revision** (default) | The thing Redo already knows you are about to forget. Falls back to Parikshaa's library when nothing is due. |
+| **LeetCode's daily challenge** | Fetched from LeetCode and cached for the UTC day, because that is when the daily rolls over — not at your local midnight. |
+| **Any problem** | The LeetCode problem set. |
+
+The gate is a page, not a silent redirect. Being yanked from YouTube to LeetCode with no
+explanation is indistinguishable from a hijacked browser, and it leaves nowhere to press the
+escape hatch — so the page says what happened, shows the problem with one button, and carries
+the emergency pause.
+
+Never gated: the six judges, Parikshaa, GitHub, Google sign-in, Gmail, Calendar, `localhost`,
+anything that is not an ordinary web page, and whatever you add to the allowlist. An extension
+that locks someone out of their mail gets uninstalled the first morning it does so.
+
+The gate fires on navigation. A tab already sitting on a distracting page when you switch focus
+mode on is left alone until it next navigates.
 
 ## Contest Radar
 

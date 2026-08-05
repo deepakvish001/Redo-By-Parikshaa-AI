@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { FOCUS_MODE_LABELS, type FocusMode } from '../core/focus.ts';
 import { send, type DiagnosticEntry } from '../core/messages.ts';
 import {
   BugIcon,
@@ -7,6 +8,7 @@ import {
   GearIcon,
   GithubIcon,
   LayersIcon,
+  ShieldIcon,
   SparkIcon,
 } from '../panel/icons.tsx';
 import type { SessionDiagnostic } from '../core/parikshaa.ts';
@@ -105,6 +107,9 @@ export function App() {
   const [parikshaaStatus, setParikshaaStatus] = useState<Status>(null);
   const [verifying, setVerifying] = useState(false);
   const [log, setLog] = useState<DiagnosticEntry[]>([]);
+  const [goalText, setGoalText] = useState('');
+  const [pauseText, setPauseText] = useState('');
+  const [allowlistText, setAllowlistText] = useState('');
 
   const loadLog = async () => {
     try {
@@ -121,6 +126,9 @@ export function App() {
       setSettings(loaded);
       setIntervalsText(loaded.revision.intervals.join(', '));
       setLeadText(String(loaded.contests.leadMinutes));
+      setGoalText(String(loaded.focus.dailyGoal));
+      setPauseText(String(loaded.focus.pauseHours));
+      setAllowlistText(loaded.focus.allowlist.join('\n'));
       if (loaded.diagnostics.enabled) await loadLog();
     })();
   }, []);
@@ -132,6 +140,9 @@ export function App() {
   const patchGithub = (patch: Partial<Settings['github']>) =>
     setSettings({ ...settings, github: { ...settings.github, ...patch } });
 
+  const patchFocus = (patch: Partial<Settings['focus']>) =>
+    setSettings({ ...settings, focus: { ...settings.focus, ...patch } });
+
   const save = async () => {
     const intervals = parseIntervals(intervalsText);
     if (intervals.length === 0) {
@@ -140,10 +151,25 @@ export function App() {
     }
     try {
       const lead = Number.parseInt(leadText, 10);
+      const goal = Number.parseInt(goalText, 10);
+      const pauseHours = Number.parseInt(pauseText, 10);
       const saved = await send({
         type: 'settings:save',
         patch: {
           ...settings,
+          focus: {
+            ...settings.focus,
+            // An unreadable number keeps the current value rather than becoming NaN.
+            dailyGoal: Number.isFinite(goal) && goal > 0 ? goal : settings.focus.dailyGoal,
+            pauseHours:
+              Number.isFinite(pauseHours) && pauseHours > 0
+                ? pauseHours
+                : settings.focus.pauseHours,
+            allowlist: allowlistText
+              .split(/[\s,]+/)
+              .map((entry) => entry.trim())
+              .filter(Boolean),
+          },
           revision: { ...settings.revision, intervals },
           contests: {
             ...settings.contests,
@@ -155,6 +181,9 @@ export function App() {
       setSettings(saved);
       setIntervalsText(saved.revision.intervals.join(', '));
       setLeadText(String(saved.contests.leadMinutes));
+      setGoalText(String(saved.focus.dailyGoal));
+      setPauseText(String(saved.focus.pauseHours));
+      setAllowlistText(saved.focus.allowlist.join('\n'));
       setSaveStatus({ tone: 'ok', message: 'Saved.' });
     } catch (error) {
       setSaveStatus({
@@ -395,6 +424,99 @@ export function App() {
               {parikshaaStatus.message}
             </span>
           )}
+        </div>
+      </section>
+
+      <section className="section-card">
+        <h2 className="section-card__title">
+          <ShieldIcon size={14} />
+          Focus mode
+        </h2>
+        <p className="section-card__hint">
+          Nothing else until today's problem is done. Browsing anywhere outside the judges,
+          Parikshaa and GitHub lands on a page that points you at one problem instead — the idea
+          behind <em>Eat That Frog</em>, with the frog picked for you.
+        </p>
+        <p className="section-card__hint">
+          This is the one feature that needs to see which site a tab is on, which is why the
+          extension asks for the browsing-history permission. It reads the address and nothing
+          else — never the contents of a page.
+        </p>
+
+        <Toggle
+          checked={settings.focus.enabled}
+          onChange={(enabled) => patchFocus({ enabled })}
+          label="Gate browsing until I've solved today"
+          hint="Off by default. Turning it off again takes one click, any time."
+        />
+
+        <div className="field">
+          <span className="field__label">Send me to</span>
+          {(['due', 'daily', 'any'] as FocusMode[]).map((mode) => (
+            <label className="radio" key={mode}>
+              <input
+                type="radio"
+                name="focus-mode"
+                checked={settings.focus.mode === mode}
+                onChange={() => patchFocus({ mode })}
+              />
+              <span>
+                {FOCUS_MODE_LABELS[mode]}
+                {mode === 'due' && (
+                  <small>
+                    Uses what Redo already knows you are about to forget. Falls back to Parikshaa's
+                    library when nothing is due.
+                  </small>
+                )}
+                {mode === 'daily' && <small>Rolls over at 00:00 UTC, as LeetCode's does.</small>}
+              </span>
+            </label>
+          ))}
+        </div>
+
+        <div className="field field-row">
+          <div>
+            <label className="field__label" htmlFor="goal">
+              Problems to solve before the gate opens
+            </label>
+            <input
+              id="goal"
+              type="text"
+              value={goalText}
+              onChange={(event) => setGoalText(event.target.value)}
+              placeholder="1"
+            />
+          </div>
+          <div>
+            <label className="field__label" htmlFor="pause-hours">
+              Emergency pause length (hours)
+            </label>
+            <input
+              id="pause-hours"
+              type="text"
+              value={pauseText}
+              onChange={(event) => setPauseText(event.target.value)}
+              placeholder="3"
+            />
+            <div className="field__hint">One pause per day. Resets at local midnight.</div>
+          </div>
+        </div>
+
+        <div className="field">
+          <label className="field__label" htmlFor="allowlist">
+            Never gate these sites
+          </label>
+          <textarea
+            id="allowlist"
+            rows={3}
+            value={allowlistText}
+            onChange={(event) => setAllowlistText(event.target.value)}
+            placeholder={'stackoverflow.com\nnotion.so'}
+          />
+          <div className="field__hint">
+            One host per line; subdomains are included. The judges, Parikshaa, GitHub, Google
+            sign-in, Gmail and Calendar are always allowed.
+          </div>
         </div>
       </section>
 
