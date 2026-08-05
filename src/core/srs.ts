@@ -31,16 +31,47 @@ function intervalDays(intervals: number[], stage: number, ease: number): number 
   return Math.max(1, Math.round(base * ease));
 }
 
-/** Schedule a freshly solved problem for its first revision. */
-export function initialRevision(intervals: number[], now: number): RevisionState {
+/**
+ * Schedule a freshly solved problem for its first revision.
+ *
+ * `struggle` (0–1) is what the attempt journal said the problem cost. It sets
+ * the starting ease, so a problem that took six submits comes back sooner and
+ * keeps coming back sooner at every stage, and it raises the number of clean
+ * reviews the problem is expected to earn before it is settled.
+ */
+export function initialRevision(intervals: number[], now: number, struggle = 0): RevisionState {
+  const bounded = Math.min(1, Math.max(0, struggle));
+  // 0 struggle leaves the ladder as configured; full struggle compresses it to
+  // 60%, the same floor a run of `forgot` ratings would reach.
+  const ease = clampEase(1 - 0.4 * bounded);
+
   return {
     stage: 0,
-    ease: 1,
-    dueAt: now + intervalDays(intervals, 0, 1) * DAY_MS,
+    ease,
+    dueAt: now + intervalDays(intervals, 0, ease) * DAY_MS,
     reviewCount: 0,
     lapses: 0,
     hintsUsed: 0,
+    struggle: bounded,
+    targetReviews: targetReviewsFor(bounded, intervals),
   };
+}
+
+/**
+ * How many clean reviews a problem should earn before it is settled.
+ *
+ * The ladder is the floor; a problem that fought back gets up to three extra
+ * passes on top of it.
+ */
+export function targetReviewsFor(struggle: number, intervals: number[]): number {
+  const base = Math.max(1, intervals.length);
+  return base + Math.round(3 * Math.min(1, Math.max(0, struggle)));
+}
+
+/** True once the problem has had the reviews its difficulty asked for. */
+export function isSettled(state: RevisionState, intervals: number[]): boolean {
+  const target = state.targetReviews ?? Math.max(1, intervals.length);
+  return state.reviewCount >= target && state.stage >= Math.max(0, intervals.length - 1);
 }
 
 /** Apply a recall rating and return the next schedule for the problem. */
@@ -66,6 +97,13 @@ export function applyRecall(
     reviewCount: state.reviewCount + 1,
     lapses: state.lapses + (recall === 'forgot' ? 1 : 0),
     hintsUsed: state.hintsUsed ?? 0,
+    struggle: state.struggle,
+    // Forgetting it once means the original estimate of what it costs was too
+    // low, so the problem earns another pass.
+    targetReviews:
+      state.targetReviews === undefined
+        ? undefined
+        : state.targetReviews + (recall === 'forgot' ? 1 : 0),
   };
 }
 

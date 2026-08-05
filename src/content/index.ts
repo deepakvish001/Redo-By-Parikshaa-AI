@@ -2,7 +2,7 @@ import { adapterFor } from '../adapters/index.ts';
 import { OBSERVER_CHANNEL, type ObservedGlimpse } from '../adapters/observed.ts';
 import { send, type DiagnosticEntry } from '../core/messages.ts';
 import { formatDueIn } from '../core/srs.ts';
-import type { SolvedProblem } from '../core/types.ts';
+import type { AttemptEvent, SolvedProblem } from '../core/types.ts';
 import { showReviewPanel } from './review-panel.ts';
 import { showToast } from './toast.ts';
 
@@ -15,7 +15,7 @@ function describeSync(problem: SolvedProblem): string {
     case 'pending':
       return 'Saved locally. GitHub sync is queued.';
     default:
-      return 'Saved locally. Turn on GitHub sync in the extension options to back it up.';
+      return 'Saved locally. Turn on GitHub sync in Settings to back it up.';
   }
 }
 
@@ -65,12 +65,35 @@ function createDiagnosticSink(platform: string) {
   };
 }
 
+/**
+ * Buffers attempt events the same way, and for the same reason: a debugging
+ * session produces a run every few seconds.
+ */
+function createJournalSink(platform: string) {
+  const queues = new Map<string, AttemptEvent[]>();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const flush = () => {
+    timer = undefined;
+    for (const [slug, events] of queues) {
+      void send({ type: 'attempt:record', platform, slug, events }).catch(() => undefined);
+    }
+    queues.clear();
+  };
+
+  return (slug: string, event: AttemptEvent) => {
+    queues.set(slug, [...(queues.get(slug) ?? []), event]);
+    if (!timer) timer = setTimeout(flush, 1200);
+  };
+}
+
 function main(): void {
   const url = new URL(window.location.href);
   const adapter = adapterFor(url);
   if (!adapter) return;
 
   const record = createDiagnosticSink(adapter.platform);
+  const journal = createJournalSink(adapter.platform);
 
   void send({ type: 'settings:get' })
     .then((settings) => {
@@ -113,6 +136,15 @@ function main(): void {
       // Attempt counts are tallied inside the adapter and travel with the
       // accepted submission; nothing to show for a failed verdict.
       record('attempt', key);
+    },
+    onEvent: (slug, event) => {
+      record(
+        'event',
+        `${event.kind} ${slug}: ${event.verdict}${
+          event.testsTotal ? ` (${event.testsPassed ?? 0}/${event.testsTotal})` : ''
+        }`,
+      );
+      journal(slug, event);
     },
     onError: (message) => {
       record('error', message);

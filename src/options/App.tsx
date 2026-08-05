@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react';
 import { send, type DiagnosticEntry } from '../core/messages.ts';
+import {
+  BugIcon,
+  CalendarIcon,
+  ClockIcon,
+  GearIcon,
+  GithubIcon,
+  LayersIcon,
+  SparkIcon,
+} from '../panel/icons.tsx';
 import type { SessionDiagnostic } from '../core/parikshaa.ts';
 import { DEFAULT_SETTINGS } from '../core/storage.ts';
 import { PLATFORMS, PLATFORM_LABELS, type Platform, type Settings } from '../core/types.ts';
@@ -199,12 +208,26 @@ export function App() {
     setVerifyStatus(null);
     try {
       const info = await send({ type: 'github:verify', config: settings.github });
-      setVerifyStatus({
-        tone: info.canPush ? 'ok' : 'error',
-        message: info.canPush
-          ? `Connected as ${info.login} — ${info.fullName} (default branch: ${info.defaultBranch}).`
-          : `Reached ${info.fullName}, but this token cannot write to it. Grant "Contents: read and write".`,
-      });
+      const branch = settings.github.branch || info.defaultBranch;
+
+      if (!info.canPush) {
+        setVerifyStatus({
+          tone: 'error',
+          message: `Reached ${info.fullName} as ${info.login}, but this token cannot write to it. Grant "Contents: read and write" on that repository.`,
+        });
+      } else if (!info.branchExists) {
+        // Read access proves the token works, so the branch is the only thing
+        // left that can still fail — and it fails at commit time, not here.
+        setVerifyStatus({
+          tone: 'error',
+          message: `Token can write to ${info.fullName}, but branch "${branch}" does not exist. Its default branch is "${info.defaultBranch}".`,
+        });
+      } else {
+        setVerifyStatus({
+          tone: 'ok',
+          message: `Connected as ${info.login} — writing to ${info.fullName} on "${branch}".`,
+        });
+      }
     } catch (error) {
       setVerifyStatus({
         tone: 'error',
@@ -221,6 +244,10 @@ export function App() {
         <h1>
           <span className="brand__mark" aria-hidden="true">↻</span>
           Redo
+          <span className="page__label">
+            <GearIcon size={13} />
+            Settings
+          </span>
         </h1>
         <p className="page__intro">
           Accepted solutions on LeetCode and Codeforces get committed to a GitHub repository,
@@ -231,7 +258,10 @@ export function App() {
       </header>
 
       <section className="section-card">
-        <h2 className="section-card__title">GitHub sync</h2>
+        <h2 className="section-card__title">
+          <GithubIcon size={14} />
+          GitHub sync
+        </h2>
         <p className="section-card__hint">
           Create a fine-grained personal access token with <strong>Contents: read and write</strong>{' '}
           on the target repository, at{' '}
@@ -330,7 +360,10 @@ export function App() {
       </section>
 
       <section className="section-card">
-        <h2 className="section-card__title">Parikshaa sync</h2>
+        <h2 className="section-card__title">
+          <SparkIcon size={14} />
+          Parikshaa sync
+        </h2>
         <p className="section-card__hint">
           When an accepted LeetCode problem matches a problem on{' '}
           <a href="https://parikshaa.org" target="_blank" rel="noreferrer">
@@ -366,7 +399,10 @@ export function App() {
       </section>
 
       <section className="section-card">
-        <h2 className="section-card__title">Revision schedule</h2>
+        <h2 className="section-card__title">
+          <ClockIcon size={14} />
+          Revision schedule
+        </h2>
         <p className="section-card__hint">
           Days between revisions. A problem starts at the first interval and moves up the ladder
           each time you rate it well — and drops back down when you forget it.
@@ -399,7 +435,10 @@ export function App() {
       </section>
 
       <section className="section-card">
-        <h2 className="section-card__title">Diagnostics</h2>
+        <h2 className="section-card__title">
+          <BugIcon size={14} />
+          Diagnostics
+        </h2>
         <p className="section-card__hint">
           If a solved problem does not show up, turn this on, solve one, then copy the log below
           and send it over. It records which requests the judge made and whether any of them
@@ -443,7 +482,10 @@ export function App() {
       </section>
 
       <section className="section-card">
-        <h2 className="section-card__title">Contests</h2>
+        <h2 className="section-card__title">
+          <CalendarIcon size={14} />
+          Contests
+        </h2>
         <p className="section-card__hint">
           Upcoming contests from Codeforces, LeetCode, CodeChef and AtCoder are gathered into one
           list in the popup, with a link to add any of them to your calendar. Listings are
@@ -490,7 +532,10 @@ export function App() {
       </section>
 
       <section className="section-card">
-        <h2 className="section-card__title">Platforms</h2>
+        <h2 className="section-card__title">
+          <LayersIcon size={14} />
+          Platforms
+        </h2>
         <p className="section-card__hint">Turn off a platform to stop tracking submissions there.</p>
         {PLATFORMS.map((platform) => (
           <Toggle

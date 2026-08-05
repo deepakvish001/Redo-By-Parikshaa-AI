@@ -1,6 +1,8 @@
+import { computeStats } from '../core/analytics.ts';
 import { getFileContent, isConfigured, putFile } from '../core/github.ts';
 import { buildIndexReadme, buildProblemReadme } from '../core/markdown.ts';
 import { notesPath, solutionPath } from '../core/paths.ts';
+import { buildProfileReadme, buildProfileSvg } from '../core/profile.ts';
 import { getProblemList } from '../core/storage.ts';
 import type { GithubSyncState, Settings, SolvedProblem } from '../core/types.ts';
 
@@ -85,11 +87,23 @@ export async function syncProblem(
       }
 
       const indexPath = await resolveIndexPath(config);
+      const now = Date.now();
+      await putFile(config, indexPath, buildIndexReadme(withCurrent, now), 'docs: update solved index');
+
+      // The profile is a view over the same local state, so it is rebuilt from
+      // scratch each time rather than patched.
+      const stats = computeStats(withCurrent, settings.revision.intervals, now);
       await putFile(
         config,
-        indexPath,
-        buildIndexReadme(withCurrent, Date.now()),
-        'docs: update solved index',
+        'assets/profile.svg',
+        buildProfileSvg(withCurrent, stats, now),
+        'docs: update profile card',
+      );
+      await putFile(
+        config,
+        'PROFILE.md',
+        buildProfileReadme(withCurrent, stats, now),
+        'docs: update coding profile',
       );
 
       return {

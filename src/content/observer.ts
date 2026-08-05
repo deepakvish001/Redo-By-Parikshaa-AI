@@ -23,7 +23,7 @@ import {
 } from '../adapters/observed.ts';
 
 /**
- * Off unless the user turns diagnostics on in options. When on, the observer
+ * Off unless the user turns diagnostics on in Settings. When on, the observer
  * additionally reports the path of every request it sees — which is how a
  * judge that changed its endpoints gets identified instead of guessed at.
  */

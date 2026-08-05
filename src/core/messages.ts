@@ -1,13 +1,25 @@
 import type { RepoInfo } from './github.ts';
 import type { Contest } from './contests.ts';
 import type { ParikshaaCredentials, SessionDiagnostic } from './parikshaa.ts';
-import type { AcceptedSubmission, Recall, Settings, SolvedProblem, Stats } from './types.ts';
+import type {
+  AcceptedSubmission,
+  AttemptEvent,
+  Recall,
+  Settings,
+  SolvedProblem,
+  Stats,
+} from './types.ts';
 
 export interface DashboardData {
   problems: SolvedProblem[];
   stats: Stats;
   settings: Settings;
   now: number;
+  /**
+   * Attempts for problems that are not solved yet, keyed by `<platform>:<slug>`.
+   * Solved problems carry their own journal on the record.
+   */
+  openJournals: Record<string, AttemptEvent[]>;
 }
 
 /**
@@ -29,6 +41,8 @@ export type Request =
   | { type: 'problem:get'; id: string }
   | { type: 'page:opened'; platform: string; slug: string }
   | { type: 'problem:resync'; id: string }
+  | { type: 'problem:resync-parikshaa'; id: string }
+  | { type: 'attempt:record'; platform: string; slug: string; events: AttemptEvent[] }
   | { type: 'problem:delete'; id: string }
   | { type: 'settings:get' }
   | { type: 'settings:save'; patch: Partial<Settings> }
@@ -53,6 +67,8 @@ export interface ResponseMap {
   'problem:get': { problem?: SolvedProblem };
   'page:opened': { tracking: boolean };
   'problem:resync': { problem?: SolvedProblem };
+  'problem:resync-parikshaa': { problem?: SolvedProblem };
+  'attempt:record': { recorded: number };
   'problem:delete': { ok: true };
   'settings:get': Settings;
   'settings:save': Settings;
@@ -72,7 +88,7 @@ export interface ResponseMap {
 export interface DiagnosticEntry {
   at: number;
   platform: string;
-  kind: 'page' | 'seen' | 'accepted' | 'attempt' | 'error';
+  kind: 'page' | 'seen' | 'accepted' | 'attempt' | 'event' | 'error';
   detail: string;
   /** For `seen`: whether the URL is one the extension acts on. */
   matched?: boolean;

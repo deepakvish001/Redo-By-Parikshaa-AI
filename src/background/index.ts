@@ -3,8 +3,13 @@ import { verifyAccess } from '../core/github.ts';
 import type { DiagnosticEntry, Request, Response, ResponseMap } from '../core/messages.ts';
 import { problemKey } from '../core/paths.ts';
 import { isExpired, type SessionDiagnostic } from '../core/parikshaa.ts';
+import { appendActivity, struggleScore } from '../core/journal.ts';
 import {
+  appendJournalEvents,
+  deleteJournal,
   deleteProblem,
+  getJournal,
+  getJournals,
   getMeta,
   getParikshaaApi,
   getParikshaaCredentials,
@@ -18,7 +23,12 @@ import {
   updateProblem,
 } from '../core/storage.ts';
 import { applyRecall, dueProblems, initialRevision, isDue } from '../core/srs.ts';
-import type { AcceptedSubmission, Recall, SolvedProblem } from '../core/types.ts';
+import type {
+  AcceptedSubmission,
+  ActivityEvent,
+  Recall,
+  SolvedProblem,
+} from '../core/types.ts';
 import { getCachedContests, refreshContests, sendContestReminders } from './contests.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
@@ -80,10 +90,43 @@ async function recordPageOpened(key: string): Promise<void> {
   const opened = await readOpened();
   const existing = opened[key];
   const now = Date.now();
+
+  // A visit is logged even when the solve clock is already running — how many
+  // times you came back to a problem is exactly the kind of thing worth having.
+  await note(key, { at: now, kind: 'opened' });
+
   if (existing && now - existing < MAX_SOLVE_MS) return;
 
   opened[key] = now;
   await chrome.storage.local.set({ [OPENED_KEY]: opened });
+}
+
+/**
+ * Appends one line to a problem's history.
+ *
+ * Silently does nothing for a problem that is not tracked yet — opens before
+ * the first accepted submission have nowhere to go, and the attempt journal
+ * already covers that stretch.
+ */
+async function note(id: string, event: ActivityEvent): Promise<void> {
+  await updateProblem(id, (problem) => ({
+    ...problem,
+    history: appendActivity(problem.history ?? [], event),
+  }));
+}
+
+/** The history line a finished sync deserves, whichever way it went. */
+function syncNote(
+  kind: 'github' | 'parikshaa',
+  state: { status: string; reason?: string; error?: string; path?: string; url?: string },
+  at: number,
+): ActivityEvent {
+  return {
+    at,
+    kind,
+    outcome: state.status,
+    reason: state.error ?? state.reason ?? state.path ?? state.url,
+  };
 }
 
 /** Elapsed time since the page was opened, and forgets the entry. */
@@ -106,12 +149,23 @@ async function recordSubmission(
 ): Promise<ResponseMap['submission:accepted']> {
   const settings = await getSettings();
   if (!settings.platforms[submission.platform]) {
-    return { saved: false, reason: `Tracking for ${submission.platform} is turned off in options.` };
+    return { saved: false, reason: `Tracking for ${submission.platform} is turned off in Settings.` };
   }
 
   const id = problemKey(submission.platform, submission.slug);
   const existing = await getProblem(id);
   const now = Date.now();
+
+  // Everything the judge said on the way here, including the runs and the
+  // failed submits, which is what decides how hard this problem was.
+  const events = await getJournal(id);
+  const solveTimeMs = (await takeSolveTime(id)) ?? existing?.solveTimeMs;
+  const struggle = struggleScore({
+    events,
+    attempts: submission.attempts,
+    solveTimeMs,
+    difficulty: submission.difficulty,
+  });
 
   const problem: SolvedProblem = {
     id,
@@ -131,11 +185,18 @@ async function recordSubmission(
     memoryNote: submission.memoryNote,
     note: existing?.note,
     complexity: existing?.complexity,
-    solveTimeMs: (await takeSolveTime(id)) ?? existing?.solveTimeMs,
+    solveTimeMs,
+    events,
+    history: appendActivity(existing?.history ?? [], {
+      at: now,
+      kind: 'solved',
+      outcome: existing ? 're-solved' : 'first time',
+      reason: `${submission.language}, ${submission.attempts ?? 1} attempt(s)`,
+    }),
     github: { status: 'pending' },
     parikshaa: { status: 'pending' },
     // A re-solve keeps its place on the ladder; only new problems start over.
-    revision: existing?.revision ?? initialRevision(settings.revision.intervals, now),
+    revision: existing?.revision ?? initialRevision(settings.revision.intervals, now, struggle),
   };
 
   await putProblem(problem);
@@ -145,7 +206,16 @@ async function recordSubmission(
     syncProblem(problem, settings),
     syncToParikshaa(problem, settings),
   ]);
-  const synced = { ...problem, github, parikshaa };
+  const at = Date.now();
+  const synced = {
+    ...problem,
+    github,
+    parikshaa,
+    history: [
+      syncNote('github', github, at),
+      syncNote('parikshaa', parikshaa, at),
+    ].reduce(appendActivity, problem.history ?? []),
+  };
   await putProblem(synced);
 
   return { saved: true, problem: synced };
@@ -158,10 +228,21 @@ async function reviewProblem(
   const settings = await getSettings();
   const now = Date.now();
 
-  const problem = await updateProblem(id, (current) => ({
-    ...current,
-    revision: applyRecall(current.revision, recall, settings.revision.intervals, now),
-  }));
+  const problem = await updateProblem(id, (current) => {
+    const revision = applyRecall(current.revision, recall, settings.revision.intervals, now);
+    return {
+      ...current,
+      revision,
+      history: appendActivity(current.history ?? [], {
+        at: now,
+        kind: 'review',
+        outcome: recall,
+        reason: `stage ${current.revision.stage + 1} → ${revision.stage + 1}, next in ${Math.round(
+          (revision.dueAt - now) / 86_400_000,
+        )}d`,
+      }),
+    };
+  });
 
   if (problem) {
     const meta = await getMeta();
@@ -200,14 +281,55 @@ async function handle(request: Request): Promise<unknown> {
     }
 
     case 'dashboard:get': {
-      const [problems, settings] = await Promise.all([getProblemList(), getSettings()]);
+      const [problems, settings, journals] = await Promise.all([
+        getProblemList(),
+        getSettings(),
+        getJournals(),
+      ]);
       const now = Date.now();
+      const solved = new Set(problems.map((problem) => problem.id));
+
+      // Problems still being worked on have a journal but no record yet; the
+      // panel shows those as work in progress.
+      const openJournals: Record<string, typeof journals[string]> = {};
+      for (const [id, events] of Object.entries(journals)) {
+        if (!solved.has(id)) openJournals[id] = events;
+      }
+
       return {
         problems: problems.sort((a, b) => a.revision.dueAt - b.revision.dueAt),
         stats: computeStats(problems, settings.revision.intervals, now),
         settings,
         now,
+        openJournals,
       };
+    }
+
+    case 'attempt:record': {
+      // The platform comes off the wire as a string; the key is the same shape
+      // either way, and an unknown platform simply never matches a problem.
+      const id = `${request.platform}:${request.slug}`;
+      const events = await appendJournalEvents(id, request.events);
+      // A problem already solved keeps its journal on the record too, so a
+      // re-solve's attempts are not lost when the journal is pruned.
+      await updateProblem(id, (problem) => ({ ...problem, events }));
+      return { recorded: events.length };
+    }
+
+    case 'problem:resync-parikshaa': {
+      const [problem, settings] = await Promise.all([getProblem(request.id), getSettings()]);
+      if (!problem) return { problem: undefined };
+      const parikshaa = await syncToParikshaa(problem, settings);
+      const updated = {
+        ...problem,
+        parikshaa,
+        history: appendActivity(
+          problem.history ?? [],
+          syncNote('parikshaa', parikshaa, Date.now()),
+        ),
+      };
+      await putProblem(updated);
+      return { problem: updated };
     }
 
     case 'problem:review':
@@ -218,12 +340,27 @@ async function handle(request: Request): Promise<unknown> {
         ...current,
         note: request.note ?? current.note,
         complexity: request.complexity ?? current.complexity,
+        history: appendActivity(current.history ?? [], {
+          at: Date.now(),
+          kind: 'note',
+          outcome: 'saved',
+          reason: [
+            request.note?.trim() ? 'approach' : undefined,
+            request.complexity?.time || request.complexity?.space ? 'complexity' : undefined,
+          ]
+            .filter(Boolean)
+            .join(' + ') || 'cleared',
+        }),
       }));
       // Notes belong in the committed README, so a save pushes them.
       if (problem) {
         const settings = await getSettings();
         const github = await syncProblem(problem, settings);
-        const updated = { ...problem, github };
+        const updated = {
+          ...problem,
+          github,
+          history: appendActivity(problem.history ?? [], syncNote('github', github, Date.now())),
+        };
         await putProblem(updated);
         return { problem: updated };
       }
@@ -241,6 +378,12 @@ async function handle(request: Request): Promise<unknown> {
           // Counting reveals, not clicks: re-opening level 1 is not new help.
           hintsUsed: Math.max(current.revision.hintsUsed ?? 0, request.level),
         },
+        history: appendActivity(current.history ?? [], {
+          at: Date.now(),
+          kind: 'hint',
+          outcome: `level ${request.level}`,
+          reason: ['nudge', 'approach', 'your own solution'][request.level - 1],
+        }),
       }));
       return { problem };
     }
@@ -257,7 +400,16 @@ async function handle(request: Request): Promise<unknown> {
         syncProblem(problem, settings),
         syncToParikshaa(problem, settings),
       ]);
-      const updated = { ...problem, github, parikshaa };
+      const at = Date.now();
+      const updated = {
+        ...problem,
+        github,
+        parikshaa,
+        history: [syncNote('github', github, at), syncNote('parikshaa', parikshaa, at)].reduce(
+          appendActivity,
+          problem.history ?? [],
+        ),
+      };
       await putProblem(updated);
       return { problem: updated };
     }
@@ -354,6 +506,7 @@ async function handle(request: Request): Promise<unknown> {
 
     case 'problem:delete':
       await deleteProblem(request.id);
+      await deleteJournal(request.id);
       await refreshBadge();
       return { ok: true };
 
