@@ -78,18 +78,35 @@ function blend(dst, src, alpha) {
   return dst * (1 - alpha) + src * alpha;
 }
 
+/** Sign of the cross product — the side of AB that P falls on. */
+function side(px, py, ax, ay, bx, by) {
+  return (bx - ax) * (py - ay) - (by - ay) * (px - ax);
+}
+
+function insideTriangle(px, py, [ax, ay], [bx, by], [cx, cy]) {
+  const d1 = side(px, py, ax, ay, bx, by);
+  const d2 = side(px, py, bx, by, cx, cy);
+  const d3 = side(px, py, cx, cy, ax, ay);
+  // Inside when every cross product shares a sign.
+  return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+}
+
 function renderIcon(size) {
   const rgba = Buffer.alloc(size * size * 4);
   const radius = size * 0.24;
-  const stroke = size * 0.085;
+  const stroke = size * 0.088;
+  const ringRadius = size * 0.235;
 
-  // checkmark, in unit coordinates scaled to the tile
-  const check = [
-    [0.28, 0.53, 0.44, 0.68],
-    [0.44, 0.68, 0.74, 0.34],
-  ].map(([ax, ay, bx, by]) => [ax * size, ay * size, bx * size, by * size]);
-
-  const dot = { x: size * 0.775, y: size * 0.735, r: size * 0.085 };
+  /**
+   * A solid arrowhead sitting on the open end of the ring, pointing the way
+   * the arrow travels. Drawn as a triangle so the tip stays sharp at 16px,
+   * where a stroked chevron turns to mush.
+   */
+  const head = [
+    [0.55, 0.135],
+    [0.55, 0.405],
+    [0.79, 0.27],
+  ].map(([x, y]) => [x * size, y * size]);
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -109,26 +126,27 @@ function renderIcon(size) {
           let sa = 0;
 
           if (insideRoundedRect(px, py, size, radius)) {
-            // vertical indigo -> violet gradient
-            const t = py / size;
-            sr = blend(79, 139, t);
-            sg = blend(70, 92, t);
-            sb = blend(229, 246, t);
+            // Parikshaa's own gradient: orange hsl(22 95% 53%) -> amber hsl(43 96% 56%)
+            const t = (px + py) / (2 * size);
+            sr = blend(249, 251, t);
+            sg = blend(115, 191, t);
+            sb = blend(22, 36, t);
             sa = 1;
 
-            const checkDistance = Math.min(
-              ...check.map(([ax, ay, bx, by]) => distanceToSegment(px, py, ax, ay, bx, by)),
-            );
-            if (checkDistance <= stroke / 2) {
-              sr = 255;
-              sg = 255;
-              sb = 255;
-            }
+            // A redo arrow: an open ring with an arrowhead at its top right.
+            const dx = px - size / 2;
+            const dy = py - size / 2;
+            const fromCentre = Math.hypot(dx, dy);
+            const angle = Math.atan2(dy, dx);
+            // The gap the arrowhead fills, from about -78 to -8 degrees.
+            const inGap = angle > -1.36 && angle < -0.14;
+            const onRing =
+              Math.abs(fromCentre - ringRadius) <= stroke / 2 && !inGap;
 
-            if (Math.hypot(px - dot.x, py - dot.y) <= dot.r) {
-              sr = 251;
-              sg = 191;
-              sb = 36;
+            if (onRing || insideTriangle(px, py, head[0], head[1], head[2])) {
+              sr = 26;
+              sg = 16;
+              sb = 6;
             }
           }
 

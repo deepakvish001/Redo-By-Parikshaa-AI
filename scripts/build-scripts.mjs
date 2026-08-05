@@ -31,7 +31,7 @@ for (const entry of entries) {
       lib: {
         entry: resolve(root, entry.file),
         formats: ['iife'],
-        name: `smriti_${entry.name}`,
+        name: `redo_${entry.name}`,
         fileName: () => `${entry.name}.js`,
       },
       rollupOptions: {

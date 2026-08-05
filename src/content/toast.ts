@@ -6,7 +6,7 @@
  * the host page.
  */
 
-const HOST_ID = 'smriti-root';
+const HOST_ID = 'redo-root';
 
 const STYLES = `
 :host { all: initial; }
@@ -25,9 +25,9 @@ const STYLES = `
   box-sizing: border-box;
   padding: 14px 16px;
   border-radius: 12px;
-  background: #16161d;
+  background: #0a0a0c;
   color: #e7e7ee;
-  border: 1px solid #2e2e3a;
+  border: 1px solid #2e2e2e;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
   animation: slide-in 180ms ease-out;
 }
@@ -43,7 +43,8 @@ const STYLES = `
 .row { display: flex; align-items: flex-start; gap: 10px; }
 .dot {
   width: 8px; height: 8px; border-radius: 50%;
-  margin-top: 6px; flex: none; background: #8b5cf6;
+  margin-top: 6px; flex: none;
+  background: linear-gradient(135deg, #f97316 0%, #fbbf24 100%);
 }
 .card.error .dot { background: #f0616d; }
 .card.success .dot { background: #4ade80; }
@@ -62,7 +63,7 @@ const STYLES = `
   background: #101017;
   border: 1px solid #2a2a36;
 }
-.body a { color: #a78bfa; }
+.body a { color: #fb923c; }
 .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 button {
   font: inherit;
@@ -76,8 +77,11 @@ button {
   cursor: pointer;
 }
 button:hover { background: #2e2e3c; }
-button.primary { background: #6d4aff; border-color: #6d4aff; color: #fff; }
-button.primary:hover { background: #7c5cff; }
+button.primary {
+  background: linear-gradient(135deg, #f97316 0%, #fbbf24 100%);
+  border-color: transparent; color: #1a1006;
+}
+button.primary:hover { filter: brightness(1.08); }
 .close {
   margin-left: auto; border: none; background: none; color: #6f6f80;
   font-size: 15px; line-height: 1; padding: 0 2px; cursor: pointer;

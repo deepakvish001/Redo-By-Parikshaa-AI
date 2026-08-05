@@ -13,7 +13,7 @@ import { showReviewPanel } from './review-panel.ts';
 import { showToast } from './toast.ts';
 
 const PROBLEM_HREF = /\/library\/problems\/([^/?#]+)/;
-const MARKER = 'data-smriti-due';
+const MARKER = 'data-redo-due';
 
 /**
  * Links whose text is a call to action rather than the problem's name — a card
@@ -28,8 +28,8 @@ const BADGE_STYLE = [
   'margin-left:6px',
   'padding:1px 7px',
   'border-radius:999px',
-  'background:#6d4aff',
-  'color:#fff',
+  'background:linear-gradient(135deg,#f97316 0%,#fbbf24 100%)',
+  'color:#1a1006',
   'font-size:10px',
   'font-weight:700',
   'line-height:1.6',
@@ -57,7 +57,7 @@ function badgeFor(problem: DueProblem, now: number): HTMLSpanElement {
   badge.setAttribute('style', BADGE_STYLE);
   const overdue = problem.dueAt <= now;
   badge.textContent = overdue ? 'revise' : 'due soon';
-  badge.title = `Smriti — ${formatDueIn(problem.dueAt, now)} (stage ${problem.stage + 1})`;
+  badge.title = `Redo — ${formatDueIn(problem.dueAt, now)} (stage ${problem.stage + 1})`;
   return badge;
 }
 

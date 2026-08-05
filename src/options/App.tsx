@@ -196,7 +196,10 @@ export function App() {
   return (
     <div className="page">
       <header>
-        <h1>Smriti</h1>
+        <h1>
+          <span className="brand__mark" aria-hidden="true">↻</span>
+          Redo
+        </h1>
         <p className="page__intro">
           Accepted solutions on LeetCode and Codeforces get committed to a GitHub repository,
           ticked off on Parikshaa, and scheduled for spaced-repetition revision. Everything is
@@ -205,9 +208,9 @@ export function App() {
         </p>
       </header>
 
-      <section className="panel">
-        <h2 className="panel__title">GitHub sync</h2>
-        <p className="panel__hint">
+      <section className="section-card">
+        <h2 className="section-card__title">GitHub sync</h2>
+        <p className="section-card__hint">
           Create a fine-grained personal access token with <strong>Contents: read and write</strong>{' '}
           on the target repository, at{' '}
           <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noreferrer">
@@ -304,9 +307,9 @@ export function App() {
         </div>
       </section>
 
-      <section className="panel">
-        <h2 className="panel__title">Parikshaa sync</h2>
-        <p className="panel__hint">
+      <section className="section-card">
+        <h2 className="section-card__title">Parikshaa sync</h2>
+        <p className="section-card__hint">
           When an accepted LeetCode problem matches a problem on{' '}
           <a href="https://parikshaa.org" target="_blank" rel="noreferrer">
             parikshaa.org
@@ -315,7 +318,7 @@ export function App() {
           saved against the problem and an accepted submission is recorded, which is what marks it
           solved across your sheets.
         </p>
-        <p className="panel__hint">
+        <p className="section-card__hint">
           There is nothing to paste: the extension uses the session already in your browser from
           being signed in to parikshaa.org. Codeforces is not synced, because Parikshaa problems
           are matched by LeetCode slug. Existing notes and solutions in other languages are merged,
@@ -340,9 +343,9 @@ export function App() {
         </div>
       </section>
 
-      <section className="panel">
-        <h2 className="panel__title">Revision schedule</h2>
-        <p className="panel__hint">
+      <section className="section-card">
+        <h2 className="section-card__title">Revision schedule</h2>
+        <p className="section-card__hint">
           Days between revisions. A problem starts at the first interval and moves up the ladder
           each time you rate it well — and drops back down when you forget it.
         </p>
@@ -373,9 +376,9 @@ export function App() {
         />
       </section>
 
-      <section className="panel">
-        <h2 className="panel__title">Contests</h2>
-        <p className="panel__hint">
+      <section className="section-card">
+        <h2 className="section-card__title">Contests</h2>
+        <p className="section-card__hint">
           Upcoming contests from Codeforces, LeetCode, CodeChef and AtCoder are gathered into one
           list in the popup, with a link to add any of them to your calendar. Listings are
           re-fetched every few hours, not polled.
@@ -420,9 +423,9 @@ export function App() {
         ))}
       </section>
 
-      <section className="panel">
-        <h2 className="panel__title">Platforms</h2>
-        <p className="panel__hint">Turn off a platform to stop tracking submissions there.</p>
+      <section className="section-card">
+        <h2 className="section-card__title">Platforms</h2>
+        <p className="section-card__hint">Turn off a platform to stop tracking submissions there.</p>
         {PLATFORMS.map((platform) => (
           <Toggle
             key={platform}

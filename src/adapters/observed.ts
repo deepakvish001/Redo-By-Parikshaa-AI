@@ -26,7 +26,7 @@ export function isObserved(url: string): boolean {
   return OBSERVED_URLS.some((pattern) => pattern.test(url));
 }
 
-export const OBSERVER_CHANNEL = 'smriti-observer';
+export const OBSERVER_CHANNEL = 'redo-observer';
 
 /** One request/response pair seen by the observer. */
 export interface ObservedExchange {

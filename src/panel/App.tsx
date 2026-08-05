@@ -223,23 +223,22 @@ function ProblemCard({
         </span>
         <SyncChip problem={problem} />
         <ParikshaaChip problem={problem} />
-        <span>{problem.platform}</span>
-        <span>·</span>
-        <span>stage {problem.revision.stage + 1}</span>
-        {problem.revision.lapses > 0 && (
-          <>
-            <span>·</span>
-            <span>{problem.revision.lapses} lapse{problem.revision.lapses === 1 ? '' : 's'}</span>
-          </>
-        )}
+        <span className="card__facts">
+          {[
+            problem.platform,
+            `stage ${problem.revision.stage + 1}`,
+            problem.revision.lapses > 0 &&
+              `${problem.revision.lapses} lapse${problem.revision.lapses === 1 ? '' : 's'}`,
+            problem.solveTimeMs && `${Math.max(1, Math.round(problem.solveTimeMs / 60_000))} min`,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </span>
       </div>
 
-      <div className="card__actions">
-        <button type="button" onClick={() => openUrl(problem.url)}>
-          Open problem
-        </button>
-        {showRecall ? (
-          RECALLS.map(({ recall, label, primary }) => (
+      {showRecall && (
+        <div className="card__ratings">
+          {RECALLS.map(({ recall, label, primary }) => (
             <button
               key={recall}
               type="button"
@@ -248,8 +247,15 @@ function ProblemCard({
             >
               {label}
             </button>
-          ))
-        ) : (
+          ))}
+        </div>
+      )}
+
+      <div className="card__actions">
+        <button type="button" onClick={() => openUrl(problem.url)}>
+          Open problem
+        </button>
+        {!showRecall && (
           <>
             <button type="button" onClick={() => setEditing((open) => !open)}>
               {problem.note || problem.complexity?.time ? 'Edit notes' : 'Add notes'}
@@ -441,7 +447,10 @@ export function App() {
   return (
     <div className="shell">
       <header className="shell__header">
-        <span className="shell__title">Smriti</span>
+        <span className="brand">
+          <span className="brand__mark" aria-hidden="true">↻</span>
+          <span className="shell__title">Redo</span>
+        </span>
         <span className="shell__spacer" />
         <button type="button" className="ghost" onClick={() => void chrome.runtime.openOptionsPage()}>
           Options

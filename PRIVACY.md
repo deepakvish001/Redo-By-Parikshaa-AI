@@ -1,14 +1,14 @@
-# Privacy Policy — Smriti
+# Privacy Policy — Redo
 
 _Last updated: 5 August 2026_
 
-Smriti is a browser extension that records the competitive-programming problems you solve, so it
+Redo is a browser extension that records the competitive-programming problems you solve, so it
 can schedule them for revision. This policy describes exactly what it stores and what leaves your
 browser.
 
 ## The short version
 
-Smriti has no server, no account and no analytics. Everything it records is kept in your own
+Redo has no server, no account and no analytics. Everything it records is kept in your own
 browser. The only data that leaves your machine goes directly to services **you** connect —
 your GitHub repository and, optionally, your Parikshaa account — and nothing is sent anywhere
 else, ever.
@@ -30,7 +30,7 @@ All of the following lives in `chrome.storage.local`, on your device:
 
 ## What is sent, and to whom
 
-Smriti makes network requests to exactly these places:
+Redo makes network requests to exactly these places:
 
 1. **The judge you are on** (LeetCode, Codeforces, AtCoder, CodeChef, HackerRank,
    GeeksforGeeks) — to read the problem's own details and your own submission's source. These
@@ -55,12 +55,12 @@ them. For that reason:
 - Use a **fine-grained** GitHub token scoped to the single repository you sync to, with the
   `Contents: read and write` permission and nothing else.
 - The Parikshaa session is read from the site's own storage — it is the session you are already
-  signed in with, not a new credential — and Smriti never refreshes or extends it.
-- Turn either integration off, and Smriti stops using that credential.
+  signed in with, not a new credential — and Redo never refreshes or extends it.
+- Turn either integration off, and Redo stops using that credential.
 
 ## Reading your pages
 
-Smriti observes network requests on the supported judges to learn when a submission is accepted.
+Redo observes network requests on the supported judges to learn when a submission is accepted.
 The observed URLs are restricted to each judge's submission endpoints. It never modifies,
 blocks or delays a request, and it does not read pages on any other site.
 
@@ -73,7 +73,7 @@ blocks or delays a request, and it does not read pages on any other site.
 
 ## Children
 
-Smriti is not directed at children under 13 and collects no information from anyone.
+Redo is not directed at children under 13 and collects no information from anyone.
 
 ## Changes
 

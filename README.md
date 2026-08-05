@@ -1,6 +1,6 @@
-# Smriti
+# Redo
 
-**स्मृति — memory.** A Chrome extension for people who grind DSA and then forget it.
+**The developer’s word for “do it again”.** A Chrome extension for people who grind DSA and then forget it.
 
 When a submission is accepted on **LeetCode, Codeforces, AtCoder, CodeChef, HackerRank** or
 **GeeksforGeeks**, the extension commits the solution to a GitHub repository you own, ticks the
@@ -70,7 +70,12 @@ npm run build
 2. Click **Load unpacked** and select the `dist/` folder.
 3. The options page opens on first install.
 
-Requires Chrome 111 or newer (the LeetCode listener relies on `world: "MAIN"` content scripts).
+Clicking the toolbar icon opens Redo in Chrome's **side panel**, docked to the right of the page
+— so the due list, the hint ladder and the problem you are solving are on screen at once,
+instead of a popup that closes the moment you click into the editor.
+
+Requires Chrome 114 or newer (side panel), and the interface is dark to sit alongside the
+judges and Parikshaa rather than flashing white next to them.
 
 ## Connecting GitHub
 
@@ -272,6 +277,7 @@ npm run build        # production build into dist/
 npm run package      # build, validate against the store's rules, and zip for upload
 npm run screenshots  # regenerate the 1280x800 store screenshots
 npm run icons        # regenerate the PNG icons
+npm run rename -- X  # rename the product everywhere in one pass
 ```
 
 ## Publishing
@@ -292,7 +298,7 @@ src/
 ├── adapters/    # one file per platform, behind a shared interface
 ├── content/     # shared submission observer, Parikshaa bridge, in-page UI
 ├── background/  # service worker: message routing, sync queues, badge, alarms
-├── popup/       # dashboard (due / solved / stats)
+├── panel/       # side panel (due / solved / contests / stats)
 └── options/     # settings
 ```
 

@@ -3,7 +3,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 /**
- * Builds the extension's HTML pages (popup + options).
+ * Builds the extension's HTML pages (side panel + options).
  *
  * These run as normal extension pages, so ES modules and code splitting are
  * fine here. Content scripts and the service worker have different constraints
@@ -16,10 +16,10 @@ export default defineConfig({
   build: {
     outDir: resolve(import.meta.dirname, 'dist'),
     emptyOutDir: true,
-    target: 'chrome111',
+    target: 'chrome114',
     rollupOptions: {
       input: {
-        popup: resolve(import.meta.dirname, 'src/popup/index.html'),
+        panel: resolve(import.meta.dirname, 'src/panel/index.html'),
         options: resolve(import.meta.dirname, 'src/options/index.html'),
       },
     },

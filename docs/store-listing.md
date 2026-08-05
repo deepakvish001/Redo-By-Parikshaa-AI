@@ -8,7 +8,7 @@ permissions.
 
 **Name**
 ```
-Smriti — DSA revision that sticks
+Redo — DSA revision that sticks
 ```
 
 **Short description** (132 characters max — this is the manifest `description`)
@@ -23,10 +23,10 @@ Commit your accepted DSA solutions to GitHub, then actually remember them with s
 ```
 You solved 300 problems. Three months later you can do maybe 100 of them.
 
-Smriti fixes the part everyone skips: revision.
+Redo fixes the part everyone skips: revision.
 
 When a submission is accepted on LeetCode, Codeforces, AtCoder, CodeChef, HackerRank or
-GeeksforGeeks, Smriti does three things automatically:
+GeeksforGeeks, Redo does three things automatically:
 
 • Commits the solution to your own GitHub repository — organised as
   leetcode/medium/0011-container-with-most-water/solution.py, with a README holding the link,
@@ -34,6 +34,10 @@ GeeksforGeeks, Smriti does three things automatically:
 • Schedules the problem for spaced repetition — 1, 3, 7, 21, 45, 90 days by default. The
   toolbar badge tells you how many are due.
 • Ticks it off on parikshaa.org, if you use it, so your sheets stay in sync.
+
+OPENS IN THE SIDE PANEL
+Click the toolbar icon and Redo docks to the right of the page — your due list stays visible
+while you solve, instead of a popup that closes the moment you click into the editor.
 
 WHEN A PROBLEM COMES BACK
 Open it and a panel appears on the page itself. Re-solve it, then rate how it went — Good moves
@@ -86,6 +90,7 @@ https://github.com/deepakvish001/New-Repo/blob/main/PRIVACY.md
 | --- | --- |
 | `storage` | Stores solved problems, their revision schedule, and the user's settings and tokens locally. The extension has no server, so this is its only persistence. |
 | `alarms` | Wakes the service worker periodically to recompute how many problems are due, refresh the contest list, and send reminders. |
+| `sidePanel` | The whole interface is a side panel, opened by clicking the toolbar icon, so it can stay open beside the problem being solved. |
 | `notifications` | Notifies the user when problems are due for revision and before a contest they follow starts. Both are user-configurable and can be turned off. |
 | `https://leetcode.com/*`, `https://leetcode.cn/*` | Detects an accepted submission and reads the problem's metadata and the user's own source code from LeetCode's API, and shows the revision panel on the problem page. |
 | `https://codeforces.com/*` | Reads accepted verdicts from the submissions table, fetches the user's own submitted source, and reads the problem page for tags and rating. Also used for the public contest schedule. |
@@ -102,7 +107,7 @@ https://github.com/deepakvish001/New-Repo/blob/main/PRIVACY.md
 | Asset | Size | Where |
 | --- | --- | --- |
 | Icon | 128×128 | `public/icons/icon-128.png` |
-| Screenshots (at least 1, up to 5) | 1280×800 | `docs/screenshots/` |
+| Screenshots (up to 5 shown; 8 rendered so you can pick) | 1280×800 | `docs/screenshots/` |
 | Small promo tile (optional) | 440×280 | `docs/screenshots/promo-440x280.png` |
 
 Generate the screenshots with `npm run screenshots`, then upload the package produced by

@@ -1,5 +1,5 @@
 {
-  "name": "smriti",
+  "name": "redo",
   "version": "1.0.0",
   "private": true,
   "description": "Commit your accepted DSA solutions to GitHub, then actually remember them with spaced repetition and weak-topic analytics.",
@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.mjs",
     "package": "npm run build && node scripts/package.mjs",
-    "screenshots": "node scripts/screenshots.mjs"
+    "screenshots": "node scripts/screenshots.mjs",
+    "rename": "node scripts/rename.mjs"
   },
   "dependencies": {
     "react": "^19.2.0",

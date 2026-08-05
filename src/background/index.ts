@@ -33,7 +33,7 @@ async function refreshBadge(): Promise<number> {
   const problems = await getProblemList();
   const due = dueProblems(problems, Date.now()).length;
   await chrome.action.setBadgeText({ text: due > 0 ? String(due) : '' });
-  await chrome.action.setBadgeBackgroundColor({ color: '#6d4aff' });
+  await chrome.action.setBadgeBackgroundColor({ color: '#f97316' });
   return due;
 }
 
@@ -362,6 +362,14 @@ chrome.runtime.onMessage.addListener((request: Request, _sender, sendResponse) =
 });
 
 /* ---------------------------------------------------------------- alarms */
+
+// With no popup declared, clicking the toolbar icon has to be told to open
+// the side panel; without this the click does nothing at all.
+chrome.runtime.onInstalled.addListener(() => {
+  void chrome.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: true })
+    .catch(() => undefined);
+});
 
 chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create(BADGE_ALARM, { periodInMinutes: 30 });

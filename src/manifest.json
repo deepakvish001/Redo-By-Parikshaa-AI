@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Smriti \u2014 DSA revision that sticks",
+  "name": "Redo \u2014 DSA revision that sticks",
   "version": "1.0.0",
   "description": "Commit your accepted DSA solutions to GitHub, then actually remember them with spaced repetition and weak-topic analytics.",
-  "minimum_chrome_version": "111",
+  "minimum_chrome_version": "114",
   "permissions": [
     "storage",
     "alarms",
-    "notifications"
+    "notifications",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://leetcode.com/*",
@@ -27,8 +28,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_popup": "popup/index.html",
-    "default_title": "Smriti",
+    "default_title": "Redo \u2014 open the revision panel",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",
@@ -99,5 +99,8 @@
       "all_frames": false
     }
   ],
-  "short_name": "Smriti"
+  "short_name": "Redo",
+  "side_panel": {
+    "default_path": "panel/index.html"
+  }
 }
