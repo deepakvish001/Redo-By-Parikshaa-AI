@@ -36,6 +36,19 @@ export function buildProblemReadme(problem: SolvedProblem): string {
     lines.push('', `**Judge:** ${judge.join(' · ')}`);
   }
 
+  if (problem.solveTimeMs) {
+    lines.push('', `**Time to solve:** ${Math.max(1, Math.round(problem.solveTimeMs / 60_000))} min`);
+  }
+
+  // The user's own analysis, kept separate from the judge's measurements.
+  const complexity = [
+    problem.complexity?.time && `**Time:** ${problem.complexity.time}`,
+    problem.complexity?.space && `**Space:** ${problem.complexity.space}`,
+  ].filter(Boolean);
+  if (complexity.length > 0) {
+    lines.push('', '## Complexity', '', complexity.join('  \n'));
+  }
+
   lines.push('', '## Approach', '', problem.note?.trim() || '_Add your notes here._', '');
   lines.push('---', '', '<sub>Committed by DSA Revision Buddy.</sub>', '');
 

@@ -35,9 +35,15 @@ Solving is the easy part. Remembering three months later is the part nothing els
 - **Flags due problems inside Parikshaa.** Browsing a sheet, roadmap or recommendation strip,
   anything due for revision gets a `revise` badge next to its title; opening one brings up the
   rating panel right there. This works whether or not sync is switched on.
+- **Gives hints instead of the answer.** Stuck on a revision? The ladder climbs from a nudge
+  about the shape of the problem, to the approach (your own saved notes, or the technique for
+  its topic), to your own previous solution. Reaching for hints is counted against the topic.
+- **Keeps your reasoning, not just the code.** Notes and your own time/space complexity are
+  editable from the popup and go into the problem's committed README.
 - **Ranks your weak topics.** Mastery per tag is computed from how far each problem has climbed
-  the ladder, how often you forgot it on review, and how many attempts it took to get accepted
-  the first time — so "dynamic programming: 34" is a claim backed by your own history.
+  the ladder, how often you forgot it on review, how many attempts it took to get accepted,
+  how many hints you needed, and how long it took relative to the difficulty — so "dynamic
+  programming: 34" is a claim backed by your own history.
 - **Runs entirely locally.** No backend, no account, no telemetry. The only network calls are to
   the sites you are already on and to the GitHub repository you configured.
 
@@ -117,6 +123,37 @@ revision can be closed out without leaving the page.
   is why the observer records that origin alongside the API key.
 - Only languages Parikshaa's editor supports (Python, C++, Java, JavaScript, TypeScript, C,
   Go, SQL) can be stored; anything else is skipped with a reason shown in the popup.
+
+## The hint ladder
+
+Revising is only useful if you do the work, so a due problem offers help one rung at a time
+rather than showing the answer:
+
+1. **Nudge** — its tags, how many attempts and how long it took you last time, and a question
+   about the shape of the problem drawn from a per-topic library. It never names the technique.
+2. **Approach** — your own saved notes and complexity if you wrote any; otherwise the technique
+   for its topic, stated without code.
+3. **Your solution** — the code you committed last time, trimmed to the first 30 lines.
+
+Nothing here calls a model or a server: every rung comes from the record already stored for the
+problem, which is also why the most useful hints are your own past work. Each reveal is counted,
+and hints pull the topic's mastery down — a topic you can only solve with help should not score
+like one you can solve without.
+
+## What feeds topic mastery
+
+| Signal | Effect |
+| --- | --- |
+| Position on the interval ladder | raises |
+| Forgotten on review (a lapse) | lowers, heavily |
+| Attempts before the first accept | lowers, saturating at 5 |
+| Hints revealed | lowers, saturating at 3 |
+| Time to solve vs the difficulty's budget | lowers past the budget (15/30/60 min for easy/medium/hard) |
+
+Time and hints only count for the problems that actually have them, so a collection recorded
+before those were tracked is scored on what it does have rather than penalised for the gap.
+Solve time is measured from opening the problem page to the accepted submission, and a span
+over six hours is discarded as a tab left open rather than recorded as a struggle.
 
 ## How the scheduling works
 

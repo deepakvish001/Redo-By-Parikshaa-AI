@@ -9,7 +9,7 @@
 
 import { send, type DueProblem } from '../core/messages.ts';
 import { formatDueIn } from '../core/srs.ts';
-import type { Recall } from '../core/types.ts';
+import { showReviewPanel } from './review-panel.ts';
 import { showToast } from './toast.ts';
 
 const PROBLEM_HREF = /\/library\/problems\/([^/?#]+)/;
@@ -91,49 +91,18 @@ function clear(): void {
   }
 }
 
-function offerReview(problem: DueProblem, onReviewed: () => void): void {
-  const dismiss = showToast({
-    title: `Due for revision: ${problem.title}`,
-    body: 'You solved this before. Re-solve it here, then rate how it went.',
-    tone: 'info',
-    actions: (
-      [
-        ['forgot', 'Forgot'],
-        ['hard', 'Hard'],
-        ['good', 'Good'],
-        ['easy', 'Easy'],
-      ] as Array<[Recall, string]>
-    ).map(([recall, label]) => ({
-      label,
-      primary: recall === 'good',
-      onClick: async () => {
-        try {
-          const { problem: updated } = await send({
-            type: 'problem:review',
-            id: problem.id,
-            recall,
-          });
-          onReviewed();
-          if (updated) {
-            showToast({
-              title: 'Review recorded',
-              body: `Scheduled again ${formatDueIn(updated.revision.dueAt, Date.now())}.`,
-              tone: 'success',
-              timeout: 5000,
-            });
-          }
-        } catch (error) {
-          showToast({
-            title: 'Could not record the review',
-            body: error instanceof Error ? error.message : String(error),
-            tone: 'error',
-          });
-        }
-      },
-    })),
-  });
-
-  setTimeout(dismiss, 30_000);
+/**
+ * The full record is fetched here rather than carried in the due list, because
+ * the hint ladder needs the saved notes and solution and there is no reason to
+ * ship every due problem's source to every page.
+ */
+async function offerReview(problem: DueProblem, onReviewed: () => void): Promise<void> {
+  try {
+    const { problem: full } = await send({ type: 'problem:get', id: problem.id });
+    if (full) showReviewPanel(full, { onReviewed });
+  } catch {
+    // The service worker may be asleep; the badge alone still did its job.
+  }
 }
 
 export function startHighlighting(): void {
@@ -182,7 +151,7 @@ export function startHighlighting(): void {
       const problem = due.get(currentSlug);
       if (problem && promptedSlug !== currentSlug) {
         promptedSlug = currentSlug;
-        offerReview(problem, () => void refresh());
+        void offerReview(problem, () => void refresh());
       }
       return;
     }

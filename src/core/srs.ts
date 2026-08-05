@@ -39,6 +39,7 @@ export function initialRevision(intervals: number[], now: number): RevisionState
     dueAt: now + intervalDays(intervals, 0, 1) * DAY_MS,
     reviewCount: 0,
     lapses: 0,
+    hintsUsed: 0,
   };
 }
 
@@ -64,6 +65,7 @@ export function applyRecall(
     lastReviewedAt: now,
     reviewCount: state.reviewCount + 1,
     lapses: state.lapses + (recall === 'forgot' ? 1 : 0),
+    hintsUsed: state.hintsUsed ?? 0,
   };
 }
 

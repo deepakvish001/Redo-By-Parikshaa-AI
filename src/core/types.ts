@@ -55,6 +55,13 @@ export interface SolvedProblem {
   memoryNote?: string;
   /** User's own note, editable from the popup. */
   note?: string;
+  /** The user's own complexity analysis — not the judge's runtime figures. */
+  complexity?: { time?: string; space?: string };
+  /**
+   * How long the problem page was open before the accepted submission.
+   * Absent when the span was implausible (a tab left open overnight).
+   */
+  solveTimeMs?: number;
   github: GithubSyncState;
   parikshaa: ParikshaaSyncState;
   revision: RevisionState;
@@ -91,6 +98,8 @@ export interface RevisionState {
   reviewCount: number;
   /** Number of reviews rated `forgot` — the signal behind weak-topic ranking. */
   lapses: number;
+  /** Hint levels revealed across all revisions of this problem. */
+  hintsUsed: number;
 }
 
 export interface Settings {
@@ -122,6 +131,9 @@ export interface TopicStat {
   solved: number;
   lapses: number;
   totalAttempts: number;
+  hintsUsed: number;
+  /** Median time to an accepted submission, where it was recorded. */
+  medianSolveMs?: number;
   /** 0–100. Lower means the topic needs work. */
   mastery: number;
 }

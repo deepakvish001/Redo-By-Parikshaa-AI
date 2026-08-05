@@ -18,7 +18,15 @@ export type Request =
   | { type: 'page:context'; platform: string; slug: string }
   | { type: 'dashboard:get' }
   | { type: 'problem:review'; id: string; recall: Recall }
-  | { type: 'problem:note'; id: string; note: string }
+  | {
+      type: 'problem:details';
+      id: string;
+      note?: string;
+      complexity?: { time?: string; space?: string };
+    }
+  | { type: 'problem:hint'; id: string; level: number }
+  | { type: 'problem:get'; id: string }
+  | { type: 'page:opened'; platform: string; slug: string }
   | { type: 'problem:resync'; id: string }
   | { type: 'problem:delete'; id: string }
   | { type: 'settings:get' }
@@ -34,7 +42,10 @@ export interface ResponseMap {
   'page:context': { tracked: boolean; due: boolean; problem?: SolvedProblem };
   'dashboard:get': DashboardData;
   'problem:review': { problem?: SolvedProblem };
-  'problem:note': { problem?: SolvedProblem };
+  'problem:details': { problem?: SolvedProblem };
+  'problem:hint': { problem?: SolvedProblem };
+  'problem:get': { problem?: SolvedProblem };
+  'page:opened': { tracking: boolean };
   'problem:resync': { problem?: SolvedProblem };
   'problem:delete': { ok: true };
   'settings:get': Settings;

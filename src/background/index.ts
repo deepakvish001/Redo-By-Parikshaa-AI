@@ -51,6 +51,48 @@ async function sendDigest(): Promise<void> {
   });
 }
 
+/* --------------------------------------------------------- solve timing */
+
+const OPENED_KEY = 'openedAt';
+/**
+ * Anything longer than this is a tab left open, not time spent solving, so it
+ * is discarded rather than recorded as a six-hour struggle.
+ */
+const MAX_SOLVE_MS = 6 * 60 * 60 * 1000;
+
+async function readOpened(): Promise<Record<string, number>> {
+  const stored = await chrome.storage.local.get(OPENED_KEY);
+  return (stored[OPENED_KEY] as Record<string, number> | undefined) ?? {};
+}
+
+/**
+ * Notes when a problem page was opened. An existing timestamp is kept unless
+ * it has gone stale, so navigating away and back mid-solve does not restart
+ * the clock.
+ */
+async function recordPageOpened(key: string): Promise<void> {
+  const opened = await readOpened();
+  const existing = opened[key];
+  const now = Date.now();
+  if (existing && now - existing < MAX_SOLVE_MS) return;
+
+  opened[key] = now;
+  await chrome.storage.local.set({ [OPENED_KEY]: opened });
+}
+
+/** Elapsed time since the page was opened, and forgets the entry. */
+async function takeSolveTime(key: string): Promise<number | undefined> {
+  const opened = await readOpened();
+  const startedAt = opened[key];
+  if (!startedAt) return undefined;
+
+  delete opened[key];
+  await chrome.storage.local.set({ [OPENED_KEY]: opened });
+
+  const elapsed = Date.now() - startedAt;
+  return elapsed > 0 && elapsed <= MAX_SOLVE_MS ? elapsed : undefined;
+}
+
 /* ------------------------------------------------------- solved problems */
 
 async function recordSubmission(
@@ -82,6 +124,8 @@ async function recordSubmission(
     runtimeNote: submission.runtimeNote,
     memoryNote: submission.memoryNote,
     note: existing?.note,
+    complexity: existing?.complexity,
+    solveTimeMs: (await takeSolveTime(id)) ?? existing?.solveTimeMs,
     github: { status: 'pending' },
     parikshaa: { status: 'pending' },
     // A re-solve keeps its place on the ladder; only new problems start over.
@@ -163,12 +207,41 @@ async function handle(request: Request): Promise<unknown> {
     case 'problem:review':
       return reviewProblem(request.id, request.recall);
 
-    case 'problem:note': {
+    case 'problem:details': {
       const problem = await updateProblem(request.id, (current) => ({
         ...current,
-        note: request.note,
+        note: request.note ?? current.note,
+        complexity: request.complexity ?? current.complexity,
+      }));
+      // Notes belong in the committed README, so a save pushes them.
+      if (problem) {
+        const settings = await getSettings();
+        const github = await syncProblem(problem, settings);
+        const updated = { ...problem, github };
+        await putProblem(updated);
+        return { problem: updated };
+      }
+      return { problem };
+    }
+
+    case 'problem:get':
+      return { problem: await getProblem(request.id) };
+
+    case 'problem:hint': {
+      const problem = await updateProblem(request.id, (current) => ({
+        ...current,
+        revision: {
+          ...current.revision,
+          // Counting reveals, not clicks: re-opening level 1 is not new help.
+          hintsUsed: Math.max(current.revision.hintsUsed ?? 0, request.level),
+        },
       }));
       return { problem };
+    }
+
+    case 'page:opened': {
+      await recordPageOpened(`${request.platform}:${request.slug}`);
+      return { tracking: true };
     }
 
     case 'problem:resync': {

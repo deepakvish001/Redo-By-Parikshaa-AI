@@ -82,12 +82,104 @@ function Empty({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+/**
+ * Notes and complexity live with the problem and travel into its committed
+ * README, so the repository ends up holding the reasoning and not just the
+ * code that happened to pass.
+ */
+function DetailsEditor({
+  problem,
+  onSave,
+}: {
+  problem: SolvedProblem;
+  onSave: (
+    id: string,
+    note: string,
+    complexity: { time?: string; space?: string },
+  ) => Promise<void>;
+}) {
+  const [note, setNote] = useState(problem.note ?? '');
+  const [time, setTime] = useState(problem.complexity?.time ?? '');
+  const [space, setSpace] = useState(problem.complexity?.space ?? '');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const dirty =
+    note !== (problem.note ?? '') ||
+    time !== (problem.complexity?.time ?? '') ||
+    space !== (problem.complexity?.space ?? '');
+
+  return (
+    <div className="editor">
+      <textarea
+        rows={3}
+        value={note}
+        placeholder="How did you approach it? What tripped you up?"
+        onChange={(event) => {
+          setNote(event.target.value);
+          setSaved(false);
+        }}
+      />
+      <div className="editor__row">
+        {/* Labelled rather than placeholder-only: once both hold "O(n)" the
+            placeholders are gone and the fields become indistinguishable. */}
+        <label className="editor__field">
+          <span>Time</span>
+          <input
+            type="text"
+            value={time}
+            placeholder="O(n)"
+            onChange={(event) => {
+              setTime(event.target.value);
+              setSaved(false);
+            }}
+          />
+        </label>
+        <label className="editor__field">
+          <span>Space</span>
+          <input
+            type="text"
+            value={space}
+            placeholder="O(1)"
+            onChange={(event) => {
+              setSpace(event.target.value);
+              setSaved(false);
+            }}
+          />
+        </label>
+      </div>
+      <div className="editor__actions">
+        <button
+          type="button"
+          className="primary"
+          disabled={!dirty || saving}
+          onClick={async () => {
+            setSaving(true);
+            try {
+              await onSave(problem.id, note, { time: time.trim(), space: space.trim() });
+              setSaved(true);
+            } finally {
+              setSaving(false);
+            }
+          }}
+        >
+          {saving ? 'Saving…' : 'Save notes'}
+        </button>
+        <span className="editor__hint">
+          {saved ? 'Saved, and pushed if GitHub sync is on.' : 'Goes into the problem’s README.'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function ProblemCard({
   problem,
   now,
   onReview,
   onResync,
   onDelete,
+  onSaveDetails,
   showRecall,
 }: {
   problem: SolvedProblem;
@@ -95,8 +187,14 @@ function ProblemCard({
   onReview: (id: string, recall: Recall) => void;
   onResync: (id: string) => void;
   onDelete: (id: string) => void;
+  onSaveDetails: (
+    id: string,
+    note: string,
+    complexity: { time?: string; space?: string },
+  ) => Promise<void>;
   showRecall: boolean;
 }) {
+  const [editing, setEditing] = useState(false);
   const overdue = problem.revision.dueAt <= now;
 
   return (
@@ -140,6 +238,9 @@ function ProblemCard({
           ))
         ) : (
           <>
+            <button type="button" onClick={() => setEditing((open) => !open)}>
+              {problem.note || problem.complexity?.time ? 'Edit notes' : 'Add notes'}
+            </button>
             {problem.github.commitUrl && (
               <button type="button" onClick={() => openUrl(problem.github.commitUrl as string)}>
                 Commit
@@ -154,8 +255,24 @@ function ProblemCard({
           </>
         )}
       </div>
+
+      {editing && !showRecall && <DetailsEditor problem={problem} onSave={onSaveDetails} />}
     </div>
   );
+}
+
+/** The signals behind a topic's score, so the number is never a black box. */
+function describeTopic(topic: TopicStat): string {
+  const parts = [
+    `${topic.solved} solved`,
+    `${topic.lapses} forgotten on review`,
+    `${topic.totalAttempts} total attempts`,
+  ];
+  if (topic.hintsUsed > 0) parts.push(`${topic.hintsUsed} hints used`);
+  if (topic.medianSolveMs) {
+    parts.push(`median ${Math.max(1, Math.round(topic.medianSolveMs / 60_000))} min`);
+  }
+  return parts.join(' · ');
 }
 
 function TopicBars({ topics, title }: { topics: TopicStat[]; title: string }) {
@@ -166,7 +283,7 @@ function TopicBars({ topics, title }: { topics: TopicStat[]; title: string }) {
       {topics.map((topic) => (
         <div className="bar-row" key={topic.tag}>
           <div>
-            <div className="bar-row__label" title={`${topic.solved} solved · ${topic.lapses} lapses`}>
+            <div className="bar-row__label" title={describeTopic(topic)}>
               {topic.tag}
             </div>
             <div className="bar">
@@ -217,6 +334,14 @@ export function App() {
   const handleDelete = useCallback(
     async (id: string) => {
       await send({ type: 'problem:delete', id });
+      await load();
+    },
+    [load],
+  );
+
+  const handleSaveDetails = useCallback(
+    async (id: string, note: string, complexity: { time?: string; space?: string }) => {
+      await send({ type: 'problem:details', id, note, complexity });
       await load();
     },
     [load],
@@ -321,6 +446,7 @@ export function App() {
                     onReview={(id, recall) => void handleReview(id, recall)}
                     onResync={(id) => void handleResync(id)}
                     onDelete={(id) => void handleDelete(id)}
+                    onSaveDetails={handleSaveDetails}
                     showRecall
                   />
                 ))}
@@ -350,6 +476,7 @@ export function App() {
                   onReview={(id, recall) => void handleReview(id, recall)}
                   onResync={(id) => void handleResync(id)}
                   onDelete={(id) => void handleDelete(id)}
+                  onSaveDetails={handleSaveDetails}
                   showRecall={false}
                 />
               ))

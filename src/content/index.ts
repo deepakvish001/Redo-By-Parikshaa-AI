@@ -1,15 +1,9 @@
 import { adapterFor } from '../adapters/index.ts';
 import { send } from '../core/messages.ts';
 import { formatDueIn } from '../core/srs.ts';
-import type { Recall, SolvedProblem } from '../core/types.ts';
+import type { SolvedProblem } from '../core/types.ts';
+import { showReviewPanel } from './review-panel.ts';
 import { showToast } from './toast.ts';
-
-const RECALL_LABELS: Array<{ recall: Recall; label: string; primary?: boolean }> = [
-  { recall: 'forgot', label: 'Forgot' },
-  { recall: 'hard', label: 'Hard' },
-  { recall: 'good', label: 'Good', primary: true },
-  { recall: 'easy', label: 'Easy' },
-];
 
 function describeSync(problem: SolvedProblem): string {
   switch (problem.github.status) {
@@ -34,54 +28,12 @@ function announceSaved(problem: SolvedProblem): void {
   });
 }
 
-/**
- * Shown when the user opens a problem that is due. Rating it here is the
- * whole point of the extension — the revision happens on the problem page,
- * not in a separate app.
- */
-function offerReview(problem: SolvedProblem): void {
-  const solvedDaysAgo = Math.max(
-    1,
-    Math.round((Date.now() - problem.solvedAt) / 86_400_000),
-  );
-
-  const dismiss = showToast({
-    title: 'Due for revision',
-    body: `You solved this ${solvedDaysAgo} day${solvedDaysAgo === 1 ? '' : 's'} ago. Re-solve it, then rate how it went.`,
-    tone: 'info',
-    actions: RECALL_LABELS.map(({ recall, label, primary }) => ({
-      label,
-      primary,
-      onClick: async () => {
-        try {
-          const { problem: updated } = await send({ type: 'problem:review', id: problem.id, recall });
-          if (updated) {
-            showToast({
-              title: 'Review recorded',
-              body: `Scheduled again ${formatDueIn(updated.revision.dueAt, Date.now())}.`,
-              tone: 'success',
-              timeout: 5000,
-            });
-          }
-        } catch (error) {
-          showToast({
-            title: 'Could not record the review',
-            body: error instanceof Error ? error.message : String(error),
-            tone: 'error',
-          });
-        }
-      },
-    })),
-  });
-
-  // The banner is a nudge, not a modal — it goes away on its own.
-  setTimeout(dismiss, 30_000);
-}
-
 async function checkRevisionDue(slug: string, platform: string): Promise<void> {
   try {
+    // Starts the clock for this problem, whether or not it is already tracked.
+    await send({ type: 'page:opened', platform, slug });
     const context = await send({ type: 'page:context', platform, slug });
-    if (context.tracked && context.due && context.problem) offerReview(context.problem);
+    if (context.tracked && context.due && context.problem) showReviewPanel(context.problem);
   } catch {
     // The service worker may still be starting up; a missed nudge is harmless.
   }

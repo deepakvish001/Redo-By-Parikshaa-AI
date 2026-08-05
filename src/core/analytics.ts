@@ -45,11 +45,44 @@ export function computeStreak(problems: SolvedProblem[], now: number): number {
 }
 
 /**
+ * Roughly how long a problem of each difficulty should take before the time
+ * spent starts to say something about how well the topic is known.
+ */
+const TIME_BUDGET_MS: Record<string, number> = {
+  easy: 15 * 60_000,
+  medium: 30 * 60_000,
+  hard: 60 * 60_000,
+  unknown: 30 * 60_000,
+};
+
+/** Median, so one marathon session does not define a whole topic. */
+function medianOf(values: number[]): number | undefined {
+  if (values.length === 0) return undefined;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? Math.round(((sorted[middle - 1] as number) + (sorted[middle] as number)) / 2)
+    : (sorted[middle] as number);
+}
+
+/** 0 when solved within budget, rising to 1 at three times the budget. */
+function timeOverrun(problem: SolvedProblem): number | undefined {
+  if (!problem.solveTimeMs) return undefined;
+  const budget = TIME_BUDGET_MS[problem.difficulty] ?? TIME_BUDGET_MS.unknown!;
+  return Math.min(1, Math.max(0, problem.solveTimeMs / budget - 1) / 2);
+}
+
+/**
  * Per-tag mastery on a 0–100 scale.
  *
- * The score rewards problems that have climbed the interval ladder and
- * penalises the two signals that actually predict a shaky topic: forgetting a
- * problem on review, and needing many attempts before it was accepted.
+ * The score rewards problems that have climbed the interval ladder, and
+ * penalises the four signals that actually predict a shaky topic: forgetting a
+ * problem on review, needing many attempts before it was accepted, reaching for
+ * hints, and taking far longer than the problem should take.
+ *
+ * Time and hints only count for the problems that have them, so a collection
+ * recorded before those were tracked is scored on what it does have rather
+ * than being penalised for the gap.
  */
 export function computeTopicStats(problems: SolvedProblem[], maxStage: number): TopicStat[] {
   const buckets = new Map<string, SolvedProblem[]>();
@@ -80,13 +113,31 @@ export function computeTopicStats(problems: SolvedProblem[], maxStage: number): 
     const attemptPenalty =
       bucket.reduce((sum, p) => sum + Math.min(Math.max(p.attempts - 1, 0), 4), 0) /
       (solved * 4);
+    // Three revealed hints on a problem is as much help as we count.
+    const hintsUsed = bucket.reduce((sum, p) => sum + (p.revision.hintsUsed ?? 0), 0);
+    const hintPenalty =
+      bucket.reduce((sum, p) => sum + Math.min(p.revision.hintsUsed ?? 0, 3), 0) / (solved * 3);
 
-    const raw = 0.6 * stageScore + 0.4 * (1 - lapseRate) - 0.25 * attemptPenalty;
+    const overruns = bucket
+      .map(timeOverrun)
+      .filter((value): value is number => value !== undefined);
+    const timePenalty =
+      overruns.length === 0 ? 0 : overruns.reduce((sum, value) => sum + value, 0) / overruns.length;
+
+    const raw =
+      0.55 * stageScore +
+      0.45 * (1 - lapseRate) -
+      (0.2 * attemptPenalty + 0.15 * hintPenalty + 0.1 * timePenalty);
+
     stats.push({
       tag,
       solved,
       lapses,
       totalAttempts,
+      hintsUsed,
+      medianSolveMs: medianOf(
+        bucket.map((p) => p.solveTimeMs).filter((value): value is number => Boolean(value)),
+      ),
       mastery: Math.round(Math.min(1, Math.max(0, raw)) * 100),
     });
   }

@@ -48,7 +48,20 @@ const STYLES = `
 .card.error .dot { background: #f0616d; }
 .card.success .dot { background: #4ade80; }
 .title { font-size: 13px; font-weight: 600; line-height: 1.35; }
-.body { margin-top: 4px; font-size: 12px; line-height: 1.5; color: #a9a9b8; }
+.body { margin-top: 4px; font-size: 12px; line-height: 1.5; color: #a9a9b8; white-space: pre-wrap; }
+.body.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #c8c8d6;
+  max-height: 260px;
+  overflow: auto;
+  margin-top: 8px;
+  padding: 8px 9px;
+  border-radius: 7px;
+  background: #101017;
+  border: 1px solid #2a2a36;
+}
 .body a { color: #a78bfa; }
 .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 button {
@@ -87,6 +100,8 @@ export interface ToastOptions {
   actions?: ToastAction[];
   /** ms before auto-dismiss; omit or pass 0 to require manual dismissal. */
   timeout?: number;
+  /** Render the body as scrollable monospace — used for showing code back. */
+  mono?: boolean;
 }
 
 let stack: HTMLDivElement | null = null;
@@ -130,7 +145,7 @@ export function showToast(options: ToastOptions): () => void {
 
   if (options.body) {
     const body = document.createElement('div');
-    body.className = 'body';
+    body.className = options.mono ? 'body mono' : 'body';
     body.textContent = options.body;
     text.append(body);
   }

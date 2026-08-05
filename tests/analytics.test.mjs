@@ -201,3 +201,98 @@ test('pipes in a title cannot break the index table', () => {
   const readme = buildIndexReadme([makeProblem({ title: 'A | B' })], NOW);
   assert.match(readme, /A \\\| B/);
 });
+
+/* ------------------------------------------- hints and time as signals */
+
+test('reaching for hints lowers a topic below one solved unaided', () => {
+  const problems = [
+    makeProblem({ slug: 'a', tags: ['greedy'], revision: { stage: 3, reviewCount: 3, hintsUsed: 3 } }),
+    makeProblem({ slug: 'b', tags: ['greedy'], revision: { stage: 3, reviewCount: 3, hintsUsed: 3 } }),
+    makeProblem({ slug: 'c', tags: ['trie'], revision: { stage: 3, reviewCount: 3, hintsUsed: 0 } }),
+    makeProblem({ slug: 'd', tags: ['trie'], revision: { stage: 3, reviewCount: 3, hintsUsed: 0 } }),
+  ];
+
+  const stats = computeTopicStats(problems, INTERVALS.length - 1);
+  const greedy = stats.find((stat) => stat.tag === 'greedy');
+  const trie = stats.find((stat) => stat.tag === 'trie');
+
+  assert.ok(greedy.mastery < trie.mastery, `${greedy.mastery} should be below ${trie.mastery}`);
+  assert.equal(greedy.hintsUsed, 6);
+  assert.equal(trie.hintsUsed, 0);
+});
+
+test('taking far longer than the difficulty warrants lowers the score', () => {
+  const quick = makeProblem({ slug: 'a', tags: ['stack'], difficulty: 'easy', solveTimeMs: 5 * 60_000 });
+  const slow = makeProblem({ slug: 'b', tags: ['heap'], difficulty: 'easy', solveTimeMs: 90 * 60_000 });
+
+  const stats = computeTopicStats([quick, slow], INTERVALS.length - 1);
+  const fast = stats.find((stat) => stat.tag === 'stack');
+  const dragged = stats.find((stat) => stat.tag === 'heap');
+
+  assert.ok(dragged.mastery < fast.mastery);
+  assert.equal(fast.medianSolveMs, 5 * 60_000);
+});
+
+test('the time budget scales with difficulty', () => {
+  // The same 45 minutes is over budget for an easy problem, fine for a hard one.
+  const easy = makeProblem({ slug: 'a', tags: ['bfs'], difficulty: 'easy', solveTimeMs: 45 * 60_000 });
+  const hard = makeProblem({ slug: 'b', tags: ['dfs'], difficulty: 'hard', solveTimeMs: 45 * 60_000 });
+
+  const stats = computeTopicStats([easy, hard], INTERVALS.length - 1);
+  assert.ok(
+    stats.find((s) => s.tag === 'bfs').mastery < stats.find((s) => s.tag === 'dfs').mastery,
+  );
+});
+
+test('problems recorded before timing existed are not penalised for it', () => {
+  const untimed = [
+    makeProblem({ slug: 'a', tags: ['queue'], revision: { stage: 3, reviewCount: 2 } }),
+    makeProblem({ slug: 'b', tags: ['queue'], revision: { stage: 3, reviewCount: 2 } }),
+  ];
+  const timed = [
+    makeProblem({ slug: 'c', tags: ['recursion'], solveTimeMs: 60_000, revision: { stage: 3, reviewCount: 2 } }),
+    makeProblem({ slug: 'd', tags: ['recursion'], solveTimeMs: 60_000, revision: { stage: 3, reviewCount: 2 } }),
+  ];
+
+  const stats = computeTopicStats([...untimed, ...timed], INTERVALS.length - 1);
+  // A well-within-budget time scores the same as no time at all.
+  assert.equal(
+    stats.find((s) => s.tag === 'queue').mastery,
+    stats.find((s) => s.tag === 'recursion').mastery,
+  );
+  assert.equal(stats.find((s) => s.tag === 'queue').medianSolveMs, undefined);
+});
+
+test('the median ignores a single marathon session', () => {
+  const problems = [
+    makeProblem({ slug: 'a', tags: ['dp'], solveTimeMs: 10 * 60_000 }),
+    makeProblem({ slug: 'b', tags: ['dp'], solveTimeMs: 12 * 60_000 }),
+    makeProblem({ slug: 'c', tags: ['dp'], solveTimeMs: 300 * 60_000 }),
+  ];
+  const dp = computeTopicStats(problems, INTERVALS.length - 1).find((s) => s.tag === 'dp');
+  assert.equal(dp.medianSolveMs, 12 * 60_000);
+});
+
+test('the README carries your own complexity, separate from the judge figures', () => {
+  const readme = buildProblemReadme(
+    makeProblem({
+      note: 'Seen-map in one pass.',
+      complexity: { time: 'O(n)', space: 'O(n)' },
+      solveTimeMs: 12 * 60_000,
+      runtimeNote: 'Runtime 52 ms',
+    }),
+  );
+
+  assert.match(readme, /## Complexity/);
+  assert.match(readme, /\*\*Time:\*\* O\(n\)/);
+  assert.match(readme, /\*\*Space:\*\* O\(n\)/);
+  assert.match(readme, /\*\*Time to solve:\*\* 12 min/);
+  // The judge's measurement stays its own thing.
+  assert.match(readme, /\*\*Judge:\*\* Runtime 52 ms/);
+});
+
+test('a problem with no complexity recorded omits the section entirely', () => {
+  const readme = buildProblemReadme(makeProblem());
+  assert.doesNotMatch(readme, /## Complexity/);
+  assert.doesNotMatch(readme, /Time to solve/);
+});
