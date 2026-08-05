@@ -2,10 +2,11 @@
 
 A Chrome extension for people who grind DSA and then forget it.
 
-When a submission is accepted on **LeetCode** or **Codeforces**, the extension does two
-things: it commits the solution to a GitHub repository you own, and it puts the problem on a
-spaced-repetition schedule. Days later the toolbar badge tells you what is due; you re-solve
-the problem on the site, rate how it went, and the schedule adapts.
+When a submission is accepted on **LeetCode** or **Codeforces**, the extension commits the
+solution to a GitHub repository you own, ticks the problem off on [Parikshaa](https://parikshaa.org)
+if it has a match there, and puts it on a spaced-repetition schedule. Days later the toolbar
+badge tells you what is due; you re-solve the problem on the site, rate how it went, and the
+schedule adapts.
 
 Solving is the easy part. Remembering three months later is the part nothing else helps with.
 
@@ -25,6 +26,10 @@ Solving is the easy part. Remembering three months later is the part nothing els
   and `Forgot` sends it to the start.
 - **Rate without leaving the site.** Open a problem that is due and a small panel appears in
   the corner with the four rating buttons.
+- **Ticks problems off on Parikshaa.** Parikshaa's coding problems use the same slugs as
+  LeetCode, so an accepted submission saves your solution against the matching problem and
+  records an accepted submission — which is what marks it solved across your sheets and
+  dashboards. Off by default.
 - **Ranks your weak topics.** Mastery per tag is computed from how far each problem has climbed
   the ladder, how often you forgot it on review, and how many attempts it took to get accepted
   the first time — so "dynamic programming: 34" is a claim backed by your own history.
@@ -61,6 +66,34 @@ The token lives in `chrome.storage.local`. That is not an encrypted store — an
 to your browser profile can read it, which is exactly why the token should be scoped to a
 single repository and no other permissions. If the machine is shared, leave sync off and use
 the extension purely as a local revision tracker.
+
+## Parikshaa sync
+
+Turn on **Mark matching problems solved on Parikshaa** in options. There is nothing to paste
+and no second login: while you are signed in to parikshaa.org, the extension reads that
+session from the site's own storage and writes as you.
+
+Two rows are written per accepted problem:
+
+- `user_problem_solutions` — your saved solution. The existing row is read and **merged**
+  first, so notes you wrote and solutions in other languages survive untouched; only the
+  language you just solved in is added or replaced.
+- `code_submissions` — an `Accepted` row, which is what Parikshaa reads to mark a problem
+  solved everywhere it appears.
+
+Details worth knowing:
+
+- **LeetCode only.** Parikshaa problems are matched by LeetCode slug, so Codeforces
+  submissions are marked `skipped` rather than sent on a lookup that cannot match.
+- **A problem with no Parikshaa counterpart is skipped**, not created.
+- **Expired sessions wait rather than break.** Supabase access tokens last about an hour.
+  Refreshing one from here would rotate the refresh token and sign you out of the website, so
+  instead the problem is left `pending` and retried the next time you open parikshaa.org.
+- **No project keys ship in this extension.** The REST endpoint and your user id are read
+  from the session token's own claims, and the publishable API key is observed from a request
+  the site already makes. Nothing Parikshaa-specific is hard-coded beyond the domain name.
+- Only languages Parikshaa's editor supports (Python, C++, Java, JavaScript, TypeScript, C,
+  Go, SQL) can be stored; anything else is skipped with a reason shown in the popup.
 
 ## How the scheduling works
 
@@ -111,6 +144,11 @@ above that hard.
 Adding a platform means implementing the `PlatformAdapter` interface in `src/adapters/` and
 registering it — the rest of the pipeline is platform-agnostic.
 
+**Parikshaa** needs no verdict detection: a separate content script on parikshaa.org reads the
+Supabase session from `localStorage` and captures the publishable key from the site's own
+outgoing requests, then hands both to the service worker. Like the LeetCode observer, it only
+watches — it never alters a request.
+
 ## Known limits
 
 - Both sites can change their markup or endpoints at any time; detection is best-effort and the
@@ -118,6 +156,8 @@ registering it — the rest of the pipeline is platform-agnostic.
 - Codeforces submissions are only picked up on pages that show the submissions table (the
   status page you land on after submitting, `/contest/<id>/my`, or a submission page).
 - Attempt counts are per browser session, so they reset when you close the tab.
+- Parikshaa sync needs a parikshaa.org tab to have been open at some point in the last hour;
+  otherwise problems queue until the session refreshes.
 - Storage is `chrome.storage.local`, which is capped around 10 MB — thousands of solutions, but
   not unlimited.
 
@@ -133,10 +173,10 @@ npm run icons      # regenerate the PNG icons from scripts/generate-icons.mjs
 
 ```
 src/
-├── core/        # pure logic: SRS scheduler, analytics, GitHub client, storage, markdown
+├── core/        # pure logic: SRS scheduler, analytics, GitHub + Parikshaa clients, storage
 ├── adapters/    # one file per platform, behind a shared interface
-├── content/     # injected observer + in-page UI
-├── background/  # service worker: message routing, sync queue, badge, alarms
+├── content/     # injected observers (LeetCode, Parikshaa) + in-page UI
+├── background/  # service worker: message routing, sync queues, badge, alarms
 ├── popup/       # dashboard (due / solved / stats)
 └── options/     # settings
 ```

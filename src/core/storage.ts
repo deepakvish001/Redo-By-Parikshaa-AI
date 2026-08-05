@@ -1,9 +1,11 @@
+import type { ParikshaaCredentials } from './parikshaa.ts';
 import type { Platform, Settings, SolvedProblem } from './types.ts';
 
 const KEYS = {
   settings: 'settings',
   problems: 'problems',
   meta: 'meta',
+  parikshaaCredentials: 'parikshaaCredentials',
 } as const;
 
 /** Aggregate counters that do not belong to any single problem. */
@@ -23,6 +25,9 @@ export const DEFAULT_SETTINGS: Settings = {
     branch: 'main',
     enabled: false,
     commitMessage: 'solve: {title} ({platform})',
+  },
+  parikshaa: {
+    enabled: false,
   },
   revision: {
     intervals: [1, 3, 7, 21, 45, 90],
@@ -53,6 +58,7 @@ export async function getSettings(): Promise<Settings> {
   // its defaults on an existing install.
   return {
     github: { ...DEFAULT_SETTINGS.github, ...stored.github },
+    parikshaa: { ...DEFAULT_SETTINGS.parikshaa, ...stored.parikshaa },
     revision: { ...DEFAULT_SETTINGS.revision, ...stored.revision },
     platforms: { ...DEFAULT_SETTINGS.platforms, ...stored.platforms } as Record<Platform, boolean>,
   };
@@ -62,6 +68,7 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
   const current = await getSettings();
   const next: Settings = {
     github: { ...current.github, ...patch.github },
+    parikshaa: { ...current.parikshaa, ...patch.parikshaa },
     revision: { ...current.revision, ...patch.revision },
     platforms: { ...current.platforms, ...patch.platforms },
   };
@@ -104,6 +111,21 @@ export async function deleteProblem(id: string): Promise<void> {
   const problems = await getProblems();
   delete problems[id];
   await chrome.storage.local.set({ [KEYS.problems]: problems });
+}
+
+export async function getParikshaaCredentials(): Promise<ParikshaaCredentials | undefined> {
+  const stored = await readKey<ParikshaaCredentials | undefined>(KEYS.parikshaaCredentials, undefined);
+  return stored;
+}
+
+export async function saveParikshaaCredentials(
+  credentials: ParikshaaCredentials,
+): Promise<void> {
+  await chrome.storage.local.set({ [KEYS.parikshaaCredentials]: credentials });
+}
+
+export async function clearParikshaaCredentials(): Promise<void> {
+  await chrome.storage.local.remove(KEYS.parikshaaCredentials);
 }
 
 export async function getMeta(): Promise<Meta> {

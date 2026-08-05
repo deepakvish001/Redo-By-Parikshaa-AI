@@ -147,6 +147,25 @@ test('dashboard stats summarise the collection', () => {
   assert.equal(stats.reviewsCompleted, 2);
 });
 
+test('the strong list never repeats what the weak list already showed', () => {
+  const problems = [
+    makeProblem({ slug: 'a', tags: ['dp'], attempts: 5, revision: { stage: 0, reviewCount: 3, lapses: 3 } }),
+    makeProblem({ slug: 'b', tags: ['dp'], attempts: 5, revision: { stage: 0, reviewCount: 3, lapses: 3 } }),
+    makeProblem({ slug: 'c', tags: ['array'], revision: { stage: 5, reviewCount: 3, lapses: 0 } }),
+    makeProblem({ slug: 'd', tags: ['array'], revision: { stage: 5, reviewCount: 3, lapses: 0 } }),
+  ];
+
+  const stats = computeStats(problems, INTERVALS, NOW);
+  const weak = stats.weakestTopics.map((topic) => topic.tag);
+  const strong = stats.strongestTopics.map((topic) => topic.tag);
+
+  assert.deepEqual(weak, ['dp', 'array']);
+  // Only two topics exist and both are already listed as needing work, so the
+  // "solid" list stays empty rather than echoing them back.
+  assert.deepEqual(strong, []);
+  assert.equal(strong.some((tag) => weak.includes(tag)), false);
+});
+
 test('day keys are stable within a local day', () => {
   const morning = new Date(2026, 0, 15, 1, 0, 0).getTime();
   const evening = new Date(2026, 0, 15, 23, 0, 0).getTime();

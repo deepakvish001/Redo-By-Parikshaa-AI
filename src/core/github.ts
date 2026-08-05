@@ -5,12 +5,12 @@ const API = 'https://api.github.com';
 export type GithubConfig = Settings['github'];
 
 export class GithubError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
     super(message);
     this.name = 'GithubError';
+    this.status = status;
   }
 }
 

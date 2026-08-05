@@ -40,6 +40,39 @@ function SyncChip({ problem }: { problem: SolvedProblem }) {
   return <span className="chip">{status === 'pending' ? 'syncing' : 'local only'}</span>;
 }
 
+function ParikshaaChip({ problem }: { problem: SolvedProblem }) {
+  const state = problem.parikshaa;
+  // Older records predate Parikshaa sync and simply have nothing to show.
+  if (!state || state.status === 'disabled') return null;
+
+  if (state.status === 'synced') {
+    return (
+      <span className="chip chip--ok" title={state.url}>
+        parikshaa ✓
+      </span>
+    );
+  }
+  if (state.status === 'error') {
+    return (
+      <span className="chip chip--overdue" title={state.error}>
+        parikshaa failed
+      </span>
+    );
+  }
+  if (state.status === 'skipped') {
+    return (
+      <span className="chip" title={state.reason}>
+        parikshaa n/a
+      </span>
+    );
+  }
+  return (
+    <span className="chip" title={state.reason}>
+      parikshaa queued
+    </span>
+  );
+}
+
 function Empty({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="empty">
@@ -78,6 +111,7 @@ function ProblemCard({
           {formatDueIn(problem.revision.dueAt, now)}
         </span>
         <SyncChip problem={problem} />
+        <ParikshaaChip problem={problem} />
         <span>{problem.platform}</span>
         <span>·</span>
         <span>stage {problem.revision.stage + 1}</span>

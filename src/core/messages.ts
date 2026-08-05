@@ -1,4 +1,5 @@
 import type { RepoInfo } from './github.ts';
+import type { ParikshaaCredentials } from './parikshaa.ts';
 import type { AcceptedSubmission, Recall, Settings, SolvedProblem, Stats } from './types.ts';
 
 export interface DashboardData {
@@ -22,7 +23,9 @@ export type Request =
   | { type: 'problem:delete'; id: string }
   | { type: 'settings:get' }
   | { type: 'settings:save'; patch: Partial<Settings> }
-  | { type: 'github:verify'; config: Settings['github'] };
+  | { type: 'github:verify'; config: Settings['github'] }
+  | { type: 'parikshaa:credentials'; credentials: ParikshaaCredentials }
+  | { type: 'parikshaa:status' };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -35,6 +38,17 @@ export interface ResponseMap {
   'settings:get': Settings;
   'settings:save': Settings;
   'github:verify': RepoInfo;
+  'parikshaa:credentials': { accepted: boolean; flushed: number };
+  'parikshaa:status': ParikshaaStatus;
+}
+
+export interface ParikshaaStatus {
+  connected: boolean;
+  expired: boolean;
+  email?: string;
+  capturedAt?: number;
+  /** Problems waiting on a usable session. */
+  pending: number;
 }
 
 export type Response<T extends Request['type']> =

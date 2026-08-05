@@ -45,6 +45,7 @@ export function App() {
   const [intervalsText, setIntervalsText] = useState('');
   const [saveStatus, setSaveStatus] = useState<Status>(null);
   const [verifyStatus, setVerifyStatus] = useState<Status>(null);
+  const [parikshaaStatus, setParikshaaStatus] = useState<Status>(null);
   const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
@@ -84,6 +85,39 @@ export function App() {
     }
   };
 
+  const refreshParikshaa = async () => {
+    try {
+      const status = await send({ type: 'parikshaa:status' });
+      if (!status.connected) {
+        setParikshaaStatus({
+          tone: 'error',
+          message: 'No Parikshaa session yet. Open parikshaa.org, sign in, and check again.',
+        });
+        return;
+      }
+      if (status.expired) {
+        setParikshaaStatus({
+          tone: 'error',
+          message: `Session for ${status.email ?? 'your account'} has expired — open parikshaa.org to refresh it.${
+            status.pending > 0 ? ` ${status.pending} problem(s) are waiting.` : ''
+          }`,
+        });
+        return;
+      }
+      setParikshaaStatus({
+        tone: 'ok',
+        message: `Connected as ${status.email ?? 'your Parikshaa account'}.${
+          status.pending > 0 ? ` ${status.pending} problem(s) queued.` : ''
+        }`,
+      });
+    } catch (error) {
+      setParikshaaStatus({
+        tone: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
   const verify = async () => {
     setVerifying(true);
     setVerifyStatus(null);
@@ -110,9 +144,10 @@ export function App() {
       <header>
         <h1>DSA Revision Buddy</h1>
         <p className="page__intro">
-          Accepted solutions on LeetCode and Codeforces get committed to a GitHub repository and
-          scheduled for spaced-repetition revision. Everything is stored in this browser; nothing is
-          sent anywhere except the GitHub repository you choose below.
+          Accepted solutions on LeetCode and Codeforces get committed to a GitHub repository,
+          ticked off on Parikshaa, and scheduled for spaced-repetition revision. Everything is
+          stored in this browser; nothing is sent anywhere except the destinations you turn on
+          below.
         </p>
       </header>
 
@@ -211,6 +246,42 @@ export function App() {
           </button>
           {verifyStatus && (
             <span className={`status status--${verifyStatus.tone}`}>{verifyStatus.message}</span>
+          )}
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2 className="panel__title">Parikshaa sync</h2>
+        <p className="panel__hint">
+          When an accepted LeetCode problem matches a problem on{' '}
+          <a href="https://parikshaa.org" target="_blank" rel="noreferrer">
+            parikshaa.org
+          </a>{' '}
+          (they share the same slugs), it gets ticked off there automatically — your solution is
+          saved against the problem and an accepted submission is recorded, which is what marks it
+          solved across your sheets.
+        </p>
+        <p className="panel__hint">
+          There is nothing to paste: the extension uses the session already in your browser from
+          being signed in to parikshaa.org. Codeforces is not synced, because Parikshaa problems
+          are matched by LeetCode slug. Existing notes and solutions in other languages are merged,
+          never overwritten.
+        </p>
+
+        <Toggle
+          checked={settings.parikshaa.enabled}
+          onChange={(enabled) => setSettings({ ...settings, parikshaa: { enabled } })}
+          label="Mark matching problems solved on Parikshaa"
+        />
+
+        <div className="actions">
+          <button type="button" onClick={() => void refreshParikshaa()}>
+            Check connection
+          </button>
+          {parikshaaStatus && (
+            <span className={`status status--${parikshaaStatus.tone}`}>
+              {parikshaaStatus.message}
+            </span>
           )}
         </div>
       </section>

@@ -9,7 +9,10 @@
     "https://leetcode.com/*",
     "https://leetcode.cn/*",
     "https://codeforces.com/*",
-    "https://api.github.com/*"
+    "https://api.github.com/*",
+    "https://parikshaa.org/*",
+    "https://www.parikshaa.org/*",
+    "https://*.supabase.co/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -46,6 +49,19 @@
         "https://codeforces.com/*"
       ],
       "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": ["https://parikshaa.org/*", "https://www.parikshaa.org/*"],
+      "js": ["parikshaa-injected.js"],
+      "world": "MAIN",
+      "run_at": "document_start",
+      "all_frames": false
+    },
+    {
+      "matches": ["https://parikshaa.org/*", "https://www.parikshaa.org/*"],
+      "js": ["parikshaa.js"],
       "run_at": "document_idle",
       "all_frames": false
     }

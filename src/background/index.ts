@@ -2,19 +2,23 @@ import { computeStats, dayKey } from '../core/analytics.ts';
 import { verifyAccess } from '../core/github.ts';
 import type { Request, Response, ResponseMap } from '../core/messages.ts';
 import { problemKey } from '../core/paths.ts';
+import { isExpired } from '../core/parikshaa.ts';
 import {
   deleteProblem,
   getMeta,
+  getParikshaaCredentials,
   getProblem,
   getProblemList,
   getSettings,
   putProblem,
   saveMeta,
+  saveParikshaaCredentials,
   saveSettings,
   updateProblem,
 } from '../core/storage.ts';
 import { applyRecall, dueProblems, initialRevision, isDue } from '../core/srs.ts';
 import type { AcceptedSubmission, Recall, SolvedProblem } from '../core/types.ts';
+import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
 
 const BADGE_ALARM = 'refresh-badge';
@@ -78,6 +82,7 @@ async function recordSubmission(
     memoryNote: submission.memoryNote,
     note: existing?.note,
     github: { status: 'pending' },
+    parikshaa: { status: 'pending' },
     // A re-solve keeps its place on the ladder; only new problems start over.
     revision: existing?.revision ?? initialRevision(settings.revision.intervals, now),
   };
@@ -85,8 +90,11 @@ async function recordSubmission(
   await putProblem(problem);
   await refreshBadge();
 
-  const github = await syncProblem(problem, settings);
-  const synced = { ...problem, github };
+  const [github, parikshaa] = await Promise.all([
+    syncProblem(problem, settings),
+    syncToParikshaa(problem, settings),
+  ]);
+  const synced = { ...problem, github, parikshaa };
   await putProblem(synced);
 
   return { saved: true, problem: synced };
@@ -165,10 +173,34 @@ async function handle(request: Request): Promise<unknown> {
     case 'problem:resync': {
       const [problem, settings] = await Promise.all([getProblem(request.id), getSettings()]);
       if (!problem) return { problem: undefined };
-      const github = await syncProblem(problem, settings);
-      const updated = { ...problem, github };
+      const [github, parikshaa] = await Promise.all([
+        syncProblem(problem, settings),
+        syncToParikshaa(problem, settings),
+      ]);
+      const updated = { ...problem, github, parikshaa };
       await putProblem(updated);
       return { problem: updated };
+    }
+
+    case 'parikshaa:credentials': {
+      await saveParikshaaCredentials(request.credentials);
+      const settings = await getSettings();
+      const flushed = await flushPending(settings, request.credentials);
+      return { accepted: true, flushed };
+    }
+
+    case 'parikshaa:status': {
+      const [credentials, problems] = await Promise.all([
+        getParikshaaCredentials(),
+        getProblemList(),
+      ]);
+      return {
+        connected: Boolean(credentials),
+        expired: credentials ? isExpired(credentials, Date.now()) : false,
+        email: credentials?.email,
+        capturedAt: credentials?.capturedAt,
+        pending: problems.filter((problem) => problem.parikshaa?.status === 'pending').length,
+      };
     }
 
     case 'problem:delete':

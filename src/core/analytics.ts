@@ -110,6 +110,14 @@ export function computeStats(
 
   const topics = computeTopicStats(problems, Math.max(1, intervals.length - 1));
   const ranked = rankable(topics);
+  const weakestTopics = ranked.slice(0, 5);
+  // With only a handful of tags the two lists would otherwise show the same
+  // topics twice, which reads as a bug rather than a ranking.
+  const weakestTags = new Set(weakestTopics.map((topic) => topic.tag));
+  const strongestTopics = [...ranked]
+    .reverse()
+    .filter((topic) => !weakestTags.has(topic.tag))
+    .slice(0, 5);
 
   return {
     total: problems.length,
@@ -118,7 +126,7 @@ export function computeStats(
     dueToday: problems.filter((problem) => isDue(problem.revision, now)).length,
     reviewsCompleted,
     currentStreak: computeStreak(problems, now),
-    weakestTopics: ranked.slice(0, 5),
-    strongestTopics: [...ranked].reverse().slice(0, 5),
+    weakestTopics,
+    strongestTopics,
   };
 }

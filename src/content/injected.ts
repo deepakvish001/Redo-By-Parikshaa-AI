@@ -176,3 +176,6 @@ XMLHttpRequest.prototype.send = function patchedSend(this: XMLHttpRequest, ...ar
   }
   return (originalSend as (...a: unknown[]) => void).apply(this, args);
 };
+
+// Marks this file as a module so its top-level names stay file-scoped.
+export {};

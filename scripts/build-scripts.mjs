@@ -14,6 +14,8 @@ const entries = [
   { name: 'background', file: 'src/background/index.ts' },
   { name: 'content', file: 'src/content/index.ts' },
   { name: 'injected', file: 'src/content/injected.ts' },
+  { name: 'parikshaa', file: 'src/content/parikshaa.ts' },
+  { name: 'parikshaa-injected', file: 'src/content/parikshaa-injected.ts' },
 ];
 
 for (const entry of entries) {

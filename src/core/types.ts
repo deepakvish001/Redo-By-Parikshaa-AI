@@ -31,7 +31,18 @@ export interface SolvedProblem {
   /** User's own note, editable from the popup. */
   note?: string;
   github: GithubSyncState;
+  parikshaa: ParikshaaSyncState;
   revision: RevisionState;
+}
+
+export interface ParikshaaSyncState {
+  /** `pending` means it is queued for the next time credentials are fresh. */
+  status: 'pending' | 'synced' | 'skipped' | 'error' | 'disabled';
+  /** Why it was skipped — no matching problem, unsupported language, and so on. */
+  reason?: string;
+  error?: string;
+  url?: string;
+  syncedAt?: number;
 }
 
 export interface GithubSyncState {
@@ -66,6 +77,10 @@ export interface Settings {
     enabled: boolean;
     /** Commit message template; `{title}` and `{platform}` are substituted. */
     commitMessage: string;
+  };
+  parikshaa: {
+    /** Mark matching problems solved on parikshaa.org. */
+    enabled: boolean;
   };
   revision: {
     /** Interval ladder in days. Stage n schedules `intervals[n]` days out. */
