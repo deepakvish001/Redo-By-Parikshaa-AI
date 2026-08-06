@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { readAttempt, readVerdict } from '../src/adapters/leetcode.ts';
-import { looksLikeLanguage } from '../src/adapters/codeforces.ts';
+import { failedOnTest, looksLikeLanguage, readJudgeCells } from '../src/adapters/codeforces.ts';
 import { isObserved } from '../src/adapters/observed.ts';
 import {
   MAX_HISTORY,
@@ -295,4 +295,39 @@ test('the history is bounded so a much-revisited problem cannot grow forever', (
   assert.equal(history.length, MAX_HISTORY);
   // Trimmed from the front, so the most recent activity survives.
   assert.equal(history[history.length - 1].at, (MAX_HISTORY + 39) * 120_000);
+});
+
+test('Codeforces reports the judge’s time and memory, which it never used to', () => {
+  // The status table has had these columns all along; not reading them is why
+  // every Codeforces README came out with no "Judge:" line while LeetCode's had
+  // "Runtime 1 ms · Memory 42.9 MB".
+  const row = {
+    cells: {
+      '.time-consumed-cell': '30 ms',
+      '.memory-consumed-cell': '0 KB',
+    },
+    querySelector(selector) {
+      const value = this.cells[selector];
+      return value === undefined ? null : { textContent: value };
+    },
+  };
+
+  assert.deepEqual(readJudgeCells(row), { runtime: '30 ms', memory: '0 KB' });
+
+  const empty = { querySelector: () => null };
+  assert.deepEqual(readJudgeCells(empty), { runtime: undefined, memory: undefined });
+});
+
+test('the failing test number becomes a passed count', () => {
+  // Codeforces counts from 1 and never says how many tests there are, so
+  // failing on test 5 means four passed.
+  assert.equal(failedOnTest('Wrong answer on test 5'), 4);
+  assert.equal(failedOnTest('Time limit exceeded on test 12'), 11);
+  assert.equal(failedOnTest('Неправильный ответ на тесте 3'), 2);
+
+  // An accepted row names no test, and neither does a compile error.
+  assert.equal(failedOnTest('Accepted'), undefined);
+  assert.equal(failedOnTest('Compilation error'), undefined);
+  // Failing the very first test means nothing passed, not "-1".
+  assert.equal(failedOnTest('Wrong answer on test 1'), 0);
 });

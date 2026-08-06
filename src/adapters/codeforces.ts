@@ -17,6 +17,36 @@ const LANGUAGE_TOKENS = new Set(
   ],
 );
 
+/**
+ * Time and memory, from the status table's own columns.
+ *
+ * These are the figures the LeetCode adapter reports as "Runtime … · Memory …",
+ * and Codeforces has had them all along — they simply were not being read, so
+ * every Codeforces problem's committed README had no Judge line at all.
+ */
+export function readJudgeCells(row: {
+  querySelector(selectors: string): { textContent: string | null } | null;
+}): { runtime?: string; memory?: string } {
+  const text = (selector: string) => row.querySelector(selector)?.textContent?.trim() || undefined;
+  return {
+    runtime: text('.time-consumed-cell'),
+    memory: text('.memory-consumed-cell'),
+  };
+}
+
+/**
+ * How many tests passed, from "Wrong answer on test 5".
+ *
+ * Codeforces counts the failing test from 1 and never says how many there are,
+ * so four passed before test 5 failed. An accepted row names no test.
+ */
+export function failedOnTest(verdict: string): number | undefined {
+  const match = /on test (\d+)/i.exec(verdict) ?? /на тесте (\d+)/i.exec(verdict);
+  if (!match?.[1]) return undefined;
+  const failed = Number(match[1]);
+  return Number.isFinite(failed) && failed > 0 ? failed - 1 : undefined;
+}
+
 /** True when a table cell reads like a language, not like a problem title. */
 export function looksLikeLanguage(text: string): boolean {
   if (!text || text.length >= 40) return false;
@@ -101,9 +131,14 @@ export class CodeforcesAdapter implements PlatformAdapter {
       const submissionId = row.getAttribute('data-submission-id');
       if (!submissionId || this.processed.has(submissionId)) continue;
 
-      const verdict = row.querySelector('.status-verdict-cell')?.textContent?.trim() ?? '';
-      // An empty or "running" verdict means the judge has not finished yet.
-      if (!verdict || /in queue|running|testing/i.test(verdict)) continue;
+      const verdictCell = row.querySelector('.status-verdict-cell');
+      const verdict = verdictCell?.textContent?.trim() ?? '';
+      if (!verdict) continue;
+
+      // `waiting` is Codeforces' own flag for "the judge has not finished", and
+      // unlike the verdict text it is the same on the Russian locale.
+      if (verdictCell?.getAttribute('waiting') === 'true') continue;
+      if (/in queue|running|testing|в очереди|выполняется/i.test(verdict)) continue;
 
       const author = row.querySelector<HTMLAnchorElement>('a[href^="/profile/"]')?.textContent?.trim();
       const mine = handle ? author === handle : this.isMySubmissionsPage();
@@ -116,7 +151,11 @@ export class CodeforcesAdapter implements PlatformAdapter {
       const key = `${parsed.contestId}${parsed.index.toUpperCase()}`;
       this.processed.add(submissionId);
       const language = this.languageFromRow(row);
-      const accepted = /^accepted/i.test(verdict);
+      const judged = readJudgeCells(row);
+      // `submissionverdict` is Codeforces' machine-readable verdict; the cell's
+      // text is localised and "Accepted" is "Полное решение" in Russian.
+      const machine = verdictCell?.getAttribute('submissionverdict') ?? '';
+      const accepted = machine ? machine === 'OK' : /^accepted/i.test(verdict);
 
       // Codeforces has no run/submit split — every row in the status table is a
       // real submission, and the verdict cell names the test it died on.
@@ -126,9 +165,9 @@ export class CodeforcesAdapter implements PlatformAdapter {
         verdict,
         accepted,
         language: language || undefined,
-        testsPassed: /on test (\d+)/i.exec(verdict)?.[1]
-          ? Number(/on test (\d+)/i.exec(verdict)?.[1]) - 1
-          : undefined,
+        runtime: judged.runtime,
+        memory: judged.memory,
+        testsPassed: failedOnTest(verdict),
         submissionId,
       });
 
@@ -148,6 +187,8 @@ export class CodeforcesAdapter implements PlatformAdapter {
         index: parsed.index.toUpperCase(),
         sourceHref,
         language,
+        runtime: judged.runtime,
+        memory: judged.memory,
       });
     }
   }
@@ -168,6 +209,8 @@ export class CodeforcesAdapter implements PlatformAdapter {
       index: string;
       sourceHref: string;
       language: string;
+      runtime?: string;
+      memory?: string;
     },
   ): Promise<void> {
     try {
@@ -192,6 +235,8 @@ export class CodeforcesAdapter implements PlatformAdapter {
         language: submission.language || 'Unknown',
         code,
         attempts,
+        runtimeNote: submission.runtime ? `Runtime ${submission.runtime}` : undefined,
+        memoryNote: submission.memory ? `Memory ${submission.memory}` : undefined,
       } satisfies AcceptedSubmission);
     } catch (error) {
       context.onError(error instanceof Error ? error.message : 'Codeforces lookup failed.');

@@ -73,18 +73,37 @@ function createJournalSink(platform: string) {
   const queues = new Map<string, AttemptEvent[]>();
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  const flush = () => {
-    timer = undefined;
-    for (const [slug, events] of queues) {
-      void send({ type: 'attempt:record', platform, slug, events }).catch(() => undefined);
+  /**
+   * Returns a promise so a caller can wait for the journal to land.
+   *
+   * This matters: the problem's README is built during `submission:accepted`,
+   * from the journal as it stands at that moment. With only the timer, the
+   * accepted submit was still sitting in this queue when the README was
+   * written, and the committed file said "0 submits · 1 run" for a problem it
+   * had just recorded as solved.
+   */
+  const flush = async (): Promise<void> => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = undefined;
     }
+    if (queues.size === 0) return;
+
+    const pending = [...queues.entries()];
     queues.clear();
+    await Promise.all(
+      pending.map(([slug, events]) =>
+        send({ type: 'attempt:record', platform, slug, events }).catch(() => undefined),
+      ),
+    );
   };
 
-  return (slug: string, event: AttemptEvent) => {
+  const record = (slug: string, event: AttemptEvent) => {
     queues.set(slug, [...(queues.get(slug) ?? []), event]);
-    if (!timer) timer = setTimeout(flush, 1200);
+    if (!timer) timer = setTimeout(() => void flush(), 1200);
   };
+
+  return { record, flush };
 }
 
 function main(): void {
@@ -118,6 +137,9 @@ function main(): void {
   adapter.start({
     onAccepted: async (submission) => {
       record('accepted', `${submission.slug} (${submission.language})`);
+      // The README is built from the journal during this call, so the accepted
+      // attempt has to be in it before the call is made.
+      await journal.flush();
       try {
         const result = await send({ type: 'submission:accepted', submission });
         if (result.saved && result.problem) announceSaved(result.problem);
@@ -144,7 +166,7 @@ function main(): void {
           event.testsTotal ? ` (${event.testsPassed ?? 0}/${event.testsTotal})` : ''
         }`,
       );
-      journal(slug, event);
+      journal.record(slug, event);
     },
     onError: (message) => {
       record('error', message);
