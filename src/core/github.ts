@@ -14,14 +14,6 @@ export class GithubError extends Error {
   }
 }
 
-/** UTF-8 safe base64, since `btoa` alone throws on non-Latin-1 characters. */
-export function toBase64(text: string): string {
-  const bytes = new TextEncoder().encode(text);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
 function headers(config: GithubConfig): HeadersInit {
   return {
     Authorization: `Bearer ${config.token}`,
@@ -124,21 +116,6 @@ export async function verifyAccess(config: GithubConfig): Promise<RepoInfo> {
   };
 }
 
-async function getExistingSha(
-  path: string,
-  config: GithubConfig,
-): Promise<string | undefined> {
-  const url = `${API}/repos/${config.owner}/${config.repo}/contents/${encodeURI(path)}?ref=${encodeURIComponent(config.branch)}`;
-  const response = await fetch(url, { headers: headers(config) });
-  if (response.status === 404) return undefined;
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new GithubError(describeFailure(response, body), response.status);
-  }
-  const json = (await response.json()) as { sha?: string };
-  return json.sha;
-}
-
 /** UTF-8 safe base64 decode, for reading file contents back out of the API. */
 export function fromBase64(encoded: string): string {
   const binary = atob(encoded.replace(/\s/g, ''));
@@ -168,58 +145,124 @@ export interface CommitResult {
   commitUrl: string;
 }
 
+export interface FileChange {
+  path: string;
+  content: string;
+}
+
 /**
- * Creates or updates a single file. GitHub requires the current blob sha to
- * overwrite, and returns 409 when the branch moved between our read and write,
- * so a conflicting write is retried once with a fresh sha.
+ * Commits a set of files as one commit, through the Git Data API.
+ *
+ * The Contents API cannot do this. It writes one file per request, and each
+ * write needs the file's current blob sha — which is read back through a GET
+ * that is served from a cache lagging behind writes to the same branch. Writing
+ * five files in a row therefore read a stale sha for the second one onwards,
+ * the PUT came back 409, and retrying re-read the *same* stale value, so every
+ * attempt failed identically. That is what "the branch kept moving" was really
+ * reporting.
+ *
+ * Building a tree on top of the branch's current commit needs no per-file shas
+ * at all, and produces one commit per solve instead of five.
  */
-export async function putFile(
+export async function commitFiles(
   config: GithubConfig,
-  path: string,
-  content: string,
+  files: FileChange[],
   message: string,
 ): Promise<CommitResult> {
-  const commit = async (): Promise<CommitResult> => {
-    const sha = await getExistingSha(path, config);
-    const json = (await request(
-      `/repos/${config.owner}/${config.repo}/contents/${encodeURI(path)}`,
-      config,
-      {
-        method: 'PUT',
-        body: JSON.stringify({
-          message,
-          content: toBase64(content),
-          branch: config.branch,
-          ...(sha ? { sha } : {}),
-        }),
-      },
-    )) as { commit?: { html_url?: string } };
+  if (files.length === 0) throw new GithubError('Nothing to commit.', 0);
 
-    return { path, commitUrl: json.commit?.html_url ?? '' };
+  const repo = `/repos/${config.owner}/${config.repo}`;
+  const ref = `heads/${config.branch}`;
+
+  const attempt = async (): Promise<CommitResult> => {
+    // A repository with no commits has no ref to read; that is the one case
+    // where the new commit has no parent and the branch has to be created.
+    const head = await readRef(repo, ref, config);
+
+    const baseTree = head
+      ? ((await request(`${repo}/git/commits/${head}`, config)) as { tree: { sha: string } }).tree
+          .sha
+      : undefined;
+
+    const tree = (await request(`${repo}/git/trees`, config, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...(baseTree ? { base_tree: baseTree } : {}),
+        tree: files.map((file) => ({
+          path: file.path,
+          mode: '100644',
+          type: 'blob',
+          content: file.content,
+        })),
+      }),
+    })) as { sha: string };
+
+    // Identical content produces the identical tree, and committing that would
+    // add an empty commit to someone's repository on every re-sync. The URL is
+    // built rather than fetched — a round trip to learn a string we can spell
+    // ourselves is not worth making.
+    if (baseTree && tree.sha === baseTree) {
+      return {
+        path: files[0]?.path ?? '',
+        commitUrl: `https://github.com/${config.owner}/${config.repo}/commit/${head}`,
+      };
+    }
+
+    const commit = (await request(`${repo}/git/commits`, config, {
+      method: 'POST',
+      body: JSON.stringify({
+        message,
+        tree: tree.sha,
+        parents: head ? [head] : [],
+      }),
+    })) as { sha: string; html_url?: string };
+
+    if (head) {
+      await request(`${repo}/git/refs/${ref}`, config, {
+        method: 'PATCH',
+        body: JSON.stringify({ sha: commit.sha }),
+      });
+    } else {
+      await request(`${repo}/git/refs`, config, {
+        method: 'POST',
+        body: JSON.stringify({ ref: `refs/${ref}`, sha: commit.sha }),
+      });
+    }
+
+    return { path: files[0]?.path ?? '', commitUrl: commit.html_url ?? '' };
   };
 
-  // A 409 means someone else moved the branch between our read of the sha and
-  // our write. Re-reading and writing again is the whole fix, so it is worth
-  // several tries — the previous single retry gave up and then claimed "the
-  // next sync will retry", which nothing did.
-  const delays = [600, 1500, 3000];
-  for (let attempt = 0; ; attempt += 1) {
+  // Here a conflict really does mean the branch moved under us — someone else
+  // pushed — and rebuilding on the new head is the correct answer.
+  const delays = [500, 1500, 3000];
+  for (let round = 0; ; round += 1) {
     try {
-      return await commit();
+      return await attempt();
     } catch (error) {
-      const conflict = error instanceof GithubError && error.status === 409;
-      if (!conflict) throw error;
-      if (attempt >= delays.length) {
-        throw new GithubError(
-          `The branch kept moving while committing ${path}; gave up after ${
-            delays.length + 1
-          } tries. Use "Retry these" to try again.`,
-          409,
-        );
-      }
-      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+      const moved =
+        error instanceof GithubError && (error.status === 409 || error.status === 422);
+      if (!moved || round >= delays.length) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delays[round]));
     }
   }
+}
+
+/** The branch's current commit sha, or undefined when the branch is empty. */
+async function readRef(
+  repo: string,
+  ref: string,
+  config: GithubConfig,
+): Promise<string | undefined> {
+  const response = await fetch(`${API}${repo}/git/ref/${ref}`, { headers: headers(config) });
+  // 404 here is a repository with no commits yet, or a branch that does not
+  // exist — both mean "start from nothing", not "fail".
+  if (response.status === 404 || response.status === 409) return undefined;
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new GithubError(describeFailure(response, body), response.status);
+  }
+  const json = (await response.json()) as { object?: { sha?: string } };
+  return json.object?.sha;
 }
 
 export function isConfigured(config: GithubConfig): boolean {
