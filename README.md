@@ -45,6 +45,20 @@ Solving is the easy part. Remembering three months later is the part nothing els
 - **Publishes an animated coding profile.** `PROFILE.md` and `assets/profile.svg` are rebuilt
   on every sync: totals, streak, difficulty and platform breakdowns, topic mastery, the
   problems you fought hardest for, and the revision queue.
+- **Focus mode: one problem first.** Optional and off by default. With it on, browsing anywhere
+  outside the judges, Parikshaa and GitHub lands on a page that points you at one problem —
+  a revision that is due, LeetCode's daily, or the problem set. One emergency pause a day buys
+  three hours. This is the only feature that needs the browsing-history permission; it reads
+  the address of a tab and never a page's contents.
+- **Gives you something to post.** A weekly card — problems solved, revisions, the difficulty
+  mix, your topics and the problem you fought hardest for — copied to the clipboard as a PNG
+  in one click, with a caption to go with it. Rendered locally; nothing is uploaded. It is
+  also committed to the repository as `assets/week.svg`.
+- **Keeps the whole record, not just the outcome.** Every open, solve, review, hint and sync
+  is logged with a timestamp, an outcome and a reason — "GitHub denied the request",
+  "stage 3 → 1, next in 1d" — and counted, so a problem's card can say
+  "opened 4× · revised 2× · hints 1×" and expand into the log. The same table is committed
+  into the problem's README.
 - **Keeps your reasoning, not just the code.** Notes and your own time/space complexity are
   editable from the popup and go into the problem's committed README.
 - **Ranks your weak topics.** Mastery per tag is computed from how far each problem has climbed
@@ -53,6 +67,29 @@ Solving is the easy part. Remembering three months later is the part nothing els
   programming: 34" is a claim backed by your own history.
 - **Runs entirely locally.** No backend, no account, no telemetry. The only network calls are to
   the sites you are already on and to the GitHub repository you configured.
+
+## Focus mode
+
+Brian Tracy's *Eat That Frog* as a browser gate: the hardest thing first, and the day stops
+negotiating. Turn it on in Settings and pick where it sends you.
+
+| Mode | Where it points |
+| --- | --- |
+| **A problem due for revision** (default) | The thing Redo already knows you are about to forget. Falls back to Parikshaa's library when nothing is due. |
+| **LeetCode's daily challenge** | Fetched from LeetCode and cached for the UTC day, because that is when the daily rolls over — not at your local midnight. |
+| **Any problem** | The LeetCode problem set. |
+
+The gate is a page, not a silent redirect. Being yanked from YouTube to LeetCode with no
+explanation is indistinguishable from a hijacked browser, and it leaves nowhere to press the
+escape hatch — so the page says what happened, shows the problem with one button, and carries
+the emergency pause.
+
+Never gated: the six judges, Parikshaa, GitHub, Google sign-in, Gmail, Calendar, `localhost`,
+anything that is not an ordinary web page, and whatever you add to the allowlist. An extension
+that locks someone out of their mail gets uninstalled the first morning it does so.
+
+The gate fires on navigation. A tab already sitting on a distracting page when you switch focus
+mode on is left alone until it next navigates.
 
 ## Contest Radar
 
@@ -220,12 +257,14 @@ your-solutions-repo/
 ├── README.md                              # generated index of everything solved
 ├── PROFILE.md                             # coding profile: stats, weak topics, revision queue
 ├── assets/
-│   └── profile.svg                        # the animated card PROFILE.md embeds
+│   ├── profile.svg                        # the animated card PROFILE.md embeds
+│   └── week.svg                           # this week's shareable recap
 ├── leetcode/
 │   └── medium/
 │       └── 0011-container-with-most-water/
 │           ├── solution.py
-│           └── README.md                  # link, tags, judge stats, attempt timeline, notes
+│           └── README.md                  # link, tags, judge stats, attempt timeline,
+│                                           #   the full activity record, and your notes
 └── codeforces/
     └── 1352A-sum-of-round-numbers/
         ├── solution.cpp
