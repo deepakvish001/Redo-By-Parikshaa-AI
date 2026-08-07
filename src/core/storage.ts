@@ -49,6 +49,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   wrapped: { notify: true },
   focus: DEFAULT_FOCUS,
+  handles: { codeforces: '', leetcode: '' },
   revision: {
     intervals: [1, 3, 7, 21, 45, 90],
     skipEasy: false,
@@ -88,6 +89,7 @@ export async function getSettings(): Promise<Settings> {
     },
     wrapped: { ...DEFAULT_SETTINGS.wrapped, ...stored.wrapped },
     focus: { ...DEFAULT_SETTINGS.focus, ...stored.focus },
+    handles: { ...DEFAULT_SETTINGS.handles, ...stored.handles },
     revision: { ...DEFAULT_SETTINGS.revision, ...stored.revision },
     platforms: { ...DEFAULT_SETTINGS.platforms, ...stored.platforms } as Record<Platform, boolean>,
   };
@@ -102,6 +104,7 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
     contests: { ...current.contests, ...patch.contests },
     wrapped: { ...current.wrapped, ...patch.wrapped },
     focus: { ...current.focus, ...patch.focus },
+    handles: { ...current.handles, ...patch.handles },
     revision: { ...current.revision, ...patch.revision },
     platforms: { ...current.platforms, ...patch.platforms },
   };

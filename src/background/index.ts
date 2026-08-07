@@ -32,6 +32,7 @@ import type {
 } from '../core/types.ts';
 import { getCachedContests, refreshContests, sendContestReminders } from './contests.ts';
 import { focusState, startPause, watchNavigation } from './focus.ts';
+import { codeforcesProfile, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
 
@@ -478,6 +479,37 @@ async function handle(request: Request): Promise<unknown> {
 
     case 'focus:pause':
       return startPause();
+
+    case 'rating:profiles': {
+      const { handles } = await getSettings();
+      // Fetched together but reported separately: one judge being unreachable
+      // must not blank out the other.
+      const [codeforces, leetcode] = await Promise.allSettled([
+        handles.codeforces ? codeforcesProfile(handles.codeforces) : Promise.resolve(undefined),
+        handles.leetcode ? leetcodeProfile(handles.leetcode) : Promise.resolve(undefined),
+      ]);
+
+      return {
+        codeforces: codeforces.status === 'fulfilled' ? codeforces.value : undefined,
+        leetcode: leetcode.status === 'fulfilled' ? leetcode.value : undefined,
+        errors: {
+          codeforces:
+            codeforces.status === 'rejected' ? String(codeforces.reason?.message ?? codeforces.reason) : undefined,
+          leetcode:
+            leetcode.status === 'rejected' ? String(leetcode.reason?.message ?? leetcode.reason) : undefined,
+        },
+      };
+    }
+
+    case 'rating:predict': {
+      const { handles } = await getSettings();
+      if (!handles.codeforces) return { error: 'Add your Codeforces handle in Settings first.' };
+      try {
+        return { prediction: await predictCodeforces(handles.codeforces) };
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
+    }
 
     case 'diagnostics:clear':
       await chrome.storage.local.remove(DIAGNOSTIC_KEY);

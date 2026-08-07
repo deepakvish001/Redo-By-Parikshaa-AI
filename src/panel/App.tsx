@@ -16,7 +16,13 @@ import {
 } from '../core/journal.ts';
 import { PARIKSHAA_URL, parikshaaProblemUrl } from '../core/brand.ts';
 import { buildWrappedSvg, summariseWeek, wrappedCaption } from '../core/wrapped.ts';
-import { send, type ContestsResponse, type DashboardData } from '../core/messages.ts';
+import {
+  send,
+  type ContestsResponse,
+  type DashboardData,
+  type RatingProfiles,
+} from '../core/messages.ts';
+import type { Prediction } from '../background/rating.ts';
 import { dueProblems, formatDueIn, upcomingProblems } from '../core/srs.ts';
 import { PLATFORM_LABELS, type Difficulty, type Recall, type SolvedProblem, type TopicStat } from '../core/types.ts';
 import {
@@ -636,6 +642,151 @@ function WrappedCard({
   );
 }
 
+/**
+ * Contest rating, and what the next one does to it.
+ *
+ * Codeforces publishes enough to run its own rating system, so the number here
+ * is that algorithm on the real standings — not a heuristic. LeetCode publishes
+ * a rating but not the field, so it can only be reported, never predicted; the
+ * card says so rather than inventing a figure.
+ */
+function RatingCard() {
+  const [profiles, setProfiles] = useState<RatingProfiles | null>(null);
+  const [prediction, setPrediction] = useState<Prediction | undefined>();
+  const [predictError, setPredictError] = useState<string | null>(null);
+  const [predicting, setPredicting] = useState(false);
+
+  useEffect(() => {
+    void send({ type: 'rating:profiles' })
+      .then(setProfiles)
+      .catch(() => setProfiles({ errors: {} }));
+  }, []);
+
+  if (!profiles) return <div className="empty">Loading rating…</div>;
+
+  const { codeforces, leetcode, errors } = profiles;
+  if (!codeforces && !leetcode && !errors.codeforces && !errors.leetcode) {
+    return (
+      <div className="banner">
+        Add your Codeforces handle or LeetCode username in Settings to see your contest rating —
+        and, on Codeforces, what the last contest will do to it.
+      </div>
+    );
+  }
+
+  const predicted = prediction?.prediction;
+
+  return (
+    <section className="ratings">
+      {codeforces && (
+        <div className="rating">
+          <div className="rating__head">
+            <PlatformMark platform="codeforces" size={22} />
+            <span className="rating__handle">{codeforces.handle}</span>
+            <span className="rating__band" style={{ color: codeforces.colour }}>
+              {codeforces.rank}
+            </span>
+          </div>
+
+          <div className="rating__value">
+            {codeforces.rating ?? '—'}
+            {predicted && (
+              <span className={`rating__delta ${predicted.delta >= 0 ? 'is-up' : 'is-down'}`}>
+                {predicted.delta >= 0 ? '+' : ''}
+                {predicted.delta} → <strong>{predicted.newRating}</strong>
+              </span>
+            )}
+          </div>
+
+          <div className="rating__facts">
+            {[
+              codeforces.maxRating && `peak ${codeforces.maxRating}`,
+              codeforces.last && `last: ${codeforces.last.name} — rank ${codeforces.last.rank}`,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </div>
+
+          {predicted && prediction && (
+            <div className="card__hint">
+              <strong>{prediction.contestName}</strong> — rank {predicted.rank} of{' '}
+              {prediction.participants}, seeded {Math.round(predicted.seed)}. Codeforces' own
+              algorithm on the real standings; the official figure lands when they apply ratings.
+            </div>
+          )}
+
+          {prediction === undefined && !predicting && !predictError && (
+            <div className="rating__note">
+              No unrated contest found — nothing to predict right now.
+            </div>
+          )}
+          {predictError && <div className="rating__note is-bad">{predictError}</div>}
+
+          <div className="card__actions">
+            <button
+              type="button"
+              disabled={predicting}
+              onClick={async () => {
+                setPredicting(true);
+                setPredictError(null);
+                try {
+                  const result = await send({ type: 'rating:predict' });
+                  setPrediction(result.prediction);
+                  setPredictError(result.error ?? null);
+                } finally {
+                  setPredicting(false);
+                }
+              }}
+            >
+              {predicting ? 'Working — this takes a moment…' : 'Predict the last contest'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {leetcode && (
+        <div className="rating">
+          <div className="rating__head">
+            <PlatformMark platform="leetcode" size={22} />
+            <span className="rating__handle">{leetcode.username}</span>
+            <span className="rating__band">{leetcode.attended} contests</span>
+          </div>
+
+          <div className="rating__value">
+            {leetcode.rating !== undefined ? Math.round(leetcode.rating) : '—'}
+          </div>
+
+          <div className="rating__facts">
+            {[
+              leetcode.globalRanking && `global #${leetcode.globalRanking.toLocaleString()}`,
+              leetcode.topPercentage !== undefined && `top ${leetcode.topPercentage.toFixed(1)}%`,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </div>
+
+          {leetcode.last && (
+            <div className="rating__note">
+              {leetcode.last.rated
+                ? `${leetcode.last.title}: rank ${leetcode.last.ranking.toLocaleString()}, rating applied.`
+                : `${leetcode.last.title}: rank ${leetcode.last.ranking.toLocaleString()} — rating usually lands a day later.`}
+            </div>
+          )}
+
+          <div className="card__hint">
+            LeetCode publishes your rating but not the other entrants', so a prediction cannot be
+            computed here. Doing it would mean sending your username to somebody else's server,
+            which this extension does not do.
+          </div>
+        </div>
+      )}
+
+      {errors.codeforces && <div className="banner banner--error">Codeforces: {errors.codeforces}</div>}
+      {errors.leetcode && <div className="banner banner--error">LeetCode: {errors.leetcode}</div>}
+    </section>
+  );
+}
+
 function ContestRow({ contest, now }: { contest: Contest; now: number }) {
   const start = new Date(contest.startAt);
   return (
@@ -1096,6 +1247,7 @@ export function App() {
 
         {tab === 'contests' && (
           <>
+            <RatingCard />
             {!contests ? (
               <div className="empty">Loading contests…</div>
             ) : contests.contests.length === 0 ? (

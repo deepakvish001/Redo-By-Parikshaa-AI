@@ -1,6 +1,11 @@
 import type { RepoInfo } from './github.ts';
 import type { Contest } from './contests.ts';
 import type { FocusSettings, FocusTarget, GateDecision, PauseState } from './focus.ts';
+import type {
+  CodeforcesProfile,
+  LeetCodeProfile,
+  Prediction,
+} from '../background/rating.ts';
 import type { ParikshaaCredentials, SessionDiagnostic } from './parikshaa.ts';
 import type {
   AcceptedSubmission,
@@ -58,7 +63,9 @@ export type Request =
   | { type: 'diagnostics:get' }
   | { type: 'diagnostics:clear' }
   | { type: 'focus:status' }
-  | { type: 'focus:pause' };
+  | { type: 'focus:pause' }
+  | { type: 'rating:profiles' }
+  | { type: 'rating:predict' };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -87,6 +94,15 @@ export interface ResponseMap {
   'diagnostics:clear': { ok: true };
   'focus:status': FocusStatus;
   'focus:pause': { started: boolean; until?: number };
+  'rating:profiles': RatingProfiles;
+  'rating:predict': { prediction?: Prediction; error?: string };
+}
+
+export interface RatingProfiles {
+  codeforces?: CodeforcesProfile;
+  leetcode?: LeetCodeProfile;
+  /** Per-judge failure, so one being down does not hide the other. */
+  errors: { codeforces?: string; leetcode?: string };
 }
 
 /** Everything the focus gate needs to explain itself. */

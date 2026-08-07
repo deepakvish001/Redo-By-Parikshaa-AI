@@ -68,6 +68,31 @@ Solving is the easy part. Remembering three months later is the part nothing els
 - **Runs entirely locally.** No backend, no account, no telemetry. The only network calls are to
   the sites you are already on and to the GitHub repository you configured.
 
+## Contest rating
+
+Put your Codeforces handle and LeetCode username in Settings and the Contests tab shows what each
+judge says your rating is — and, on Codeforces, what the last contest is about to do to it.
+
+**The Codeforces prediction is the real calculation, not an estimate.** Codeforces publishes
+enough to run its own rating system: the standings of a finished contest and every participant's
+current rating. So the extension fetches both and runs Mirzayanov's algorithm — seed, geometric
+mean with the achieved rank, the rating that seed implies, and the two corrections that stop the
+system inflating. The number you see is what the site will apply.
+
+It takes ten to twenty seconds, because the algorithm needs the whole field: one standings call
+plus a handful of bulk lookups, spaced to respect the API's one-request-every-two-seconds limit.
+That is why it sits behind a button rather than refreshing on its own.
+
+**LeetCode can be reported but not predicted.** They publish your rating, your global rank and
+your history, and all of that is shown. They do not publish the other entrants' ratings, and
+computing a prediction without them would mean sending your username to a third-party service —
+which would break the one promise this extension makes about your data. So it says so instead of
+inventing a figure.
+
+Two things worth knowing about the Codeforces number: participants who have never been rated are
+seeded from zero, which is how Codeforces treats them; and unofficial, virtual and team entries
+are excluded, because they do not affect anyone's rating.
+
 ## Focus mode
 
 Brian Tracy's *Eat That Frog* as a browser gate: the hardest thing first, and the day stops

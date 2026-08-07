@@ -10,6 +10,7 @@ import {
   LayersIcon,
   ShieldIcon,
   SparkIcon,
+  TrophyIcon,
 } from '../panel/icons.tsx';
 import type { SessionDiagnostic } from '../core/parikshaa.ts';
 import { DEFAULT_SETTINGS } from '../core/storage.ts';
@@ -607,6 +608,61 @@ export function App() {
         {log.length > 0 && (
           <pre className="log">{formatLog(log.slice(-60))}</pre>
         )}
+      </section>
+
+      <section className="section-card">
+        <h2 className="section-card__title">
+          <TrophyIcon size={14} />
+          Contest rating
+        </h2>
+        <p className="section-card__hint">
+          Your handles, used to read your contest rating from each judge's public API. On
+          Codeforces the extension also runs the site's own rating algorithm over a finished
+          contest's standings, so the predicted change is the real calculation rather than an
+          estimate. LeetCode publishes a rating but not the other entrants', so its rating can be
+          shown but not predicted.
+        </p>
+
+        <div className="field field-row">
+          <div>
+            <label className="field__label" htmlFor="cf-handle">
+              Codeforces handle
+            </label>
+            <input
+              id="cf-handle"
+              type="text"
+              value={settings.handles.codeforces}
+              placeholder="tourist"
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  handles: { ...settings.handles, codeforces: event.target.value.trim() },
+                })
+              }
+            />
+          </div>
+          <div>
+            <label className="field__label" htmlFor="lc-handle">
+              LeetCode username
+            </label>
+            <input
+              id="lc-handle"
+              type="text"
+              value={settings.handles.leetcode}
+              placeholder="your-username"
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  handles: { ...settings.handles, leetcode: event.target.value.trim() },
+                })
+              }
+            />
+          </div>
+        </div>
+        <div className="field__hint">
+          Both are public profile names, not logins. They are stored in this browser and sent only
+          to the judge they belong to.
+        </div>
       </section>
 
       <section className="section-card">

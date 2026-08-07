@@ -240,6 +240,12 @@ export interface Settings {
   };
   /** Gate browsing until today's problem is done. Off by default. */
   focus: FocusSettings;
+  handles: {
+    /** Codeforces handle, for rating and contest prediction. */
+    codeforces: string;
+    /** LeetCode username, for contest rating. */
+    leetcode: string;
+  };
   revision: {
     /** Interval ladder in days. Stage n schedules `intervals[n]` days out. */
     intervals: number[];
