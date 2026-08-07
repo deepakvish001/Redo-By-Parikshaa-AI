@@ -15,7 +15,7 @@ import type { GithubSyncState, Settings, SolvedProblem } from '../core/types.ts'
  */
 let queue: Promise<unknown> = Promise.resolve();
 
-function enqueue<T>(task: () => Promise<T>): Promise<T> {
+export function enqueue<T>(task: () => Promise<T>): Promise<T> {
   const result = queue.then(task, task);
   queue = result.catch(() => undefined);
   return result;

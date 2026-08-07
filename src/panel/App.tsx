@@ -15,8 +15,32 @@ import {
   summarise,
 } from '../core/journal.ts';
 import { PARIKSHAA_URL, parikshaaProblemUrl } from '../core/brand.ts';
+import {
+  MAX_LABELS,
+  addLabels,
+  countLabels,
+  removeLabel,
+  suggestionsFor,
+  withLabel,
+} from '../core/labels.ts';
+import {
+  buildFailureReport,
+  describeHeadline,
+  failureLabel,
+  strugglingTopics,
+  type FailureKind,
+} from '../core/patterns.ts';
+import { summariseUpsolve, type UpsolveItem } from '../core/upsolve.ts';
 import { buildWrappedSvg, summariseWeek, wrappedCaption } from '../core/wrapped.ts';
-import { send, type ContestsResponse, type DashboardData } from '../core/messages.ts';
+import {
+  send,
+  type ContestsResponse,
+  type DashboardData,
+  type RatingProfiles,
+  type UpsolveResponse,
+} from '../core/messages.ts';
+import { bandFloor, type RatingGoal } from '../core/rating.ts';
+import type { Prediction } from '../background/rating.ts';
 import { dueProblems, formatDueIn, upcomingProblems } from '../core/srs.ts';
 import { PLATFORM_LABELS, type Difficulty, type Recall, type SolvedProblem, type TopicStat } from '../core/types.ts';
 import {
@@ -26,8 +50,11 @@ import {
   FlameIcon,
   GearIcon,
   PlatformMark,
+  RefreshIcon,
   SearchIcon,
   SparkIcon,
+  TagIcon,
+  TargetIcon,
   TrophyIcon,
 } from './icons.tsx';
 import { copyPng, downloadPng } from './share.ts';
@@ -235,6 +262,79 @@ function DetailsEditor({
   );
 }
 
+/**
+ * Labels, as chips with an input.
+ *
+ * Deliberately not a dropdown of a fixed vocabulary: the whole value of the
+ * feature is that people invent their own words for how they study, and a
+ * dropdown would quietly tell them their word is not one of the allowed ones.
+ */
+function LabelEditor({
+  problem,
+  suggestions,
+  onSave,
+}: {
+  problem: SolvedProblem;
+  suggestions: string[];
+  onSave: (id: string, labels: string[]) => void;
+}) {
+  const [draft, setDraft] = useState('');
+  const labels = problem.labels ?? [];
+
+  const commit = (text: string) => {
+    const next = addLabels(labels, text);
+    setDraft('');
+    if (next.join() !== labels.join()) onSave(problem.id, next);
+  };
+
+  return (
+    <div className="labels">
+      {labels.map((label) => (
+        <button
+          key={label}
+          type="button"
+          className="label"
+          title={`Remove "${label}"`}
+          onClick={() => onSave(problem.id, removeLabel(labels, label))}
+        >
+          <TagIcon size={10} />
+          {label}
+          <span className="label__x" aria-hidden="true">
+            ×
+          </span>
+        </button>
+      ))}
+      <input
+        className="labels__input"
+        value={draft}
+        placeholder={labels.length >= MAX_LABELS ? 'Label limit reached' : 'Add a label…'}
+        disabled={labels.length >= MAX_LABELS}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') commit(draft);
+          // Backspace on an empty box takes the last chip off, which is what
+          // every other chip input in the world does.
+          if (event.key === 'Backspace' && draft === '' && labels.length > 0) {
+            onSave(problem.id, labels.slice(0, -1));
+          }
+        }}
+        onBlur={() => draft && commit(draft)}
+      />
+      {draft === '' &&
+        suggestions.slice(0, 3).map((label) => (
+          <button
+            key={label}
+            type="button"
+            className="label label--suggest"
+            onClick={() => commit(label)}
+          >
+            + {label}
+          </button>
+        ))}
+    </div>
+  );
+}
+
 function ProblemCard({
   problem,
   now,
@@ -243,6 +343,8 @@ function ProblemCard({
   onResyncParikshaa,
   onDelete,
   onSaveDetails,
+  onSaveLabels,
+  labelSuggestions = [],
   showRecall,
   collapsible = false,
   defaultOpen = false,
@@ -258,6 +360,8 @@ function ProblemCard({
     note: string,
     complexity: { time?: string; space?: string },
   ) => Promise<void>;
+  onSaveLabels: (id: string, labels: string[]) => void;
+  labelSuggestions?: string[];
   showRecall: boolean;
   /**
    * Collapsed cards show only what identifies the problem and when it is next
@@ -283,6 +387,13 @@ function ProblemCard({
       <button type="button" className="row" onClick={() => setOpen(true)}>
         <span className={`row__dot row__dot--${problem.difficulty}`} />
         <span className="row__title">{problem.title}</span>
+        {(problem.labels ?? []).length > 0 && (
+          <span className="row__labels" title={(problem.labels ?? []).join(', ')}>
+            <TagIcon size={10} />
+            {problem.labels![0]}
+            {problem.labels!.length > 1 && `+${problem.labels!.length - 1}`}
+          </span>
+        )}
         {problem.github.status === 'error' && (
           <span className="row__warn" title={problem.github.error}>
             <AlertIcon size={12} />
@@ -333,6 +444,14 @@ function ProblemCard({
             .join(' · ')}
         </span>
       </div>
+
+      {!showRecall && (
+        <LabelEditor
+          problem={problem}
+          suggestions={labelSuggestions}
+          onSave={onSaveLabels}
+        />
+      )}
 
       {(events.length > 0 || struggle !== undefined) && (
         <button
@@ -636,6 +755,283 @@ function WrappedCard({
   );
 }
 
+/**
+ * Contest rating, and what the next one does to it.
+ *
+ * Codeforces publishes enough to run its own rating system, so the number here
+ * is that algorithm on the real standings — not a heuristic. LeetCode publishes
+ * a rating but not the field, so it can only be reported, never predicted; the
+ * card says so rather than inventing a figure.
+ */
+/**
+ * How far the next band is, at the rate the last few contests set.
+ *
+ * The bar is drawn from the bottom of the current band to the top, so it moves
+ * a visible amount after a single good round — a bar scaled from zero to 1600
+ * barely twitches, and a progress bar that never moves is worse than none.
+ */
+function GoalBar({ goal }: { goal: RatingGoal }) {
+  const floor = bandFloor(goal.current);
+  const span = Math.max(1, goal.target - floor);
+  const filled = Math.max(0, Math.min(1, (goal.current - floor) / span));
+
+  return (
+    <div className="goal">
+      <div className="goal__head">
+        <TargetIcon size={12} />
+        <span className="goal__title">
+          {goal.gap > 0 ? `${goal.gap} to ${goal.title}` : `${goal.title} reached`}
+        </span>
+        <span className={`goal__rate ${goal.perContest >= 0 ? 'is-up' : 'is-down'}`}>
+          {goal.perContest >= 0 ? '+' : ''}
+          {goal.perContest}/contest
+        </span>
+      </div>
+      <div className="goal__track" aria-hidden="true">
+        <span className="goal__fill" style={{ width: `${filled * 100}%` }} />
+      </div>
+      <div className="goal__note">
+        {goal.gap <= 0
+          ? 'Already there — the next band is what the bar tracks from here.'
+          : goal.contests
+            ? `About ${goal.contests} contest${goal.contests === 1 ? '' : 's'} at your recent pace` +
+              (goal.etaDays ? `, roughly ${goal.etaDays} days.` : '.')
+            : 'Your last few contests are flat or down, so there is no honest estimate to give.'}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * What the last few contests left behind.
+ *
+ * The problems worth returning to are the ones that were attempted and not
+ * passed — those are gaps in technique, not in time — so they are listed first
+ * and marked differently from the ones that were never opened.
+ */
+function UpsolveCard() {
+  const [state, setState] = useState<UpsolveResponse | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async (refresh: boolean) => {
+    setBusy(true);
+    try {
+      setState(await send(refresh ? { type: 'upsolve:refresh' } : { type: 'upsolve:get' }));
+    } catch (error) {
+      setState({
+        items: [],
+        summary: summariseUpsolve([]),
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(false);
+  }, [load]);
+
+  const pending = (state?.items ?? []).filter((item) => item.state !== 'done');
+  const order: Record<UpsolveItem['state'], number> = { failed: 0, untouched: 1, done: 2 };
+
+  return (
+    <section className="upsolve">
+      <div className="upsolve__head">
+        <TargetIcon size={13} />
+        <span className="upsolve__title">Upsolve queue</span>
+        {state && state.summary.done > 0 && (
+          <span className="tag tag--ok">{state.summary.done} done</span>
+        )}
+        <button
+          type="button"
+          className="iconbtn"
+          disabled={busy}
+          onClick={() => void load(true)}
+        >
+          <RefreshIcon size={12} />
+          {busy ? 'Reading…' : 'Read my contests'}
+        </button>
+      </div>
+
+      {state?.error && <div className="banner banner--error">{state.error}</div>}
+
+      {state && !state.error && pending.length === 0 && (
+        <div className="upsolve__empty">
+          {state.items.length === 0
+            ? 'Nothing here yet. "Read my contests" pulls the problems your last three rated Codeforces rounds left unsolved.'
+            : 'Every problem from your recent contests is solved. That is the whole point.'}
+        </div>
+      )}
+
+      {[...pending].sort((a, b) => order[a.state] - order[b.state] || b.contestId - a.contestId)
+        .slice(0, 12)
+        .map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className="upsolve__row"
+            onClick={() => openUrl(item.url)}
+          >
+            <span className={`upsolve__state upsolve__state--${item.state}`}>
+              {item.state === 'failed' ? `${item.attempts}×` : '—'}
+            </span>
+            <span className="upsolve__name">
+              {item.index}. {item.name}
+            </span>
+            <span className="upsolve__contest">{item.contestName}</span>
+          </button>
+        ))}
+
+      {pending.length > 0 && (
+        <div className="upsolve__note">
+          A number means you submitted that many times during the round and none passed. A dash
+          means you never opened it.
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RatingCard() {
+  const [profiles, setProfiles] = useState<RatingProfiles | null>(null);
+  const [prediction, setPrediction] = useState<Prediction | undefined>();
+  const [predictError, setPredictError] = useState<string | null>(null);
+  const [predicting, setPredicting] = useState(false);
+
+  useEffect(() => {
+    void send({ type: 'rating:profiles' })
+      .then(setProfiles)
+      .catch(() => setProfiles({ errors: {} }));
+  }, []);
+
+  if (!profiles) return <div className="empty">Loading rating…</div>;
+
+  const { codeforces, leetcode, errors } = profiles;
+  if (!codeforces && !leetcode && !errors.codeforces && !errors.leetcode) {
+    return (
+      <div className="banner">
+        Add your Codeforces handle or LeetCode username in Settings to see your contest rating —
+        and, on Codeforces, what the last contest will do to it.
+      </div>
+    );
+  }
+
+  const predicted = prediction?.prediction;
+
+  return (
+    <section className="ratings">
+      {codeforces && (
+        <div className="rating">
+          <div className="rating__head">
+            <PlatformMark platform="codeforces" size={22} />
+            <span className="rating__handle">{codeforces.handle}</span>
+            <span className="rating__band" style={{ color: codeforces.colour }}>
+              {codeforces.rank}
+            </span>
+          </div>
+
+          <div className="rating__value">
+            {codeforces.rating ?? '—'}
+            {predicted && (
+              <span className={`rating__delta ${predicted.delta >= 0 ? 'is-up' : 'is-down'}`}>
+                {predicted.delta >= 0 ? '+' : ''}
+                {predicted.delta} → <strong>{predicted.newRating}</strong>
+              </span>
+            )}
+          </div>
+
+          <div className="rating__facts">
+            {[
+              codeforces.maxRating && `peak ${codeforces.maxRating}`,
+              codeforces.last && `last: ${codeforces.last.name} — rank ${codeforces.last.rank}`,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </div>
+
+          {codeforces.goal && <GoalBar goal={codeforces.goal} />}
+
+          {predicted && prediction && (
+            <div className="card__hint">
+              <strong>{prediction.contestName}</strong> — rank {predicted.rank} of{' '}
+              {prediction.participants}, seeded {Math.round(predicted.seed)}. Codeforces' own
+              algorithm on the real standings; the official figure lands when they apply ratings.
+            </div>
+          )}
+
+          {prediction === undefined && !predicting && !predictError && (
+            <div className="rating__note">
+              No unrated contest found — nothing to predict right now.
+            </div>
+          )}
+          {predictError && <div className="rating__note is-bad">{predictError}</div>}
+
+          <div className="card__actions">
+            <button
+              type="button"
+              disabled={predicting}
+              onClick={async () => {
+                setPredicting(true);
+                setPredictError(null);
+                try {
+                  const result = await send({ type: 'rating:predict' });
+                  setPrediction(result.prediction);
+                  setPredictError(result.error ?? null);
+                } finally {
+                  setPredicting(false);
+                }
+              }}
+            >
+              {predicting ? 'Working — this takes a moment…' : 'Predict the last contest'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {leetcode && (
+        <div className="rating">
+          <div className="rating__head">
+            <PlatformMark platform="leetcode" size={22} />
+            <span className="rating__handle">{leetcode.username}</span>
+            <span className="rating__band">{leetcode.attended} contests</span>
+          </div>
+
+          <div className="rating__value">
+            {leetcode.rating !== undefined ? Math.round(leetcode.rating) : '—'}
+          </div>
+
+          <div className="rating__facts">
+            {[
+              leetcode.globalRanking && `global #${leetcode.globalRanking.toLocaleString()}`,
+              leetcode.topPercentage !== undefined && `top ${leetcode.topPercentage.toFixed(1)}%`,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </div>
+
+          {leetcode.last && (
+            <div className="rating__note">
+              {leetcode.last.rated
+                ? `${leetcode.last.title}: rank ${leetcode.last.ranking.toLocaleString()}, rating applied.`
+                : `${leetcode.last.title}: rank ${leetcode.last.ranking.toLocaleString()} — rating usually lands a day later.`}
+            </div>
+          )}
+
+          <div className="card__hint">
+            LeetCode publishes your rating but not the other entrants', so a prediction cannot be
+            computed here. Doing it would mean sending your username to somebody else's server,
+            which this extension does not do.
+          </div>
+        </div>
+      )}
+
+      {errors.codeforces && <div className="banner banner--error">Codeforces: {errors.codeforces}</div>}
+      {errors.leetcode && <div className="banner banner--error">LeetCode: {errors.leetcode}</div>}
+    </section>
+  );
+}
+
 function ContestRow({ contest, now }: { contest: Contest; now: number }) {
   const start = new Date(contest.startAt);
   return (
@@ -667,6 +1063,100 @@ function ContestRow({ contest, now }: { contest: Contest; now: number }) {
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Why submissions get rejected, from the attempt journal.
+ *
+ * Every other tracker can tell somebody how many problems they have solved.
+ * Only this one kept the verdict of each failed submission, so only this one
+ * can say the thing that is actually useful: what goes wrong, and where.
+ */
+function FailureReport({ problems }: { problems: SolvedProblem[] }) {
+  const report = useMemo(() => buildFailureReport(problems), [problems]);
+  const headline = describeHeadline(report);
+  const struggling = useMemo(() => strugglingTopics(report), [report]);
+
+  if (report.failures === 0) {
+    return (
+      <>
+        <div className="section-title">Why submissions fail</div>
+        <div className="empty">
+          {report.submits === 0
+            ? 'Nothing recorded yet. Every run and submit gets journalled from the next problem you open.'
+            : 'No rejected submissions on record — every submit so far has passed.'}
+        </div>
+      </>
+    );
+  }
+
+  const kinds = (Object.entries(report.byKind) as Array<[FailureKind, number]>)
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1]);
+
+  return (
+    <>
+      <div className="section-title">Why submissions fail</div>
+      {headline && <div className="insight">{headline}</div>}
+
+      {kinds.map(([kind, count]) => (
+        <div className="bar-row" key={kind}>
+          <div>
+            <div className="bar-row__label bar-row__label--exact">{failureLabel(kind)}</div>
+            <div className="bar">
+              <div
+                className={`bar__fill bar__fill--${kind}`}
+                style={{ width: `${(count / report.failures) * 100}%` }}
+              />
+            </div>
+          </div>
+          <div className="bar-row__value">{count}</div>
+        </div>
+      ))}
+
+      {struggling.length > 0 && (
+        <>
+          <div className="section-title">Costs you the most tries</div>
+          {struggling.map((topic) => (
+            <div className="bar-row" key={topic.tag}>
+              <div>
+                <div className="bar-row__label" title={`${topic.submits} submits over ${topic.solved} problems`}>
+                  {topic.tag}
+                </div>
+                <div className="bar">
+                  <div
+                    className="bar__fill bar__fill--wrong"
+                    style={{ width: `${Math.min(100, topic.submitsPerSolve * 25)}%` }}
+                  />
+                </div>
+              </div>
+              <div className="bar-row__value">{topic.submitsPerSolve.toFixed(1)}×</div>
+            </div>
+          ))}
+          <div className="insight insight--quiet">
+            Submissions per accepted problem. 1.0 would be first time, every time.
+          </div>
+        </>
+      )}
+
+      {report.firstFailures.length > 0 && (
+        <>
+          <div className="section-title">Recent first-try misses</div>
+          {report.firstFailures.slice(0, 5).map((entry) => (
+            <button
+              key={entry.url}
+              type="button"
+              className="upsolve__row"
+              onClick={() => openUrl(entry.url)}
+            >
+              <span className="upsolve__state upsolve__state--failed">{entry.verdict}</span>
+              <span className="upsolve__name">{entry.title}</span>
+            </button>
+          ))}
+        </>
+      )}
+    </>
   );
 }
 
@@ -713,6 +1203,7 @@ export function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [retryingAll, setRetryingAll] = useState(false);
   const [query, setQuery] = useState('');
+  const [label, setLabel] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('due');
 
   const load = useCallback(async () => {
@@ -797,6 +1288,14 @@ export function App() {
     [load],
   );
 
+  const handleSaveLabels = useCallback(
+    async (id: string, labels: string[]) => {
+      await send({ type: 'problem:labels', id, labels });
+      await load();
+    },
+    [load],
+  );
+
   /**
    * A sync that failed stays failed — nothing re-drives it. Fixing the token is
    * the usual remedy, and that happens after the failure, so the problems it
@@ -821,7 +1320,7 @@ export function App() {
     }
   }, [failedSyncs, load]);
 
-  /** Title, tag and language, because those are the three ways people look. */
+  /** Title, tag, label and language, because those are how people look. */
   const matches = useCallback(
     (problem: SolvedProblem) => {
       const needle = query.trim().toLowerCase();
@@ -830,16 +1329,23 @@ export function App() {
         problem.title.toLowerCase().includes(needle) ||
         problem.slug.toLowerCase().includes(needle) ||
         problem.language.toLowerCase().includes(needle) ||
-        problem.tags.some((tag) => tag.toLowerCase().includes(needle))
+        problem.tags.some((tag) => tag.toLowerCase().includes(needle)) ||
+        (problem.labels ?? []).some((label) => label.includes(needle))
       );
     },
     [query],
   );
 
+  const labels = useMemo(
+    () => (data ? countLabels(data.problems, data.now) : []),
+    [data],
+  );
+
   const folders = useMemo(() => {
     if (!data) return [];
+    const pool = label ? withLabel(data.problems, label) : data.problems;
     const grouped = new Map<string, SolvedProblem[]>();
-    for (const problem of data.problems) {
+    for (const problem of pool) {
       if (!matches(problem)) continue;
       grouped.set(problem.platform, [...(grouped.get(problem.platform) ?? []), problem]);
     }
@@ -851,7 +1357,7 @@ export function App() {
         problems: [...problems].sort((a, b) => b.solvedAt - a.solvedAt),
       }))
       .sort((a, b) => b.problems.length - a.problems.length);
-  }, [data, matches]);
+  }, [data, matches, label]);
 
   const due = useMemo(
     () => (data ? dueProblems(data.problems, data.now) : []),
@@ -1003,6 +1509,8 @@ export function App() {
                     onResyncParikshaa={(id) => void handleResyncParikshaa(id)}
                     onDelete={(id) => void handleDelete(id)}
                     onSaveDetails={handleSaveDetails}
+                    onSaveLabels={(id, next) => void handleSaveLabels(id, next)}
+                    labelSuggestions={suggestionsFor(problem.labels, labels)}
                     showRecall
                   />
                 ))}
@@ -1049,7 +1557,7 @@ export function App() {
                   <input
                     type="text"
                     value={query}
-                    placeholder="Filter by title, tag or language"
+                    placeholder="Filter by title, tag, label or language"
                     onChange={(event) => setQuery(event.target.value)}
                   />
                   {query && (
@@ -1058,6 +1566,31 @@ export function App() {
                     </button>
                   )}
                 </div>
+
+                {labels.length > 0 && (
+                  <div className="labelbar">
+                    <button
+                      type="button"
+                      className={`label label--filter ${label === null ? 'is-on' : ''}`}
+                      onClick={() => setLabel(null)}
+                    >
+                      All
+                    </button>
+                    {labels.map((entry) => (
+                      <button
+                        key={entry.label}
+                        type="button"
+                        className={`label label--filter ${label === entry.label ? 'is-on' : ''}`}
+                        onClick={() => setLabel(label === entry.label ? null : entry.label)}
+                      >
+                        <TagIcon size={10} />
+                        {entry.label}
+                        <span className="label__count">{entry.count}</span>
+                        {entry.due > 0 && <span className="label__due">{entry.due} due</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {folders.length === 0 ? (
                   <Empty title="Nothing matches">Try a different word, or clear the filter.</Empty>
@@ -1070,7 +1603,9 @@ export function App() {
                       now={data.now}
                       // A filter is a search: opening the folders is the answer.
                       // Otherwise only the busiest judge starts open.
-                      defaultOpen={query.length > 0 || platform === folders[0]?.platform}
+                      defaultOpen={
+                        query.length > 0 || label !== null || platform === folders[0]?.platform
+                      }
                     >
                       {(problem) => (
                         <ProblemCard
@@ -1082,6 +1617,8 @@ export function App() {
                           onResyncParikshaa={(id) => void handleResyncParikshaa(id)}
                           onDelete={(id) => void handleDelete(id)}
                           onSaveDetails={handleSaveDetails}
+                          onSaveLabels={(id, next) => void handleSaveLabels(id, next)}
+                          labelSuggestions={suggestionsFor(problem.labels, labels)}
                           showRecall={false}
                           collapsible
                         />
@@ -1096,6 +1633,8 @@ export function App() {
 
         {tab === 'contests' && (
           <>
+            <RatingCard />
+            <UpsolveCard />
             {!contests ? (
               <div className="empty">Loading contests…</div>
             ) : contests.contests.length === 0 ? (
@@ -1174,6 +1713,8 @@ export function App() {
                 </div>
               );
             })}
+
+            <FailureReport problems={data.problems} />
 
             <TopicBars topics={data.stats.weakestTopics} title="Needs work" />
             <TopicBars topics={data.stats.strongestTopics} title="Solid" />

@@ -1293,3 +1293,427 @@ body.gate {
   font-size: 11px;
   line-height: 1.5;
 }
+
+/* ------------------------------------------------------------ contest rating */
+
+.ratings {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.rating {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px 13px;
+}
+
+.rating__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rating__handle {
+  font-size: 13px;
+  font-weight: 650;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rating__band {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.rating__value {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 8px;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.rating__delta {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.rating__delta.is-up {
+  color: var(--ok);
+}
+
+.rating__delta.is-down {
+  color: var(--danger);
+}
+
+.rating__facts {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.rating__note {
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+
+.rating__note.is-bad {
+  color: var(--danger);
+}
+
+/* ------------------------------------------------------------------ labels */
+
+/*
+ * Chips with an inline input. The input has no border of its own — it sits in
+ * the flow of the chips so adding one feels like typing into the row rather
+ * than filling in a form field.
+ */
+.labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex: none;
+}
+
+.label:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.label__x {
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.label:hover .label__x {
+  color: var(--danger);
+}
+
+.label--suggest {
+  border-style: dashed;
+  color: var(--text-faint);
+}
+
+.labels__input {
+  flex: 1 1 90px;
+  min-width: 80px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 10.5px;
+  padding: 2px 0;
+  outline: none;
+}
+
+.labels__input::placeholder {
+  color: var(--text-faint);
+}
+
+.labelbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.label--filter.is-on {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  color: var(--text);
+}
+
+.label__count {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.label__due {
+  color: hsl(20 40% 10%);
+  background: var(--amber);
+  border-radius: 999px;
+  padding: 0 5px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.row__labels {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9.5px;
+  color: var(--text-faint);
+  flex: none;
+  max-width: 90px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------- rating goal */
+
+.goal {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-raised);
+}
+
+.goal__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.goal__title {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.goal__rate {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.goal__rate.is-up {
+  color: var(--ok);
+}
+
+.goal__rate.is-down {
+  color: var(--danger);
+}
+
+.goal__track {
+  height: 5px;
+  border-radius: 4px;
+  background: var(--bg);
+  overflow: hidden;
+  margin: 7px 0 6px;
+}
+
+.goal__fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--gradient);
+}
+
+.goal__note {
+  font-size: 10px;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+
+/* ----------------------------------------------------------------- upsolve */
+
+.upsolve {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 11px 12px;
+  margin-bottom: 10px;
+}
+
+.upsolve__head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+}
+
+.upsolve__title {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.upsolve__head .iconbtn {
+  margin-left: auto;
+}
+
+.upsolve__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 4px;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.upsolve__row:hover {
+  background: var(--surface-raised);
+}
+
+/* Fixed width so the names line up however many attempts each problem took. */
+.upsolve__state {
+  flex: none;
+  min-width: 30px;
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.upsolve__state--failed {
+  color: var(--danger);
+}
+
+.upsolve__name {
+  flex: 1;
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upsolve__contest {
+  flex: none;
+  max-width: 100px;
+  font-size: 9.5px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upsolve__empty,
+.upsolve__note {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  line-height: 1.55;
+}
+
+.upsolve__note {
+  margin-top: 8px;
+}
+
+.tag--ok {
+  color: hsl(152 40% 8%);
+  background: var(--ok);
+}
+
+/* ------------------------------------------------------- failure patterns */
+
+/* The one sentence worth reading on the tab, so it gets the accent. */
+.insight {
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text);
+  border-left: 2px solid var(--accent);
+  padding: 2px 0 2px 9px;
+  margin-bottom: 12px;
+}
+
+.insight--quiet {
+  border-left-color: var(--border);
+  color: var(--text-faint);
+  font-size: 10px;
+  margin-top: 6px;
+}
+
+/* Each failure kind keeps one colour wherever it appears. */
+.bar__fill--wrong {
+  background: var(--hard);
+}
+
+.bar__fill--slow {
+  background: var(--medium);
+}
+
+.bar__fill--crash {
+  background: hsl(280 60% 62%);
+}
+
+.bar__fill--compile {
+  background: var(--text-faint);
+}
+
+/* Labels that already carry their own case — "Wrong answer", not "Wrong Answer". */
+.bar-row__label--exact {
+  text-transform: none;
+}
+
+/* -------------------------------------------------------- backup controls */
+
+.actions--wrap {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.actions--wrap button,
+.filebtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.actions--wrap svg {
+  color: var(--accent);
+  flex: none;
+}
+
+/*
+ * A file input styled as a button. The native control cannot be restyled, so
+ * it is hidden inside the label — clicking the label still opens the picker.
+ */
+.filebtn {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--text);
+  padding: 6px 11px;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.filebtn:hover {
+  border-color: var(--accent);
+  color: var(--accent-soft);
+}
+
+.filebtn:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.filebtn input[type='file'] {
+  display: none;
+}

@@ -11,6 +11,7 @@
  * the host page working exactly as it would without the extension.
  */
 
+import { wrapFetch } from './wrap-fetch.ts';
 import {
   OBSERVER_CHANNEL,
   isObserved,
@@ -158,41 +159,18 @@ function publish(
 
 /* --- fetch --- */
 
-const originalFetch = window.fetch;
-window.fetch = async function patchedFetch(
-  this: unknown,
-  ...args: Parameters<typeof fetch>
-): Promise<globalThis.Response> {
-  const response = await originalFetch.apply(this as never, args);
-
-  try {
-    const [input, init] = args;
-    const url =
-      typeof input === 'string'
-        ? input
-        : typeof Request !== 'undefined' && input instanceof Request
-          ? input.url
-          : String(input);
-
-    const observed = isObserved(url);
-    glimpse(url, init?.method ?? 'GET', observed);
-
-    if (observed) {
-      const method = init?.method ?? (input instanceof Request ? input.method : 'GET');
-      const requestBody = bodyToString(init?.body);
-      // Cloning keeps the page's own copy of the body intact.
-      response
-        .clone()
-        .text()
-        .then((text) => publish(url, method, requestBody, text))
-        .catch(() => undefined);
-    }
-  } catch {
-    /* observation only */
-  }
-
-  return response;
-};
+wrapFetch(window, {
+  onRequest: (url, method) => glimpse(url, method, isObserved(url)),
+  watch: isObserved,
+  onResponse: (url, method, init, response) => {
+    // Cloning keeps the page's own copy of the body intact.
+    response
+      .clone()
+      .text()
+      .then((text) => publish(url, method, bodyToString(init?.body), text))
+      .catch(() => undefined);
+  },
+});
 
 /* --- XMLHttpRequest --- */
 

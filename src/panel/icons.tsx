@@ -173,6 +173,51 @@ export function SearchIcon(props: IconProps) {
   );
 }
 
+export function TagIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M2.5 7.2V2.5H7.2L13.5 8.8 8.8 13.5z" />
+      <circle cx="5.1" cy="5.1" r="0.9" />
+    </Svg>
+  );
+}
+
+export function TargetIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="8" cy="8" r="5.5" />
+      <circle cx="8" cy="8" r="2" />
+    </Svg>
+  );
+}
+
+export function DownloadIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8 2.5v7.5m0 0L5 7m3 3 3-3" />
+      <path d="M2.5 12.5h11" />
+    </Svg>
+  );
+}
+
+export function UploadIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8 10.5V3m0 0L5 6m3-3 3 3" />
+      <path d="M2.5 12.5h11" />
+    </Svg>
+  );
+}
+
+export function RefreshIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M13 8a5 5 0 1 1-1.6-3.7" />
+      <path d="M13.5 2.5V5H11" />
+    </Svg>
+  );
+}
+
 /**
  * Judge marks.
  *

@@ -137,6 +137,11 @@ export interface SolvedProblem {
   memoryNote?: string;
   /** User's own note, editable from the popup. */
   note?: string;
+  /**
+   * User-defined labels — `revisit`, `blind-75`, `google-oa`. Normalised to
+   * lower-case hyphenated form so the same word is always the same group.
+   */
+  labels?: string[];
   /** The user's own complexity analysis — not the judge's runtime figures. */
   complexity?: { time?: string; space?: string };
   /**
@@ -214,6 +219,11 @@ export interface Settings {
     enabled: boolean;
     /** Commit message template; `{title}` and `{platform}` are substituted. */
     commitMessage: string;
+    /**
+     * Commit a daily backup of the revision history to the same repository.
+     * Daily rather than per-solve so the file does not bloat every commit.
+     */
+    backup: boolean;
   };
   parikshaa: {
     /** Mark matching problems solved on parikshaa.org. */
@@ -240,6 +250,17 @@ export interface Settings {
   };
   /** Gate browsing until today's problem is done. Off by default. */
   focus: FocusSettings;
+  handles: {
+    /** Codeforces handle, for rating and contest prediction. */
+    codeforces: string;
+    /** LeetCode username, for contest rating. */
+    leetcode: string;
+    /**
+     * Rating the user is aiming for. Zero means "the next band up", which is
+     * what almost everybody is actually working towards.
+     */
+    goal: number;
+  };
   revision: {
     /** Interval ladder in days. Stage n schedules `intervals[n]` days out. */
     intervals: number[];

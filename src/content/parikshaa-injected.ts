@@ -10,6 +10,8 @@
  * This observes; it never modifies, delays or blocks a request.
  */
 
+import { wrapFetch } from './wrap-fetch.ts';
+
 const CHANNEL = 'redo-parikshaa';
 
 /**
@@ -71,29 +73,16 @@ function readApiKey(headers: HeadersInit | undefined): string {
   }
 }
 
-const originalFetch = window.fetch;
-window.fetch = function patchedFetch(
-  this: unknown,
-  ...args: Parameters<typeof fetch>
-): Promise<globalThis.Response> {
-  try {
-    const [input, init] = args;
-    const url =
-      typeof input === 'string'
-        ? input
-        : typeof Request !== 'undefined' && input instanceof Request
-          ? input.url
-          : String(input);
-
+wrapFetch(window, {
+  onRequest: (url, _method, init, input) => {
+    // A Request carries its headers on itself; every other shape puts them in
+    // `init`. Both are checked because the site uses both.
     if (typeof Request !== 'undefined' && input instanceof Request) {
       relay(input.headers.get('apikey') ?? '', url);
     }
     relay(readApiKey(init?.headers), url);
-  } catch {
-    /* observation only */
-  }
-  return originalFetch.apply(this as never, args);
-};
+  },
+});
 
 // `setRequestHeader` does not know the URL, so `open` is patched to remember it.
 const requestUrls = new WeakMap<XMLHttpRequest, string>();
