@@ -1,4 +1,18 @@
-import { codeforcesRank, predictFor, type Participant, type RatingDelta } from '../core/rating.ts';
+import {
+  buildUpsolveList,
+  type ContestProblem,
+  type ProblemResult,
+  type UpsolveItem,
+} from '../core/upsolve.ts';
+import {
+  codeforcesRank,
+  predictFor,
+  projectGoal,
+  type ContestResult,
+  type Participant,
+  type RatingDelta,
+  type RatingGoal,
+} from '../core/rating.ts';
 
 /**
  * Rating, fetched from the judges' own APIs.
@@ -48,6 +62,10 @@ export interface CodeforcesProfile {
   colour: string;
   /** Most recent rated contest, as Codeforces itself recorded it. */
   last?: { contestId: number; name: string; rank: number; oldRating: number; newRating: number };
+  /** How far the next band is at the rate the recent contests set. */
+  goal?: RatingGoal;
+  /** Rated contests entered, for the trend line. */
+  contests: number;
 }
 
 interface CfUser {
@@ -62,15 +80,24 @@ interface CfRatingChange {
   rank: number;
   oldRating: number;
   newRating: number;
+  ratingUpdateTimeSeconds: number;
 }
 
-export async function codeforcesProfile(handle: string): Promise<CodeforcesProfile> {
+export async function codeforcesProfile(
+  handle: string,
+  target?: number,
+): Promise<CodeforcesProfile> {
   const [user] = await codeforces<CfUser[]>('user.info', { handles: handle });
   if (!user) throw new Error(`Codeforces has no user called "${handle}".`);
 
   let last: CodeforcesProfile['last'];
+  let results: ContestResult[] = [];
   try {
     const history = await codeforces<CfRatingChange[]>('user.rating', { handle });
+    results = history.map((change) => ({
+      at: change.ratingUpdateTimeSeconds,
+      delta: change.newRating - change.oldRating,
+    }));
     const recent = history[history.length - 1];
     if (recent) {
       last = {
@@ -94,6 +121,11 @@ export async function codeforcesProfile(handle: string): Promise<CodeforcesProfi
     rank: user.rating === undefined ? 'Unrated' : band.title,
     colour: band.colour,
     last,
+    contests: results.length,
+    goal:
+      user.rating === undefined
+        ? undefined
+        : projectGoal(user.rating, results, 8, target && target > 0 ? target : undefined),
   };
 }
 
@@ -208,6 +240,65 @@ export async function predictCodeforces(handle: string): Promise<Prediction | un
     participants: participants.length,
     prediction,
   };
+}
+
+/* ---------------------------------------------------------------- upsolve */
+
+interface CfPersonalRow extends CfStandingsRow {
+  problemResults: ProblemResult[];
+}
+
+interface CfStandings {
+  contest: { id: number; name: string };
+  problems: ContestProblem[];
+  rows: CfPersonalRow[];
+}
+
+/**
+ * The problems the handle's recent contests left unsolved.
+ *
+ * `contest.standings` filtered to one handle returns the problem list and that
+ * person's per-problem result in a single call, so each contest costs one
+ * request — which is why this reads a few recent rounds rather than the whole
+ * history. Three is roughly a month of Div. 2s; going back further mostly digs
+ * up problems nobody intends to return to.
+ */
+export async function fetchUpsolve(handle: string, count = 3): Promise<UpsolveItem[]> {
+  let history: CfRatingChange[] = [];
+  try {
+    history = await codeforces<CfRatingChange[]>('user.rating', { handle });
+  } catch {
+    return [];
+  }
+
+  const recent = history.slice(-count).reverse();
+  const now = Date.now();
+  const items: UpsolveItem[] = [];
+
+  for (const change of recent) {
+    try {
+      const standings = await codeforces<CfStandings>('contest.standings', {
+        contestId: String(change.contestId),
+        handles: handle,
+        showUnofficial: 'false',
+      });
+      const row = standings.rows[0];
+      if (!row) continue;
+      items.push(
+        ...buildUpsolveList(
+          { id: standings.contest.id, name: standings.contest.name },
+          standings.problems,
+          row.problemResults,
+          now,
+        ),
+      );
+    } catch {
+      // One unreadable contest — a gym round, a deleted contest — should not
+      // cost the caller the other two.
+    }
+  }
+
+  return items;
 }
 
 /* --------------------------------------------------------------- leetcode */

@@ -7,6 +7,7 @@ import type {
   Prediction,
 } from '../background/rating.ts';
 import type { ParikshaaCredentials, SessionDiagnostic } from './parikshaa.ts';
+import type { UpsolveItem, UpsolveSummary } from './upsolve.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
@@ -65,7 +66,14 @@ export type Request =
   | { type: 'focus:status' }
   | { type: 'focus:pause' }
   | { type: 'rating:profiles' }
-  | { type: 'rating:predict' };
+  | { type: 'rating:predict' }
+  | { type: 'problem:labels'; id: string; labels: string[] }
+  | { type: 'upsolve:get' }
+  | { type: 'upsolve:refresh' }
+  | { type: 'backup:export' }
+  | { type: 'backup:import'; text: string }
+  | { type: 'backup:push' }
+  | { type: 'backup:pull' };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -96,6 +104,29 @@ export interface ResponseMap {
   'focus:pause': { started: boolean; until?: number };
   'rating:profiles': RatingProfiles;
   'rating:predict': { prediction?: Prediction; error?: string };
+  'problem:labels': { problem?: SolvedProblem };
+  'upsolve:get': UpsolveResponse;
+  'upsolve:refresh': UpsolveResponse;
+  'backup:export': { filename: string; json: string };
+  'backup:import': RestoreResult;
+  'backup:push': { path: string; commitUrl?: string };
+  'backup:pull': RestoreResult;
+}
+
+export interface UpsolveResponse {
+  items: UpsolveItem[];
+  summary: UpsolveSummary;
+  /** When the queue was last read from Codeforces. */
+  fetchedAt?: number;
+  error?: string;
+}
+
+export interface RestoreResult {
+  /** Problems in the store after merging, and how many the file added. */
+  problems: number;
+  added: number;
+  journals: number;
+  exportedAt: number;
 }
 
 export interface RatingProfiles {

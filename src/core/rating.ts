@@ -177,6 +177,7 @@ export function predictFor(
 
 /* ------------------------------------------------------------------ ranks */
 
+/** The bands Codeforces itself uses, highest first. */
 const CODEFORCES_RANKS: Array<{ from: number; title: string; colour: string }> = [
   { from: 3000, title: 'Legendary Grandmaster', colour: '#ff0000' },
   { from: 2600, title: 'International Grandmaster', colour: '#ff0000' },
@@ -195,6 +196,11 @@ export function codeforcesRank(rating: number): { title: string; colour: string 
   return found ?? { title: 'Unrated', colour: '#808080' };
 }
 
+/** The bottom of the band a rating sits in — where a progress bar starts. */
+export function bandFloor(rating: number): number {
+  return CODEFORCES_RANKS.find((entry) => rating >= entry.from)?.from ?? 0;
+}
+
 /**
  * LeetCode does not publish rank names, but the community uses these bands and
  * they line up with the badges the site awards.
@@ -205,4 +211,86 @@ export function leetcodeBand(rating: number): { title: string; colour: string } 
   if (rating >= 1900) return { title: 'Top 10%', colour: '#0000ff' };
   if (rating >= 1600) return { title: 'Above average', colour: '#03a89e' };
   return { title: 'Getting started', colour: '#808080' };
+}
+
+/* ------------------------------------------------------------ rating goals */
+
+export interface RatingGoal {
+  target: number;
+  title: string;
+  current: number;
+  gap: number;
+  /** Mean delta over the recent contests used for the projection. */
+  perContest: number;
+  /** Contests needed at that rate, or undefined when the trend is flat or down. */
+  contests?: number;
+  /** Mean days between those contests, for an ETA. */
+  daysPerContest?: number;
+  etaDays?: number;
+}
+
+/** The next band up, which is the goal almost everyone actually has. */
+export function nextBand(rating: number): { from: number; title: string } | undefined {
+  const above = [...CODEFORCES_RANKS]
+    .filter((entry) => entry.from > rating)
+    .sort((a, b) => a.from - b.from)[0];
+  return above ? { from: above.from, title: above.title } : undefined;
+}
+
+export interface ContestResult {
+  /** Seconds since epoch, as Codeforces reports them. */
+  at: number;
+  delta: number;
+}
+
+/**
+ * How far the next band is, at the rate the recent contests set.
+ *
+ * Deliberately built on the last handful rather than the whole history: a
+ * projection from two years ago describes somebody else. It reports no
+ * estimate at all when the recent trend is flat or falling, because "∞
+ * contests" is not a number worth printing.
+ */
+export function projectGoal(
+  current: number,
+  history: ContestResult[],
+  window = 8,
+  target?: number,
+): RatingGoal | undefined {
+  const band = target ? { from: target, title: codeforcesRank(target).title } : nextBand(current);
+  if (!band) return undefined;
+
+  const recent = history.slice(-window);
+  const gap = band.from - current;
+
+  const perContest =
+    recent.length > 0 ? recent.reduce((sum, entry) => sum + entry.delta, 0) / recent.length : 0;
+
+  const goal: RatingGoal = {
+    target: band.from,
+    title: band.title,
+    current,
+    gap,
+    perContest: Number(perContest.toFixed(1)),
+  };
+
+  if (perContest <= 0 || gap <= 0) return goal;
+
+  goal.contests = Math.ceil(gap / perContest);
+
+  // Cadence comes from the gaps between contests actually entered, so somebody
+  // who competes monthly is not told "six weeks".
+  if (recent.length >= 2) {
+    const spans: number[] = [];
+    for (let i = 1; i < recent.length; i += 1) {
+      spans.push((recent[i]!.at - recent[i - 1]!.at) / 86_400);
+    }
+    const days = spans.reduce((sum, span) => sum + span, 0) / spans.length;
+    if (days > 0) {
+      goal.daysPerContest = Math.round(days);
+      goal.etaDays = Math.round(goal.contests * days);
+    }
+  }
+
+  return goal;
 }

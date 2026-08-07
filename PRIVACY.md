@@ -27,6 +27,9 @@ All of the following lives in `chrome.storage.local`, on your device:
 | Your GitHub personal access token | To commit on your behalf |
 | Your Parikshaa session token and its public API key | To mark problems solved on your account |
 | Upcoming contest listings | To show the contest list and send reminders |
+| Labels you add to problems | To group and filter your own list |
+| Unsolved problems from your recent Codeforces contests | To build the upsolve queue |
+| Your Codeforces handle and LeetCode username | To read your public contest rating |
 
 ## What is sent, and to whom
 
@@ -42,6 +45,19 @@ Redo makes network requests to exactly these places:
    solution and a record that you solved the problem, written to your own account.
 4. **Contest listings** — `codeforces.com`, `leetcode.com`, `codechef.com` and `atcoder.jp`
    public schedule endpoints. These requests contain no personal data.
+5. **Codeforces' and LeetCode's public rating APIs** — only if you enter a handle. Each receives
+   only the handle you gave it, and only the one that belongs to it.
+
+## Backups
+
+If you use **Back up now** or leave the daily backup on, Redo writes `.redo/backup.json` into the
+same repository you sync solutions to. It contains everything in the table above **except your
+GitHub token**, which is stripped out deliberately: a backup is a file people commit, mail
+themselves and drop in cloud storage, and a repository-scoped write token inside one would be a
+credential leak with a very long tail. Re-pasting a token takes ten seconds.
+
+The same file is what **Download a backup** saves to your computer. Nothing is uploaded anywhere
+else, and the daily backup can be turned off in Settings.
 
 There is no fourth party. No usage data, telemetry, crash reporting or identifier of any kind is
 collected, and nothing is sold, shared or transferred to anyone.
@@ -78,7 +94,7 @@ it, and can be cleared at any time. It is not sent anywhere automatically.
 - Remove a single problem with **Remove** in the extension popup.
 - Remove everything by uninstalling the extension — Chrome deletes its storage with it.
 - Anything already committed to your GitHub repository is yours; delete it there if you want it
-  gone.
+  gone. That includes `.redo/backup.json` if you enabled backups.
 
 ## Children
 

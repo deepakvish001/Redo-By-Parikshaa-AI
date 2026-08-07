@@ -5,16 +5,20 @@ import {
   BugIcon,
   CalendarIcon,
   ClockIcon,
+  DownloadIcon,
   GearIcon,
   GithubIcon,
   LayersIcon,
+  RefreshIcon,
   ShieldIcon,
   SparkIcon,
   TrophyIcon,
+  UploadIcon,
 } from '../panel/icons.tsx';
 import type { SessionDiagnostic } from '../core/parikshaa.ts';
 import { DEFAULT_SETTINGS } from '../core/storage.ts';
 import { PLATFORMS, PLATFORM_LABELS, type Platform, type Settings } from '../core/types.ts';
+import { downloadBlob } from '../panel/share.ts';
 
 type Status = { tone: 'ok' | 'error'; message: string } | null;
 
@@ -99,6 +103,123 @@ function Toggle({
   );
 }
 
+/**
+ * Export, import and restore.
+ *
+ * Kept as its own component with its own state because none of it goes through
+ * "Save settings" — these are actions, and an action that only takes effect
+ * after you remember to press Save somewhere else is a trap.
+ */
+function BackupSection({ connected }: { connected: boolean }) {
+  const [status, setStatus] = useState<Status>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const run = async (what: string, task: () => Promise<string>) => {
+    setBusy(what);
+    setStatus(null);
+    try {
+      setStatus({ tone: 'ok', message: await task() });
+    } catch (error) {
+      setStatus({ tone: 'error', message: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const describe = (result: { problems: number; added: number; exportedAt: number }) => {
+    const when = result.exportedAt
+      ? ` (backed up ${new Date(result.exportedAt).toLocaleDateString()})`
+      : '';
+    return result.added > 0
+      ? `Restored${when}: ${result.added} problem${result.added === 1 ? '' : 's'} added, ${result.problems} in total.`
+      : `Restored${when}: nothing new — everything in that backup was already here.`;
+  };
+
+  return (
+    <section className="section-card">
+      <h2 className="section-card__title">
+        <ShieldIcon size={14} />
+        Backup and restore
+      </h2>
+      <p className="section-card__hint">
+        Your solutions live in GitHub, but the revision schedule, the attempt journal and the
+        streak live only in this browser — one profile reset takes them with it. This writes all of
+        it to a file. Your GitHub token is deliberately left out, because backups get committed to
+        repositories.
+      </p>
+
+      <div className="actions actions--wrap">
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() =>
+            void run('export', async () => {
+              const { filename, json } = await send({ type: 'backup:export' });
+              // An anchor rather than chrome.downloads, so this needs no extra
+              // permission on a listing that already asks for enough.
+              downloadBlob(new Blob([json], { type: 'application/json' }), filename);
+              return `Saved ${filename} to your downloads.`;
+            })
+          }
+        >
+          <DownloadIcon size={13} />
+          {busy === 'export' ? 'Preparing…' : 'Download a backup'}
+        </button>
+
+        <label className="filebtn">
+          <UploadIcon size={13} />
+          {busy === 'import' ? 'Restoring…' : 'Restore from a file'}
+          <input
+            type="file"
+            accept="application/json,.json"
+            disabled={busy !== null}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              // Cleared so choosing the same file twice fires the change again.
+              event.target.value = '';
+              if (!file) return;
+              void run('import', async () =>
+                describe(await send({ type: 'backup:import', text: await file.text() })),
+              );
+            }}
+          />
+        </label>
+
+        <button
+          type="button"
+          disabled={busy !== null || !connected}
+          onClick={() =>
+            void run('push', async () => {
+              const { path } = await send({ type: 'backup:push' });
+              return `Committed ${path}.`;
+            })
+          }
+        >
+          <GithubIcon size={13} />
+          {busy === 'push' ? 'Committing…' : 'Back up now'}
+        </button>
+
+        <button
+          type="button"
+          disabled={busy !== null || !connected}
+          onClick={() => void run('pull', async () => describe(await send({ type: 'backup:pull' })))}
+        >
+          <RefreshIcon size={13} />
+          {busy === 'pull' ? 'Reading…' : 'Restore from GitHub'}
+        </button>
+      </div>
+
+      {status && <div className={`status status--${status.tone}`}>{status.message}</div>}
+
+      <p className="section-card__hint">
+        Restoring merges rather than replaces: where both sides know a problem, the more recently
+        solved record wins, so restoring an old backup can never undo newer work.
+        {!connected && ' The two GitHub buttons need a connected repository above.'}
+      </p>
+    </section>
+  );
+}
+
 export function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [intervalsText, setIntervalsText] = useState('');
@@ -111,6 +232,7 @@ export function App() {
   const [goalText, setGoalText] = useState('');
   const [pauseText, setPauseText] = useState('');
   const [allowlistText, setAllowlistText] = useState('');
+  const [ratingGoalText, setRatingGoalText] = useState('');
 
   const loadLog = async () => {
     try {
@@ -128,6 +250,7 @@ export function App() {
       setIntervalsText(loaded.revision.intervals.join(', '));
       setLeadText(String(loaded.contests.leadMinutes));
       setGoalText(String(loaded.focus.dailyGoal));
+      setRatingGoalText(loaded.handles.goal > 0 ? String(loaded.handles.goal) : '');
       setPauseText(String(loaded.focus.pauseHours));
       setAllowlistText(loaded.focus.allowlist.join('\n'));
       if (loaded.diagnostics.enabled) await loadLog();
@@ -154,6 +277,7 @@ export function App() {
       const lead = Number.parseInt(leadText, 10);
       const goal = Number.parseInt(goalText, 10);
       const pauseHours = Number.parseInt(pauseText, 10);
+      const ratingGoal = Number.parseInt(ratingGoalText, 10);
       const saved = await send({
         type: 'settings:save',
         patch: {
@@ -172,6 +296,11 @@ export function App() {
               .filter(Boolean),
           },
           revision: { ...settings.revision, intervals },
+          handles: {
+            ...settings.handles,
+            // Empty means "the next rank up", which is stored as zero.
+            goal: Number.isFinite(ratingGoal) && ratingGoal > 0 ? ratingGoal : 0,
+          },
           contests: {
             ...settings.contests,
             // An unreadable value keeps the current setting rather than becoming NaN.
@@ -185,6 +314,7 @@ export function App() {
       setGoalText(String(saved.focus.dailyGoal));
       setPauseText(String(saved.focus.pauseHours));
       setAllowlistText(saved.focus.allowlist.join('\n'));
+      setRatingGoalText(saved.handles.goal > 0 ? String(saved.handles.goal) : '');
       setSaveStatus({ tone: 'ok', message: 'Saved.' });
     } catch (error) {
       setSaveStatus({
@@ -659,10 +789,47 @@ export function App() {
             />
           </div>
         </div>
-        <div className="field__hint">
-          Both are public profile names, not logins. They are stored in this browser and sent only
-          to the judge they belong to.
+        <div className="field">
+          <label className="field__label" htmlFor="rating-goal">
+            Rating you are aiming for
+          </label>
+          <input
+            id="rating-goal"
+            type="text"
+            value={ratingGoalText}
+            onChange={(event) => setRatingGoalText(event.target.value)}
+            placeholder="leave empty for the next rank up"
+          />
+          <div className="field__hint">
+            The panel works out how many contests that is at the pace your last eight set. Leave it
+            empty and it tracks the next Codeforces rank instead.
+          </div>
         </div>
+
+        <div className="field__hint">
+          Both handles are public profile names, not logins. They are stored in this browser and
+          sent only to the judge they belong to.
+        </div>
+      </section>
+
+      <BackupSection connected={settings.github.enabled} />
+
+      <section className="section-card">
+        <h2 className="section-card__title">
+          <DownloadIcon size={14} />
+          Automatic backup
+        </h2>
+        <p className="section-card__hint">
+          Writes <code>.redo/backup.json</code> to the same repository once a day, so a browser
+          reset costs you nothing. Your GitHub token is deliberately left out of the file.
+        </p>
+        <Toggle
+          checked={settings.github.backup}
+          onChange={(backup) =>
+            setSettings({ ...settings, github: { ...settings.github, backup } })
+          }
+          label="Back up daily to my repository"
+        />
       </section>
 
       <section className="section-card">

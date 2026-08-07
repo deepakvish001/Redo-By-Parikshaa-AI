@@ -65,6 +65,28 @@ Solving is the easy part. Remembering three months later is the part nothing els
   the ladder, how often you forgot it on review, how many attempts it took to get accepted,
   how many hints you needed, and how long it took relative to the difficulty — so "dynamic
   programming: 34" is a claim backed by your own history.
+- **Says why your submissions get rejected.** The attempt journal holds the verdict of every
+  failed submit, so the Stats tab can say the thing a solved-count never can: *"40% of your
+  rejected submissions are 'too slow', and dynamic programming is where it happens most."*
+  Alongside it, the topics that cost you the most tries per accepted problem, and your recent
+  first-try misses.
+- **Queues up what a contest left behind.** Upsolving is the habit that separates improving from
+  competing, and it is normally tracked by hand in a spreadsheet. One button reads your last
+  three rated Codeforces rounds and lists what you did not solve — separating the problems you
+  submitted to and failed (a gap in technique) from the ones you never opened (a gap in time).
+  Solve one anywhere and it ticks itself off.
+- **Projects your rating goal.** How far the next rank is, and how many contests that is at the
+  pace your last eight set — with an ETA from how often you actually compete. It reports no
+  estimate at all when the recent trend is flat or falling, rather than printing a fantasy.
+- **Labels, in your own words.** Tag problems `revisit`, `blind-75`, `google-oa`,
+  `interview-round-2` — whatever you organise by — then filter and group the solved list by
+  them. (LeetCode's company tags are premium-only data, so these are yours, not theirs.)
+- **Backs itself up.** Your solutions are in GitHub, but the schedule, the journal and the streak
+  live only in this browser. Settings can download all of it as a JSON file, restore from one,
+  and commit a copy to your repository — automatically, once a day. Restoring **merges**: where
+  both sides know a problem the more recently solved record wins, so restoring an old backup can
+  never undo newer work. The GitHub token is deliberately left out of the file, because backups
+  get committed to repositories.
 - **Runs entirely locally.** No backend, no account, no telemetry. The only network calls are to
   the sites you are already on and to the GitHub repository you configured.
 
@@ -92,6 +114,26 @@ inventing a figure.
 Two things worth knowing about the Codeforces number: participants who have never been rated are
 seeded from zero, which is how Codeforces treats them; and unofficial, virtual and team entries
 are excluded, because they do not affect anyone's rating.
+
+### The goal bar
+
+Under the rating sits how far the next rank is and what that costs. The rate comes from the mean
+change over your last eight rated contests, and the ETA from how many days actually pass between
+the rounds you enter — so somebody who competes monthly is not told "three weeks". Set a specific
+target in Settings if the next rank is not what you are after.
+
+Two deliberate choices: the bar is drawn from the bottom of the band you are in rather than from
+zero, so a good round visibly moves it; and if your recent contests are flat or falling there is
+no contest count, because "∞ contests" is not a number worth printing.
+
+### The upsolve queue
+
+"Read my contests" fetches the standings of your last three rated rounds filtered to your handle,
+which returns the problem list and your result for each in one call. Anything you did not solve
+goes in the queue, marked with how many times you submitted to it during the round. Solve it
+later — anywhere, on any day — and the entry ticks over to done the next time the panel opens.
+Entries are never deleted, because a list of problems you *did* eventually go back for is the
+part worth keeping.
 
 ## Focus mode
 

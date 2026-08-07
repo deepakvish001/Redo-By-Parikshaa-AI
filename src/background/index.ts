@@ -1,5 +1,8 @@
 import { computeStats, dayKey } from '../core/analytics.ts';
+import { backupFilename, readBackup } from '../core/backup.ts';
 import { verifyAccess } from '../core/github.ts';
+import { MAX_LABELS, normalise } from '../core/labels.ts';
+import { mergeUpsolve, reconcile, summariseUpsolve } from '../core/upsolve.ts';
 import type { DiagnosticEntry, Request, Response, ResponseMap } from '../core/messages.ts';
 import { problemKey } from '../core/paths.ts';
 import { isExpired, type SessionDiagnostic } from '../core/parikshaa.ts';
@@ -17,10 +20,12 @@ import {
   getProblem,
   getProblemList,
   getSettings,
+  getUpsolve,
   putProblem,
   saveMeta,
   saveParikshaaCredentials,
   saveSettings,
+  saveUpsolve,
   updateProblem,
 } from '../core/storage.ts';
 import { applyRecall, dueProblems, initialRevision, isDue } from '../core/srs.ts';
@@ -32,7 +37,8 @@ import type {
 } from '../core/types.ts';
 import { getCachedContests, refreshContests, sendContestReminders } from './contests.ts';
 import { focusState, startPause, watchNavigation } from './focus.ts';
-import { codeforcesProfile, leetcodeProfile, predictCodeforces } from './rating.ts';
+import { applyBackup, currentBackup, pullBackup, pushBackup } from './backup.ts';
+import { codeforcesProfile, fetchUpsolve, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
 
@@ -40,6 +46,7 @@ const BADGE_ALARM = 'refresh-badge';
 const DIGEST_ALARM = 'daily-digest';
 const CONTEST_ALARM = 'refresh-contests';
 const WRAPPED_ALARM = 'weekly-wrapped';
+const BACKUP_ALARM = 'daily-backup';
 
 const DIAGNOSTIC_KEY = 'detectionLog';
 /** Enough to cover a submission flow, small enough to stay in storage. */
@@ -480,12 +487,85 @@ async function handle(request: Request): Promise<unknown> {
     case 'focus:pause':
       return startPause();
 
+    case 'problem:labels': {
+      const cleaned = [...new Set(request.labels.map(normalise).filter(Boolean))]
+        .sort()
+        .slice(0, MAX_LABELS);
+      const problem = await updateProblem(request.id, (current) => ({
+        ...current,
+        labels: cleaned,
+        history: appendActivity(current.history ?? [], {
+          at: Date.now(),
+          kind: 'note',
+          outcome: 'labelled',
+          reason: cleaned.length > 0 ? cleaned.join(', ') : 'labels cleared',
+        }),
+      }));
+      return { problem };
+    }
+
+    case 'upsolve:get': {
+      const [items, problems] = await Promise.all([getUpsolve(), getProblemList()]);
+      const solved = new Set(problems.map((problem) => problem.id));
+      const reconciled = reconcile(items, solved, Date.now());
+      // Reconciling on read rather than on solve keeps the queue correct even
+      // for problems solved before the contest was ever added to it.
+      if (reconciled.some((item, index) => item !== items[index])) {
+        await saveUpsolve(reconciled);
+      }
+      return { items: reconciled, summary: summariseUpsolve(reconciled) };
+    }
+
+    case 'upsolve:refresh': {
+      const [settings, stored, problems] = await Promise.all([
+        getSettings(),
+        getUpsolve(),
+        getProblemList(),
+      ]);
+      if (!settings.handles.codeforces) {
+        return {
+          items: stored,
+          summary: summariseUpsolve(stored),
+          error: 'Add your Codeforces handle in Settings first.',
+        };
+      }
+      try {
+        const fetched = await fetchUpsolve(settings.handles.codeforces);
+        const solved = new Set(problems.map((problem) => problem.id));
+        const merged = reconcile(mergeUpsolve(stored, fetched), solved, Date.now());
+        await saveUpsolve(merged);
+        return { items: merged, summary: summariseUpsolve(merged), fetchedAt: Date.now() };
+      } catch (error) {
+        return {
+          items: stored,
+          summary: summariseUpsolve(stored),
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+
+    case 'backup:export': {
+      const now = Date.now();
+      return { filename: backupFilename(now), json: await currentBackup(now) };
+    }
+
+    case 'backup:import':
+      return applyBackup(readBackup(request.text));
+
+    case 'backup:push':
+      return pushBackup();
+
+    case 'backup:pull':
+      return pullBackup();
+
     case 'rating:profiles': {
       const { handles } = await getSettings();
       // Fetched together but reported separately: one judge being unreachable
       // must not blank out the other.
       const [codeforces, leetcode] = await Promise.allSettled([
-        handles.codeforces ? codeforcesProfile(handles.codeforces) : Promise.resolve(undefined),
+        handles.codeforces
+          ? codeforcesProfile(handles.codeforces, handles.goal)
+          : Promise.resolve(undefined),
         handles.leetcode ? leetcodeProfile(handles.leetcode) : Promise.resolve(undefined),
       ]);
 
@@ -600,6 +680,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create(CONTEST_ALARM, { periodInMinutes: 15 });
   // Checked daily; the nudge itself only fires once a week (see below).
   chrome.alarms.create(WRAPPED_ALARM, { periodInMinutes: 60 * 24 });
+  chrome.alarms.create(BACKUP_ALARM, { periodInMinutes: 60 * 24 });
   void refreshBadge();
   if (details.reason === 'install') void chrome.runtime.openOptionsPage();
 });
@@ -617,7 +698,29 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === DIGEST_ALARM) void sendDigest();
   if (alarm.name === CONTEST_ALARM) void tickContests();
   if (alarm.name === WRAPPED_ALARM) void offerWrapped();
+  if (alarm.name === BACKUP_ALARM) void dailyBackup();
 });
+
+/**
+ * Commits the backup once a day, quietly.
+ *
+ * Daily and not per-solve: the file holds every problem's code and journal, so
+ * writing it alongside every commit would put a few hundred kilobytes of churn
+ * into the repository several times an evening. A day old is a good enough
+ * safety net for something whose alternative is nothing at all.
+ */
+async function dailyBackup(): Promise<void> {
+  const settings = await getSettings();
+  if (!settings.github.backup || !settings.github.enabled) return;
+  const problems = await getProblemList();
+  if (problems.length === 0) return;
+  try {
+    await pushBackup();
+  } catch {
+    // A failed backup is not worth a notification; the button in Settings
+    // reports the reason when somebody asks for one.
+  }
+}
 
 const WRAPPED_SENT_KEY = 'wrappedSentAt';
 

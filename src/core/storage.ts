@@ -1,6 +1,7 @@
 import { DEFAULT_FOCUS } from './focus.ts';
 import { appendEvent } from './journal.ts';
 import type { ParikshaaCredentials } from './parikshaa.ts';
+import type { UpsolveItem } from './upsolve.ts';
 import {
   PLATFORMS,
   type AttemptEvent,
@@ -16,6 +17,7 @@ const KEYS = {
   journal: 'journal',
   parikshaaCredentials: 'parikshaaCredentials',
   parikshaaApi: 'parikshaaApiKey',
+  upsolve: 'upsolve',
 } as const;
 
 /** Aggregate counters that do not belong to any single problem. */
@@ -35,6 +37,7 @@ export const DEFAULT_SETTINGS: Settings = {
     branch: 'main',
     enabled: false,
     commitMessage: 'solve: {title} ({platform})',
+    backup: true,
   },
   parikshaa: {
     enabled: false,
@@ -49,7 +52,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   wrapped: { notify: true },
   focus: DEFAULT_FOCUS,
-  handles: { codeforces: '', leetcode: '' },
+  handles: { codeforces: '', leetcode: '', goal: 0 },
   revision: {
     intervals: [1, 3, 7, 21, 45, 90],
     skipEasy: false,
@@ -241,6 +244,61 @@ export async function getParikshaaApi(): Promise<ParikshaaApi | undefined> {
 
 export async function saveParikshaaApi(apiKey: string, origin?: string): Promise<void> {
   await chrome.storage.local.set({ [KEYS.parikshaaApi]: { apiKey, origin } });
+}
+
+/* -------------------------------------------------------- upsolve queue */
+
+export async function getUpsolve(): Promise<UpsolveItem[]> {
+  return readKey<UpsolveItem[]>(KEYS.upsolve, []);
+}
+
+export async function saveUpsolve(items: UpsolveItem[]): Promise<UpsolveItem[]> {
+  await chrome.storage.local.set({ [KEYS.upsolve]: items });
+  return items;
+}
+
+/* --------------------------------------------------------- backup/restore */
+
+/** Everything a backup contains, read in one pass. */
+export async function readEverything(): Promise<{
+  settings: Settings;
+  problems: Record<string, SolvedProblem>;
+  journal: Record<string, AttemptEvent[]>;
+  meta: Meta;
+  upsolve: UpsolveItem[];
+}> {
+  const [settings, problems, journal, meta, upsolve] = await Promise.all([
+    getSettings(),
+    getProblems(),
+    getJournals(),
+    getMeta(),
+    getUpsolve(),
+  ]);
+  return { settings, problems, journal, meta, upsolve };
+}
+
+/**
+ * Writes a restored backup.
+ *
+ * Settings are written by section like `saveSettings` does, and the caller
+ * decides what to merge — this only puts the result down, in as few writes as
+ * possible so a restore cannot half-apply across a browser crash.
+ */
+export async function writeRestored(state: {
+  problems: Record<string, SolvedProblem>;
+  journal: Record<string, AttemptEvent[]>;
+  meta?: Partial<Meta>;
+  upsolve?: UpsolveItem[];
+  settings?: Partial<Settings>;
+}): Promise<void> {
+  if (state.settings) await saveSettings(state.settings);
+  const patch: Record<string, unknown> = {
+    [KEYS.problems]: state.problems,
+    [KEYS.journal]: state.journal,
+  };
+  if (state.meta) patch[KEYS.meta] = { ...(await getMeta()), ...state.meta };
+  if (state.upsolve) patch[KEYS.upsolve] = state.upsolve;
+  await chrome.storage.local.set(patch);
 }
 
 export async function getMeta(): Promise<Meta> {
