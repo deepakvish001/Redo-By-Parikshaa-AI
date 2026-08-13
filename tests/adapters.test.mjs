@@ -14,7 +14,7 @@ import { readVerdict, submissionIdFromPath } from '../src/adapters/leetcode.ts';
 import { isObserved, summarisePath } from '../src/adapters/observed.ts';
 import { firstString, parseJson, pick } from '../src/adapters/exchange.ts';
 import { CsesAdapter, languageFromFilename, parseCsesResult } from '../src/adapters/cses.ts';
-import { HackerEarthAdapter } from '../src/adapters/hackerearth.ts';
+import { HackerEarthAdapter, readHackerEarthResult } from '../src/adapters/hackerearth.ts';
 import { adapterFor } from '../src/adapters/index.ts';
 import {
   consumePendingCsesSubmission,
@@ -586,6 +586,152 @@ test('HackerEarth fixture privacy checks reject injected request and result data
   }
 });
 
+/* ---------------------------------------------------------- HackerEarth */
+
+const HACKEREARTH_RESULT_URL =
+  'https://www.hackerearth.com/response/submission-json/fixture-submission-id/AJAX/';
+
+function publishHackerEarthExchange(listener, exchange) {
+  listener({
+    source: globalThis.window,
+    data: {
+      channel: 'redo-observer',
+      method: 'GET',
+      href: 'https://www.hackerearth.com/community/problem/algorithm/make-an-array-85abd7ad/',
+      ...exchange,
+    },
+  });
+}
+
+function installHackerEarthPage() {
+  const listeners = new Set();
+  const page = {
+    location: new URL('https://www.hackerearth.com/community/problem/algorithm/make-an-array-85abd7ad/'),
+    addEventListener(type, listener) {
+      if (type === 'message') listeners.add(listener);
+    },
+    removeEventListener(type, listener) {
+      if (type === 'message') listeners.delete(listener);
+    },
+  };
+  globalThis.window = page;
+  globalThis.document = { title: 'Make an Array | HackerEarth' };
+  return (exchange) => {
+    for (const listener of listeners) publishHackerEarthExchange(listener, exchange);
+  };
+}
+
+test('HackerEarth: a public-practice acceptance carries its final response details', () => {
+  const accepted = readFileSync('tests/fixtures/hackerearth-accepted.json', 'utf8');
+  const result = readHackerEarthResult(HACKEREARTH_RESULT_URL, accepted);
+
+  assert.equal(result?.accepted, true);
+  assert.equal(result?.submissionId, 'fixture-submission-id');
+  assert.equal(result?.status, 'fixture-accepted');
+  assert.equal(result?.language, 'fixture-language');
+  assert.equal(result?.testsPassed, 1);
+  assert.equal(result?.testsTotal, 1);
+  assert.equal(result?.runtime, '1');
+  assert.equal(result?.memory, '1');
+});
+
+test('HackerEarth: assessment routes and non-final or non-practice responses are ignored', () => {
+  const accepted = readFileSync('tests/fixtures/hackerearth-accepted.json', 'utf8');
+  const pending = mutateJson(accepted, (value) => { value.status = 'queued'; });
+  const nonPractice = mutateJson(accepted, (value) => { value.context.is_practice = 0; });
+  const unrecognised = mutateJson(accepted, (value) => { value.aggregated_data.result = 'TLE'; });
+
+  assert.equal(new HackerEarthAdapter().matches(new URL('https://www.hackerearth.com/assessment/test/')), false);
+  assert.equal(readHackerEarthResult(HACKEREARTH_RESULT_URL, pending), undefined);
+  assert.equal(readHackerEarthResult(HACKEREARTH_RESULT_URL, nonPractice), undefined);
+  assert.equal(readHackerEarthResult(HACKEREARTH_RESULT_URL, unrecognised), undefined);
+});
+
+test('HackerEarth: final result polls record one failure and one editor-backed acceptance', () => {
+  const rejected = readFileSync('tests/fixtures/hackerearth-rejected.json', 'utf8');
+  const accepted = readFileSync('tests/fixtures/hackerearth-accepted.json', 'utf8');
+  const publish = installHackerEarthPage();
+  const attempts = [];
+  const events = [];
+  const solved = [];
+  const timeline = [];
+  const adapter = new HackerEarthAdapter();
+
+  adapter.start({
+    onAccepted(submission) {
+      timeline.push('accepted');
+      solved.push(submission);
+    },
+    onAttempt(problemKey) { attempts.push(problemKey); },
+    onEvent(slug, event) {
+      timeline.push(`event:${event.accepted}`);
+      events.push({ slug, event });
+    },
+    onError(message) { throw new Error(message); },
+  });
+
+  const rejectedExchange = {
+    url: HACKEREARTH_RESULT_URL.replace('fixture-submission-id', 'fixture-rejected-id'),
+    responseBody: rejected,
+  };
+  publish(rejectedExchange);
+  publish(rejectedExchange);
+  const acceptedExchange = {
+    url: HACKEREARTH_RESULT_URL,
+    // The result observer is never allowed to recover code from a request body.
+    requestBody: 'source=must-not-be-used',
+    responseBody: accepted,
+    editorCode: 'editor snapshot',
+  };
+  publish(acceptedExchange);
+  publish(acceptedExchange);
+
+  assert.deepEqual(attempts, ['hackerearth:make-an-array-85abd7ad']);
+  assert.deepEqual(events.map(({ event }) => ({
+    accepted: event.accepted,
+    verdict: event.verdict,
+    language: event.language,
+    testsPassed: event.testsPassed,
+    testsTotal: event.testsTotal,
+  })), [
+    { accepted: false, verdict: 'fixture-rejected', language: 'fixture-language', testsPassed: 0, testsTotal: 1 },
+    { accepted: true, verdict: 'fixture-accepted', language: 'fixture-language', testsPassed: 1, testsTotal: 1 },
+  ]);
+  assert.deepEqual(timeline, ['event:false', 'event:true', 'accepted']);
+  assert.deepEqual(solved.map(({ attempts: count, code, language, title, url }) => ({
+    attempts: count, code, language, title, url,
+  })), [{
+    attempts: 2,
+    code: 'editor snapshot',
+    language: 'fixture-language',
+    title: 'Make an Array',
+    url: 'https://www.hackerearth.com/community/problem/algorithm/make-an-array-85abd7ad/',
+  }]);
+});
+
+test('HackerEarth: an accepted result without an editor snapshot stays unsolved', () => {
+  const accepted = readFileSync('tests/fixtures/hackerearth-accepted.json', 'utf8');
+  const publish = installHackerEarthPage();
+  const errors = [];
+  const solved = [];
+  const adapter = new HackerEarthAdapter();
+
+  adapter.start({
+    onAccepted(submission) { solved.push(submission); },
+    onAttempt() {},
+    onEvent() {},
+    onError(message) { errors.push(message); },
+  });
+  publish({
+    url: HACKEREARTH_RESULT_URL,
+    requestBody: 'source=must-not-be-used',
+    responseBody: accepted,
+  });
+
+  assert.deepEqual(solved, []);
+  assert.deepEqual(errors, ['Accepted on HackerEarth, but the solution source could not be read.']);
+});
+
 /* --------------------------------------------------------- shared observer */
 
 test('only submission endpoints are observed', () => {
@@ -608,8 +754,10 @@ test('only submission endpoints are observed', () => {
   assert.equal(isObserved('https://www.hackerearth.com/submit/AJAX/'), false);
   assert.equal(
     isObserved('https://www.hackerearth.com/response/submission-json/fixture-submission-id/AJAX/'),
-    false,
+    true,
   );
+  assert.equal(isObserved('https://www.hackerearth.com/response/submission-json/AJAX/'), false);
+  assert.equal(isObserved('https://www.hackerearth.com/response/submission-json/fixture-submission-id/'), false);
 });
 
 test('payload helpers survive junk without throwing', () => {

@@ -8,8 +8,12 @@
  *
  * Patterns are matched against the full request URL. Keep them narrow: the
  * observer relays request bodies, and a submission request body contains the
- * user's source code.
+ * user's source code. HackerEarth is deliberately limited to its result poll;
+ * its source-bearing `/submit/AJAX/` request must never be observed.
  */
+export const HACKEREARTH_PUBLIC_PRACTICE_RESULT_URL =
+  /^https:\/\/www\.hackerearth\.com\/response\/submission-json\/([^/?#]+)\/AJAX\/?(?:[?#]|$)/i;
+
 export const OBSERVED_URLS: RegExp[] = [
   // LeetCode polls this until the judge finishes. The id is numeric for a
   // submit and `runcode_…` for a run, and the path picked up a `/v2/` segment
@@ -22,6 +26,9 @@ export const OBSERVED_URLS: RegExp[] = [
   // GeeksforGeeks practice runs through a separate API host.
   /practiceapi\.geeksforgeeks\.org\/api\/.*(submission|submit)/i,
   /geeksforgeeks\.org\/api\/.*(submission|submit)/i,
+  // Fixture-confirmed public-practice final-result poll. Do not add the
+  // source-bearing `/submit/AJAX/` endpoint to this list.
+  HACKEREARTH_PUBLIC_PRACTICE_RESULT_URL,
 ];
 
 export function isObserved(url: string): boolean {
