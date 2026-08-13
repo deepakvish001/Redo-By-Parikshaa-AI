@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <body>
+    <form action="/course/send.php" method="post" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token">
+      <input type="hidden" name="task" value="1068">
+      <input type="file" name="file">
+      <select name="lang" id="lang"></select>
+      <select name="option" id="option"></select>
+      <input type="submit" value="Submit">
+      <input type="hidden" name="type">
+      <input type="hidden" name="target">
+    </form>
+  </body>
+</html>

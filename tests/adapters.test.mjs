@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { parseHTML } from 'linkedom';
 import { extractSource, isPending, parseSubmissionRow } from '../src/adapters/atcoder.ts';
 import { readSubmission, readSubmittedCode } from '../src/adapters/hackerrank.ts';
@@ -44,6 +45,37 @@ test('CSES and HackerEarth public practice routes are the only new adapter route
   assert.equal(new HackerEarthAdapter().currentSlug(hackerEarthChallenge), null);
   assert.equal(adapterFor(csesTask)?.platform, 'cses');
   assert.equal(adapterFor(hackerEarthPractice)?.platform, 'hackerearth');
+});
+
+test('CSES submit fixture preserves the observed form contract without secret values', () => {
+  const { document } = parseHTML(readFileSync('tests/fixtures/cses-submit-form.html', 'utf8'));
+  const form = document.querySelector('form');
+
+  assert.equal(form?.getAttribute('action'), '/course/send.php');
+  assert.equal(form?.getAttribute('method'), 'post');
+  assert.equal(form?.getAttribute('enctype'), 'multipart/form-data');
+  assert.equal(form?.querySelector('input[type="hidden"][name="csrf_token"]')?.hasAttribute('value'), false);
+  assert.equal(form?.querySelector('input[type="hidden"][name="task"]')?.getAttribute('value'), '1068');
+  assert.ok(form?.querySelector('input[type="file"][name="file"]'));
+  assert.ok(form?.querySelector('select[name="lang"]#lang'));
+  assert.ok(form?.querySelector('select[name="option"]#option'));
+  assert.ok(form?.querySelector('input[type="submit"]'));
+  assert.ok(form?.querySelector('input[type="hidden"][name="type"]'));
+  assert.ok(form?.querySelector('input[type="hidden"][name="target"]'));
+  assert.equal(form?.querySelector('pre, textarea, code'), null);
+});
+
+test('CSES result fixtures retain only final verdict evidence and the public task link', () => {
+  const accepted = parseHTML(readFileSync('tests/fixtures/cses-result-accepted.html', 'utf8')).document;
+  const rejected = parseHTML(readFileSync('tests/fixtures/cses-result-rejected.html', 'utf8')).document;
+
+  for (const [document, result] of [[accepted, 'ACCEPTED'], [rejected, 'OUTPUT LIMIT EXCEEDED']]) {
+    assert.match(document.body.textContent ?? '', /Status:\s*READY/);
+    assert.match(document.body.textContent ?? '', new RegExp(`Result:\\s*${result}`));
+    assert.equal(document.querySelector('a[href]')?.getAttribute('href'), '/problemset/task/1068/');
+    assert.ok(document.querySelector('table caption')?.textContent?.includes('Test results'));
+    assert.equal(document.querySelector('input, pre, textarea, code'), null);
+  }
 });
 
 /* --------------------------------------------------------- shared observer */
