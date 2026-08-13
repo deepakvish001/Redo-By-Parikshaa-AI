@@ -635,6 +635,79 @@ test('HackerEarth: a public-practice acceptance carries its final response detai
   assert.equal(result?.memory, '1');
 });
 
+test('HackerEarth: an AC final response survives null and absent metrics', () => {
+  const accepted = readFileSync('tests/fixtures/hackerearth-accepted.json', 'utf8');
+  const withoutMetrics = mutateJson(accepted, (value) => {
+    value.context.problem_score = null;
+    value.aggregated_data.submission_score = null;
+    delete value.aggregated_data.total_time_used;
+    value.aggregated_data.max_memory_used = null;
+    value.message[0].score = null;
+    delete value.message[0].time_used;
+    value.message[0].memory_used = null;
+  });
+
+  assert.deepEqual(readHackerEarthResult(HACKEREARTH_RESULT_URL, withoutMetrics), {
+    accepted: true,
+    submissionId: 'fixture-submission-id',
+    status: 'fixture-accepted',
+    language: 'fixture-language',
+    testsPassed: 1,
+    testsTotal: 1,
+  });
+});
+
+test('HackerEarth: a WA final response survives null and absent metrics', () => {
+  const rejected = readFileSync('tests/fixtures/hackerearth-rejected.json', 'utf8');
+  const withoutMetrics = mutateJson(rejected, (value) => {
+    delete value.context.problem_score;
+    delete value.aggregated_data.submission_score;
+    value.aggregated_data.total_time_used = null;
+    delete value.aggregated_data.max_memory_used;
+    delete value.message[0].score;
+    value.message[0].time_used = null;
+    delete value.message[0].memory_used;
+  });
+
+  assert.deepEqual(readHackerEarthResult(HACKEREARTH_RESULT_URL, withoutMetrics), {
+    accepted: false,
+    submissionId: 'fixture-submission-id',
+    status: 'fixture-rejected',
+    language: 'fixture-language',
+    testsPassed: 0,
+    testsTotal: 1,
+    errorText: 'sanitized',
+  });
+});
+
+test('HackerEarth: accepted events omit unavailable runtime and memory', () => {
+  const accepted = readFileSync('tests/fixtures/hackerearth-accepted.json', 'utf8');
+  const withoutTiming = mutateJson(accepted, (value) => {
+    value.aggregated_data.total_time_used = null;
+    delete value.aggregated_data.max_memory_used;
+  });
+  const publish = installHackerEarthPage();
+  const events = [];
+
+  new HackerEarthAdapter().start({
+    onAccepted() {},
+    onAttempt() {},
+    onEvent(_slug, event) { events.push(event); },
+    onError(message) { throw new Error(message); },
+  });
+  publish({
+    url: HACKEREARTH_RESULT_URL,
+    responseBody: withoutTiming,
+    editorCode: 'editor snapshot',
+  });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].accepted, true);
+  assert.equal(events[0].verdict, 'fixture-accepted');
+  assert.equal(Object.hasOwn(events[0], 'runtime'), false);
+  assert.equal(Object.hasOwn(events[0], 'memory'), false);
+});
+
 test('HackerEarth: assessment routes and non-final or non-practice responses are ignored', () => {
   const accepted = readFileSync('tests/fixtures/hackerearth-accepted.json', 'utf8');
   const pending = mutateJson(accepted, (value) => { value.status = 'queued'; });

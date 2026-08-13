@@ -18,8 +18,8 @@ export interface HackerEarthResult {
   language: string;
   testsPassed: number;
   testsTotal: number;
-  runtime: string;
-  memory: string;
+  runtime?: string;
+  memory?: string;
   errorText?: string;
 }
 
@@ -29,6 +29,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function nonEmptyString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function numericMetric(value: unknown): string | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : undefined;
 }
 
 /**
@@ -57,8 +61,7 @@ export function readHackerEarthResult(
   }
   if (
     context.is_practice !== 1 ||
-    context.event !== 0 ||
-    typeof context.problem_score !== 'number'
+    context.event !== 0
   ) {
     return undefined;
   }
@@ -71,10 +74,7 @@ export function readHackerEarthResult(
     !result ||
     !FINAL_RESULTS.has(result) ||
     !status ||
-    !language ||
-    typeof aggregate.submission_score !== 'number' ||
-    typeof aggregate.total_time_used !== 'number' ||
-    typeof aggregate.max_memory_used !== 'number'
+    !language
   ) {
     return undefined;
   }
@@ -86,10 +86,7 @@ export function readHackerEarthResult(
     if (
       !messageStatus ||
       !FINAL_RESULTS.has(messageStatus) ||
-      !nonEmptyString(message.status_detail) ||
-      typeof message.score !== 'number' ||
-      typeof message.time_used !== 'number' ||
-      typeof message.memory_used !== 'number'
+      !nonEmptyString(message.status_detail)
     ) {
       return undefined;
     }
@@ -97,6 +94,8 @@ export function readHackerEarthResult(
   }
 
   const accepted = result === 'AC';
+  const runtime = numericMetric(aggregate.total_time_used);
+  const memory = numericMetric(aggregate.max_memory_used);
   return {
     accepted,
     submissionId: urlMatch[1],
@@ -104,8 +103,8 @@ export function readHackerEarthResult(
     language,
     testsPassed,
     testsTotal: messages.length,
-    runtime: String(aggregate.total_time_used),
-    memory: String(aggregate.max_memory_used),
+    ...(runtime ? { runtime } : {}),
+    ...(memory ? { memory } : {}),
     ...(accepted || !detail ? {} : { errorText: detail }),
   };
 }
@@ -167,11 +166,11 @@ export class HackerEarthAdapter implements PlatformAdapter {
         verdict: result.status,
         accepted: result.accepted,
         language: result.language,
-        runtime: result.runtime,
-        memory: result.memory,
         testsPassed: result.testsPassed,
         testsTotal: result.testsTotal,
         submissionId: result.submissionId,
+        ...(result.runtime ? { runtime: result.runtime } : {}),
+        ...(result.memory ? { memory: result.memory } : {}),
         ...(result.errorText ? { errorText: result.errorText } : {}),
       };
 
@@ -204,8 +203,8 @@ export class HackerEarthAdapter implements PlatformAdapter {
         language: result.language,
         code,
         attempts,
-        runtimeNote: `Runtime ${result.runtime}`,
-        memoryNote: `Memory ${result.memory}`,
+        ...(result.runtime ? { runtimeNote: `Runtime ${result.runtime}` } : {}),
+        ...(result.memory ? { memoryNote: `Memory ${result.memory}` } : {}),
       } satisfies AcceptedSubmission);
       this.attempts.delete(slug);
     });
