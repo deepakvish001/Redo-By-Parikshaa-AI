@@ -62,9 +62,10 @@ CSES uses a native file-upload submit form at
 `/problemset/submit/<task-id>/`, rather than a fetch/XHR request that the
 shared observer can read. `CsesAdapter` therefore uses a separate lifecycle:
 
-1. On an eligible form submit, read only the source file the user selected for
-   that CSES submission. Save a temporary `PendingCsesSubmission` record
-   before page navigation:
+1. On an eligible form submit, briefly hold that one native submission while
+   reading only the source file the user selected and saving a temporary
+   `PendingCsesSubmission` record. After storage acknowledges the record,
+   re-submit the same untouched form exactly once before page navigation:
 
    ```ts
    interface PendingCsesSubmission {
@@ -86,8 +87,10 @@ shared observer can read. `CsesAdapter` therefore uses a separate lifecycle:
    source, language, title, and canonical task URL.
 
 This reads no arbitrary local file: it accesses only the file already selected
-by the user in CSES's own submission form. It never submits, modifies, or
-delays the form.
+by the user in CSES's own submission form. It never changes the selected file,
+form fields, or destination. The short capture wait exists only to guarantee
+that native navigation cannot lose the user's source before it reaches local
+extension storage.
 
 ### HackerEarth adapter
 
@@ -117,10 +120,10 @@ or source code.
 1. A user opens an eligible public-practice problem. The adapter derives its
    slug and requests existing problem context; due records can show the
    current revision panel.
-2. CSES captures the user-selected source file immediately before a native
-   form navigation, then reads the final verdict from the result-page DOM.
-   HackerEarth observes an allowlisted Run or Submit endpoint and parses the
-   final response.
+2. CSES briefly holds a native submit only until it persists the user-selected
+   source file, re-submits the untouched form once, then reads the final
+   verdict from the result-page DOM. HackerEarth observes an allowlisted Run
+   or Submit endpoint and parses the final response.
 3. The platform records an `AttemptEvent` for a final result. Pending results
    are ignored; duplicate HackerEarth result polls and duplicate CSES result
    page renders are recorded once.
