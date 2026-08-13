@@ -13,9 +13,14 @@ import {
 import { readVerdict, submissionIdFromPath } from '../src/adapters/leetcode.ts';
 import { isObserved, summarisePath } from '../src/adapters/observed.ts';
 import { firstString, parseJson, pick } from '../src/adapters/exchange.ts';
-import { CsesAdapter } from '../src/adapters/cses.ts';
+import { CsesAdapter, languageFromFilename, parseCsesResult } from '../src/adapters/cses.ts';
 import { HackerEarthAdapter } from '../src/adapters/hackerearth.ts';
 import { adapterFor } from '../src/adapters/index.ts';
+import {
+  getFreshPendingCsesSubmission,
+  isPendingCsesSubmissionFresh,
+  savePendingCsesSubmission,
+} from '../src/core/storage.ts';
 import { PLATFORM_LABELS } from '../src/core/types.ts';
 
 function assertSanitisedCsesFixture(raw) {
@@ -207,6 +212,171 @@ test('CSES fixture privacy checks reject injected personal and submission data',
   for (const fixture of unsafe) {
     assert.throws(() => assertSanitisedCsesFixture(fixture), { name: 'AssertionError' });
   }
+});
+
+/* -------------------------------------------------------------- CSES flow */
+
+function installCsesStorage(initial = {}) {
+  const values = structuredClone(initial);
+  globalThis.chrome = {
+    storage: {
+      local: {
+        async get(key) {
+          return { [key]: values[key] };
+        },
+        async set(patch) {
+          Object.assign(values, structuredClone(patch));
+        },
+        async remove(key) {
+          delete values[key];
+        },
+      },
+    },
+    runtime: {
+      async sendMessage(request) {
+        return { ok: true, data: { stored: true, request } };
+      },
+    },
+  };
+  return values;
+}
+
+async function settleCsesAdapter() {
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
+test('CSES: a selected cpp file is saved for its task for fifteen minutes', async () => {
+  const stored = installCsesStorage({
+    pendingCsesSubmissions: {
+      stale: {
+        taskId: 'stale', submittedAt: -16 * 60_000, filename: 'old.py', language: 'Python', code: 'old source',
+      },
+    },
+  });
+  const pending = {
+    taskId: '1068', submittedAt: 10, filename: 'labyrinth.cpp', language: 'C++', code: 'captured source',
+  };
+
+  assert.equal(languageFromFilename('labyrinth.cpp'), 'C++');
+  assert.equal(isPendingCsesSubmissionFresh({ submittedAt: 10 }, 10 + 14 * 60_000), true);
+  assert.equal(isPendingCsesSubmissionFresh({ submittedAt: 10 }, 10 + 16 * 60_000), false);
+
+  await savePendingCsesSubmission(pending, 10);
+  assert.deepEqual(await getFreshPendingCsesSubmission('1068', 10 + 14 * 60_000), pending);
+  assert.equal(await getFreshPendingCsesSubmission('1068', 10 + 16 * 60_000), undefined);
+  assert.deepEqual(stored.pendingCsesSubmissions, {});
+});
+
+test('CSES: a ready accepted result is final and names its task', () => {
+  const { document } = parseHTML(readFileSync('tests/fixtures/cses-result-accepted.html', 'utf8'));
+
+  assert.deepEqual(parseCsesResult(document, 'https://cses.fi/problemset/result/1/'), {
+    taskId: '1068', verdict: 'Accepted', accepted: true,
+  });
+  assert.equal(parseCsesResult(document, 'https://cses.fi/problemset/task/1068/'), undefined);
+});
+
+test('CSES: a ready rejected result is final and malformed result markup is ignored', () => {
+  const rejected = parseHTML(readFileSync('tests/fixtures/cses-result-rejected.html', 'utf8')).document;
+  const unfinished = parseHTML(readFileSync('tests/fixtures/cses-result-rejected.html', 'utf8').replace('READY', 'JUDGING')).document;
+
+  assert.deepEqual(parseCsesResult(rejected, 'https://cses.fi/problemset/result/2/'), {
+    taskId: '1068', verdict: 'Output Limit Exceeded', accepted: false,
+  });
+  assert.equal(parseCsesResult(unfinished, 'https://cses.fi/problemset/result/2/'), undefined);
+});
+
+test('CSES: the selected file is captured before the unchanged native form replays once', async () => {
+  const { document, window } = parseHTML(readFileSync('tests/fixtures/cses-submit-form.html', 'utf8'));
+  const form = document.querySelector('form');
+  const file = form.querySelector('input[type="file"]');
+  const submitter = form.querySelector('input[type="submit"]');
+  const messages = [];
+  let replays = 0;
+  const originalForm = form.outerHTML;
+
+  Object.defineProperty(file, 'files', {
+    value: [{ name: 'labyrinth.cpp', text: async () => 'captured source' }],
+  });
+  form.requestSubmit = (nextSubmitter) => {
+    replays += 1;
+    assert.equal(nextSubmitter, submitter);
+  };
+  globalThis.document = document;
+  globalThis.window = { location: new URL('https://cses.fi/problemset/submit/1068/') };
+  globalThis.chrome = {
+    runtime: {
+      async sendMessage(request) {
+        messages.push(request);
+        return { ok: true, data: { stored: true } };
+      },
+    },
+    storage: { local: { async get() { return {}; }, async set() {}, async remove() {} } },
+  };
+
+  new CsesAdapter().start({ onAccepted() {}, onAttempt() {}, onEvent() {}, onError() {} });
+  const first = new window.Event('submit', { cancelable: true });
+  Object.defineProperty(first, 'submitter', { value: submitter });
+  form.dispatchEvent(first);
+  await settleCsesAdapter();
+
+  assert.equal(first.defaultPrevented, true);
+  assert.equal(replays, 1);
+  assert.equal(form.outerHTML, originalForm);
+  assert.deepEqual(messages, [{
+    type: 'cses:pending',
+    pending: {
+      taskId: '1068', submittedAt: messages[0].pending.submittedAt,
+      filename: 'labyrinth.cpp', language: 'C++', code: 'captured source',
+    },
+  }]);
+
+  const replay = new window.Event('submit', { cancelable: true });
+  form.dispatchEvent(replay);
+  assert.equal(replay.defaultPrevented, false);
+  assert.equal(replays, 1);
+});
+
+test('CSES: duplicate final result renders create one rejection and one accepted record', async () => {
+  const rejected = readFileSync('tests/fixtures/cses-result-rejected.html', 'utf8');
+  const accepted = readFileSync('tests/fixtures/cses-result-accepted.html', 'utf8');
+  const events = [];
+  const attempts = [];
+  const solved = [];
+  const stored = installCsesStorage({
+    pendingCsesSubmissions: {
+      1068: {
+        taskId: '1068', submittedAt: Date.now(), filename: 'solution.cpp', language: 'C++', code: 'captured source',
+      },
+    },
+  });
+  const context = {
+    onAccepted(submission) { solved.push(submission); },
+    onAttempt(problemKey) { attempts.push(problemKey); },
+    onEvent(slug, event) { events.push({ slug, event }); },
+    onError(message) { throw new Error(message); },
+  };
+  const adapter = new CsesAdapter();
+
+  for (const html of [rejected, rejected, accepted, accepted]) {
+    const { document } = parseHTML(html);
+    globalThis.document = document;
+    globalThis.window = { location: new URL('https://cses.fi/problemset/result/fixture/') };
+    adapter.start(context);
+    await settleCsesAdapter();
+  }
+
+  assert.deepEqual(attempts, ['cses:1068']);
+  assert.equal(events.length, 2);
+  assert.deepEqual(events.map(({ event }) => event.accepted), [false, true]);
+  assert.equal(events[1].event.language, 'C++');
+  assert.deepEqual(solved.map(({ attempts: count, title, url, code }) => ({ attempts: count, title, url, code })), [{
+    attempts: 2,
+    title: 'Weird Algorithm',
+    url: 'https://cses.fi/problemset/task/1068/',
+    code: 'captured source',
+  }]);
+  assert.deepEqual(stored.pendingCsesSubmissions, {});
 });
 
 test('HackerEarth fixtures preserve the public-practice response contract without sensitive data', () => {

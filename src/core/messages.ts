@@ -11,6 +11,7 @@ import type { UpsolveItem, UpsolveSummary } from './upsolve.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
+  PendingCsesSubmission,
   Recall,
   Settings,
   SolvedProblem,
@@ -35,6 +36,7 @@ export interface DashboardData {
  */
 export type Request =
   | { type: 'submission:accepted'; submission: AcceptedSubmission }
+  | { type: 'cses:pending'; pending: PendingCsesSubmission }
   | { type: 'page:context'; platform: string; slug: string }
   | { type: 'dashboard:get' }
   | { type: 'problem:review'; id: string; recall: Recall }
@@ -77,6 +79,7 @@ export type Request =
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
+  'cses:pending': { stored: true };
   'page:context': { tracked: boolean; due: boolean; problem?: SolvedProblem };
   'dashboard:get': DashboardData;
   'problem:review': { problem?: SolvedProblem };

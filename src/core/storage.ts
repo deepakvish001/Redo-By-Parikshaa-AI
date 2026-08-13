@@ -5,6 +5,7 @@ import type { UpsolveItem } from './upsolve.ts';
 import {
   PLATFORMS,
   type AttemptEvent,
+  type PendingCsesSubmission,
   type Platform,
   type Settings,
   type SolvedProblem,
@@ -18,7 +19,10 @@ const KEYS = {
   parikshaaCredentials: 'parikshaaCredentials',
   parikshaaApi: 'parikshaaApiKey',
   upsolve: 'upsolve',
+  pendingCsesSubmissions: 'pendingCsesSubmissions',
 } as const;
+
+export const PENDING_CSES_SUBMISSION_TTL_MS = 15 * 60_000;
 
 /** Aggregate counters that do not belong to any single problem. */
 export interface Meta {
@@ -75,6 +79,59 @@ const DEFAULT_META: Meta = {
 async function readKey<T>(key: string, fallback: T): Promise<T> {
   const result = await chrome.storage.local.get(key);
   return (result[key] as T | undefined) ?? fallback;
+}
+
+/** A selected CSES file is only valid for the brief trip to its result page. */
+export function isPendingCsesSubmissionFresh(
+  pending: Pick<PendingCsesSubmission, 'submittedAt'>,
+  now: number,
+): boolean {
+  return Number.isFinite(pending.submittedAt)
+    && pending.submittedAt <= now
+    && now - pending.submittedAt <= PENDING_CSES_SUBMISSION_TTL_MS;
+}
+
+function prunePendingCsesSubmissions(
+  pending: Record<string, PendingCsesSubmission>,
+  now: number,
+): Record<string, PendingCsesSubmission> {
+  return Object.fromEntries(
+    Object.entries(pending).filter(([, submission]) => isPendingCsesSubmissionFresh(submission, now)),
+  );
+}
+
+async function readPendingCsesSubmissions(now: number): Promise<Record<string, PendingCsesSubmission>> {
+  const pending = await readKey<Record<string, PendingCsesSubmission>>(KEYS.pendingCsesSubmissions, {});
+  const fresh = prunePendingCsesSubmissions(pending, now);
+  if (Object.keys(fresh).length !== Object.keys(pending).length) {
+    await chrome.storage.local.set({ [KEYS.pendingCsesSubmissions]: fresh });
+  }
+  return fresh;
+}
+
+/** Saves one selected CSES file per task and prunes every expired capture. */
+export async function savePendingCsesSubmission(
+  submission: PendingCsesSubmission,
+  now = Date.now(),
+): Promise<void> {
+  const pending = await readPendingCsesSubmissions(now);
+  pending[submission.taskId] = submission;
+  await chrome.storage.local.set({ [KEYS.pendingCsesSubmissions]: pending });
+}
+
+/** Reads the task's selected source, removing all captures that have expired. */
+export async function getFreshPendingCsesSubmission(
+  taskId: string,
+  now = Date.now(),
+): Promise<PendingCsesSubmission | undefined> {
+  return (await readPendingCsesSubmissions(now))[taskId];
+}
+
+/** Consumes one CSES capture after an accepted result, while pruning the rest. */
+export async function clearPendingCsesSubmission(taskId: string, now = Date.now()): Promise<void> {
+  const pending = await readPendingCsesSubmissions(now);
+  delete pending[taskId];
+  await chrome.storage.local.set({ [KEYS.pendingCsesSubmissions]: pending });
 }
 
 export async function getSettings(): Promise<Settings> {

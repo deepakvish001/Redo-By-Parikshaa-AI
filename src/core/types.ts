@@ -72,6 +72,18 @@ export interface AttemptEvent {
 }
 
 /**
+ * Source selected in CSES's own native form, held only until its final result
+ * page appears. This is deliberately separate from solved-problem storage.
+ */
+export interface PendingCsesSubmission {
+  taskId: string;
+  submittedAt: number;
+  filename: string;
+  language: string;
+  code: string;
+}
+
+/**
  * Everything that happens to a problem other than a judge verdict: opening it,
  * solving it, revising it, taking a hint, a sync succeeding or failing, notes
  * being edited.
