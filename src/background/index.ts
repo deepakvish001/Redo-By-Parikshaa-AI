@@ -10,7 +10,6 @@ import { appendActivity, struggleScore } from '../core/journal.ts';
 import { WEEK_MS, summariseWeek, wrappedCaption } from '../core/wrapped.ts';
 import {
   appendJournalEvents,
-  savePendingCsesSubmission,
   deleteJournal,
   deleteProblem,
   getJournal,
@@ -33,10 +32,10 @@ import { applyRecall, dueProblems, initialRevision, isDue } from '../core/srs.ts
 import type {
   AcceptedSubmission,
   ActivityEvent,
-  PendingCsesSubmission,
   Recall,
   SolvedProblem,
 } from '../core/types.ts';
+import { storePendingCsesSubmission } from './cses-pending.ts';
 import { getCachedContests, refreshContests, sendContestReminders } from './contests.ts';
 import { focusState, startPause, watchNavigation } from './focus.ts';
 import { applyBackup, currentBackup, pullBackup, pushBackup } from './backup.ts';
@@ -234,12 +233,6 @@ async function recordSubmission(
   return { saved: true, problem: synced };
 }
 
-function isValidPendingCsesSubmission(pending: PendingCsesSubmission): boolean {
-  return [pending.taskId, pending.filename, pending.language, pending.code].every(
-    (value) => typeof value === 'string' && value.trim().length > 0,
-  ) && Number.isFinite(pending.submittedAt);
-}
-
 async function reviewProblem(
   id: string,
   recall: Recall,
@@ -294,11 +287,7 @@ async function handle(request: Request): Promise<unknown> {
       return recordSubmission(request.submission);
 
     case 'cses:pending':
-      if (!isValidPendingCsesSubmission(request.pending)) {
-        throw new Error('CSES pending submission is malformed.');
-      }
-      await savePendingCsesSubmission(request.pending);
-      return { stored: true };
+      return storePendingCsesSubmission(request.pending);
 
     case 'page:context': {
       const problem = await getProblem(`${request.platform}:${request.slug}`);

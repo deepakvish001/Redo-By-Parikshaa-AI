@@ -117,6 +117,7 @@ export class CsesAdapter implements PlatformAdapter {
     if (!form || !taskId) return () => {};
 
     let replaying = false;
+    let captureInFlight = false;
     const onSubmit = (event: SubmitEvent) => {
       if (replaying) {
         replaying = false;
@@ -124,8 +125,13 @@ export class CsesAdapter implements PlatformAdapter {
       }
 
       event.preventDefault();
+      // A double-click or repeated handler event must not capture the file or
+      // issue another native submit while the first capture is still pending.
+      if (captureInFlight) return;
+      captureInFlight = true;
       const submitter = event.submitter;
       void this.captureThenReplay(context, form, taskId, () => {
+        captureInFlight = false;
         replaying = true;
         form.requestSubmit(submitter);
       });

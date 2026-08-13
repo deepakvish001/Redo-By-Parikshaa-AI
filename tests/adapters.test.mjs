@@ -16,6 +16,7 @@ import { firstString, parseJson, pick } from '../src/adapters/exchange.ts';
 import { CsesAdapter, languageFromFilename, parseCsesResult } from '../src/adapters/cses.ts';
 import { HackerEarthAdapter } from '../src/adapters/hackerearth.ts';
 import { adapterFor } from '../src/adapters/index.ts';
+import { storePendingCsesSubmission } from '../src/background/cses-pending.ts';
 import {
   getFreshPendingCsesSubmission,
   isPendingCsesSubmissionFresh,
@@ -241,6 +242,32 @@ function installCsesStorage(initial = {}) {
   return values;
 }
 
+function installRacingCsesStorage() {
+  const values = {};
+  globalThis.chrome = {
+    storage: {
+      local: {
+        async get(key) {
+          // The old unlocked implementation lets both calls snapshot this
+          // value before either writes. A serialized implementation starts
+          // the second read only after the first write updates `values`.
+          const snapshot = structuredClone(values[key]);
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          return { [key]: snapshot };
+        },
+        async set(patch) {
+          Object.assign(values, structuredClone(patch));
+        },
+        async remove(key) {
+          delete values[key];
+        },
+      },
+    },
+    runtime: { async sendMessage() { return { ok: true, data: { stored: true } }; } },
+  };
+  return values;
+}
+
 async function settleCsesAdapter() {
   await new Promise((resolve) => setImmediate(resolve));
 }
@@ -265,6 +292,26 @@ test('CSES: a selected cpp file is saved for its task for fifteen minutes', asyn
   assert.deepEqual(await getFreshPendingCsesSubmission('1068', 10 + 14 * 60_000), pending);
   assert.equal(await getFreshPendingCsesSubmission('1068', 10 + 16 * 60_000), undefined);
   assert.deepEqual(stored.pendingCsesSubmissions, {});
+});
+
+test('CSES: concurrent pending saves for different tasks keep both selected files', async () => {
+  const stored = installRacingCsesStorage();
+  const first = { taskId: '1068', submittedAt: 10, filename: 'first.cpp', language: 'C++', code: 'first source' };
+  const second = { taskId: '1193', submittedAt: 10, filename: 'second.py', language: 'Python', code: 'second source' };
+
+  await Promise.all([savePendingCsesSubmission(first, 10), savePendingCsesSubmission(second, 10)]);
+
+  assert.deepEqual(stored.pendingCsesSubmissions, { 1068: first, 1193: second });
+});
+
+test('CSES: malformed pending worker payloads reject without storing source', async () => {
+  const stored = installCsesStorage();
+
+  await assert.rejects(
+    storePendingCsesSubmission({ taskId: ' ', submittedAt: NaN, filename: '', language: '', code: '' }),
+    /malformed/i,
+  );
+  assert.deepEqual(stored, {});
 });
 
 test('CSES: a ready accepted result is final and names its task', () => {
@@ -334,6 +381,79 @@ test('CSES: the selected file is captured before the unchanged native form repla
   const replay = new window.Event('submit', { cancelable: true });
   form.dispatchEvent(replay);
   assert.equal(replay.defaultPrevented, false);
+  assert.equal(replays, 1);
+});
+
+for (const [name, failure] of [
+  ['file reading fails', () => Promise.reject(new Error('file unavailable'))],
+  ['pending persistence fails', () => Promise.resolve('captured source')],
+]) {
+  test(`CSES: ${name} still replays the original native form exactly once`, async () => {
+    const { document, window } = parseHTML(readFileSync('tests/fixtures/cses-submit-form.html', 'utf8'));
+    const form = document.querySelector('form');
+    const file = form.querySelector('input[type="file"]');
+    const submitter = form.querySelector('input[type="submit"]');
+    const errors = [];
+    let replays = 0;
+
+    Object.defineProperty(file, 'files', { value: [{ name: 'labyrinth.cpp', text: failure }] });
+    form.requestSubmit = () => { replays += 1; };
+    globalThis.document = document;
+    globalThis.window = { location: new URL('https://cses.fi/problemset/submit/1068/') };
+    globalThis.chrome = {
+      runtime: {
+        async sendMessage() {
+          if (name === 'pending persistence fails') throw new Error('worker unavailable');
+          return { ok: true, data: { stored: true } };
+        },
+      },
+      storage: { local: { async get() { return {}; }, async set() {}, async remove() {} } },
+    };
+
+    new CsesAdapter().start({ onAccepted() {}, onAttempt() {}, onEvent() {}, onError(message) { errors.push(message); } });
+    const event = new window.Event('submit', { cancelable: true });
+    Object.defineProperty(event, 'submitter', { value: submitter });
+    form.dispatchEvent(event);
+    await settleCsesAdapter();
+
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(replays, 1);
+    assert.equal(errors.length, 1);
+  });
+}
+
+test('CSES: rapid submit events cause one capture and one native replay', async () => {
+  const { document, window } = parseHTML(readFileSync('tests/fixtures/cses-submit-form.html', 'utf8'));
+  const form = document.querySelector('form');
+  const file = form.querySelector('input[type="file"]');
+  const submitter = form.querySelector('input[type="submit"]');
+  let resolveText;
+  const text = new Promise((resolve) => { resolveText = resolve; });
+  const messages = [];
+  let replays = 0;
+
+  Object.defineProperty(file, 'files', { value: [{ name: 'labyrinth.cpp', text: () => text }] });
+  form.requestSubmit = () => { replays += 1; };
+  globalThis.document = document;
+  globalThis.window = { location: new URL('https://cses.fi/problemset/submit/1068/') };
+  globalThis.chrome = {
+    runtime: { async sendMessage(request) { messages.push(request); return { ok: true, data: { stored: true } }; } },
+    storage: { local: { async get() { return {}; }, async set() {}, async remove() {} } },
+  };
+
+  new CsesAdapter().start({ onAccepted() {}, onAttempt() {}, onEvent() {}, onError() {} });
+  const first = new window.Event('submit', { cancelable: true });
+  const second = new window.Event('submit', { cancelable: true });
+  Object.defineProperty(first, 'submitter', { value: submitter });
+  Object.defineProperty(second, 'submitter', { value: submitter });
+  form.dispatchEvent(first);
+  form.dispatchEvent(second);
+  resolveText('captured source');
+  await settleCsesAdapter();
+
+  assert.equal(first.defaultPrevented, true);
+  assert.equal(second.defaultPrevented, true);
+  assert.equal(messages.length, 1);
   assert.equal(replays, 1);
 });
 
