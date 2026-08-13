@@ -18,6 +18,66 @@ import { HackerEarthAdapter } from '../src/adapters/hackerearth.ts';
 import { adapterFor } from '../src/adapters/index.ts';
 import { PLATFORM_LABELS } from '../src/core/types.ts';
 
+function assertSanitisedCsesFixture(raw) {
+  assert.doesNotMatch(raw, /<input[^>]*type=["']file["'][^>]*\bvalue=/i);
+  assert.doesNotMatch(raw, /\b(?:user(?:name|[_-]?id)?|identity|filename)\s*(?:=|:)/i);
+  assert.doesNotMatch(raw, /(?:data-)?(?:submission|result)[_-]?id\s*=/i);
+  assert.doesNotMatch(raw, /\/problemset\/(?:result|submission)\/[^/"'<\s]+/i);
+  assert.doesNotMatch(raw, /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}|\b1[5-9]\d{11,12}\b/);
+  assert.doesNotMatch(raw, /name=["']csrf_token["'][^>]*\bvalue=/i);
+  assert.doesNotMatch(raw, /(?:csrf|token|session|cookie|authorization|bearer)[^<\n]{0,32}(?:=|:)\s*[^\s<]+/i);
+  assert.doesNotMatch(
+    raw,
+    /<(?:pre|code|textarea)\b|\b(?:source|code)\b\s*(?:=|:)|name=["'](?:source|code)["']/i,
+  );
+  assert.doesNotMatch(raw, /https?:\/\/[^\s"'<]*\?|\?[^\s"'<]+|(?:signature|sig|expires)=/i);
+  assert.doesNotMatch(
+    raw,
+    />\s*(?:test\s+)?(?:input|output)\s*<|\btest\s*(?:input|output)\s*:|\b(?:input|output)\s*:/i,
+  );
+}
+
+function assertSanitisedHackerEarthFixture(raw) {
+  const response = JSON.parse(raw);
+  assert.deepEqual(Object.keys(response), ['status', 'context', 'aggregated_data', 'message']);
+  assert.deepEqual(Object.keys(response.context), ['is_practice', 'event', 'problem_score']);
+  assert.deepEqual(Object.keys(response.aggregated_data), [
+    'result',
+    'result_status',
+    'result_detail',
+    'submission_score',
+    'total_time_used',
+    'max_memory_used',
+    'lang',
+  ]);
+  assert.equal(response.message.length, 1);
+  assert.deepEqual(
+    Object.keys(response.message[0]),
+    response.message[0].status === 'WA'
+      ? ['status', 'status_detail', 'score', 'time_used', 'memory_used', 'diff_output_url']
+      : ['status', 'status_detail', 'score', 'time_used', 'memory_used'],
+  );
+  assert.doesNotMatch(
+    raw,
+    /https?:\/\/[^\s"']*(?:\?|signature=|sig=|expires=)|\?[^\s"']+|(?:csrf|cookie|session|token|authorization|bearer|api[_-]?key|secret|password)/i,
+  );
+  assert.doesNotMatch(
+    raw,
+    /"(?:source|code|request(?:_|-)?(?:body|url|query)|response(?:_|-)?(?:url|query)|query(?:_|-)?(?:params?|string)|(?:submission|result)(?:_|-)?id|id)"\s*:/i,
+  );
+  assert.doesNotMatch(
+    raw,
+    /"(?:timestamp|submitted(?:_|-)?at|created(?:_|-)?at|updated(?:_|-)?at)"\s*:\s*/i,
+  );
+  assert.doesNotMatch(raw, /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}|\b1[5-9]\d{11,12}\b/);
+}
+
+function mutateJson(raw, mutate) {
+  const value = JSON.parse(raw);
+  mutate(value);
+  return JSON.stringify(value);
+}
+
 /* --------------------------------------------------------- platform scope */
 
 test('CSES and HackerEarth public practice routes are the only new adapter routes', () => {
@@ -121,6 +181,34 @@ test('CSES result fixtures retain only final verdict evidence and the public tas
   }
 });
 
+test('CSES fixture privacy checks reject injected personal and submission data', () => {
+  const submit = readFileSync('tests/fixtures/cses-submit-form.html', 'utf8');
+  const accepted = readFileSync('tests/fixtures/cses-result-accepted.html', 'utf8');
+  const rejected = readFileSync('tests/fixtures/cses-result-rejected.html', 'utf8');
+
+  for (const fixture of [submit, accepted, rejected]) assertSanitisedCsesFixture(fixture);
+
+  const unsafe = [
+    submit.replace('name="file">', 'name="file" value="selected.cpp">'),
+    accepted.replace('<main>', '<main><p>Username: fixture-user</p>'),
+    accepted.replace('<main>', '<main><p>2026-08-14T12:00:00Z</p>'),
+    accepted.replace('<main>', '<main data-submission-id="42">'),
+    accepted.replace('/problemset/task/1068/', '/problemset/result/42/'),
+    submit.replace('name="csrf_token">', 'name="csrf_token" value="secret">'),
+    accepted.replace('<main>', '<main><p>session=secret</p>'),
+    accepted.replace('</main>', '<textarea name="code">secret</textarea></main>'),
+    accepted.replace('</main>', '<pre>source</pre></main>'),
+    accepted.replace('</main>', '<input name="source" value="secret"></main>'),
+    accepted.replace('/problemset/task/1068/', '/problemset/task/1068/?signature=secret'),
+    rejected.replace('</table>', '</table><p>Test input: secret</p><p>Output: secret</p>'),
+    rejected.replace('<td>Test</td>', '<td>Input</td>'),
+  ];
+
+  for (const fixture of unsafe) {
+    assert.throws(() => assertSanitisedCsesFixture(fixture), { name: 'AssertionError' });
+  }
+});
+
 test('HackerEarth fixtures preserve the public-practice response contract without sensitive data', () => {
   const paths = readFileSync('tests/fixtures/hackerearth-diagnostic-paths.txt', 'utf8')
     .trim()
@@ -137,7 +225,7 @@ test('HackerEarth fixtures preserve the public-practice response contract withou
   ]);
 
   for (const [response, result] of [[accepted, 'AC'], [rejected, 'WA']]) {
-    assert.deepEqual(Object.keys(response), ['status', 'context', 'aggregated_data', 'message']);
+    assertSanitisedHackerEarthFixture(JSON.stringify(response));
     assert.equal(typeof response.status, 'string');
     assert.equal(typeof response.context.is_practice, 'number');
     assert.equal(typeof response.context.event, 'number');
@@ -155,20 +243,33 @@ test('HackerEarth fixtures preserve the public-practice response contract withou
     assert.equal(typeof response.message[0].score, 'number');
     assert.equal(typeof response.message[0].time_used, 'number');
     assert.equal(typeof response.message[0].memory_used, 'number');
-    assert.doesNotMatch(
-      JSON.stringify(response),
-      /https?:\/\/|csrf|cookie|token|username|source|signature|expires/i,
-    );
-  }
-
-  for (const fixture of [acceptedRaw, rejectedRaw]) {
-    assert.doesNotMatch(fixture, /"(?:submission_?)?id"\s*:/i);
-    assert.doesNotMatch(fixture, /"(?:timestamp|submitted_at|created_at|updated_at)"\s*:/i);
-    assert.doesNotMatch(fixture, /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}|\b1[5-9]\d{11,12}\b/);
   }
 
   assert.equal(accepted.message[0].diff_output_url, undefined);
   assert.equal(rejected.message[0].diff_output_url, '<redacted>');
+});
+
+test('HackerEarth fixture privacy checks reject injected request and result data', () => {
+  const accepted = readFileSync('tests/fixtures/hackerearth-accepted.json', 'utf8');
+  const rejected = readFileSync('tests/fixtures/hackerearth-rejected.json', 'utf8');
+
+  assertSanitisedHackerEarthFixture(accepted);
+  assertSanitisedHackerEarthFixture(rejected);
+
+  const unsafe = [
+    mutateJson(accepted, (value) => { value.source = 'secret'; }),
+    mutateJson(accepted, (value) => { value.aggregated_data.code = 'secret'; }),
+    mutateJson(accepted, (value) => { value.request_query = 'page=1'; }),
+    mutateJson(accepted, (value) => { value.response_url = '/response/?signature=secret'; }),
+    mutateJson(accepted, (value) => { value.context.session_token = 'secret'; }),
+    mutateJson(accepted, (value) => { value.submissionId = '42'; }),
+    mutateJson(accepted, (value) => { value.timestamp = '2026-08-14T12:00:00Z'; }),
+    mutateJson(rejected, (value) => { value.message[0].diff_output_url = 'https://example.test/diff?sig=secret'; }),
+  ];
+
+  for (const fixture of unsafe) {
+    assert.throws(() => assertSanitisedHackerEarthFixture(fixture), { name: 'AssertionError' });
+  }
 });
 
 /* --------------------------------------------------------- shared observer */
@@ -190,6 +291,11 @@ test('only submission endpoints are observed', () => {
   assert.equal(isObserved('https://www.hackerrank.com/rest/hackers/me'), false);
   assert.equal(isObserved('https://www.codechef.com/api/user/profile'), false);
   assert.equal(isObserved('https://analytics.example.com/track'), false);
+  assert.equal(isObserved('https://www.hackerearth.com/submit/AJAX/'), false);
+  assert.equal(
+    isObserved('https://www.hackerearth.com/response/submission-json/fixture-submission-id/AJAX/'),
+    false,
+  );
 });
 
 test('payload helpers survive junk without throwing', () => {

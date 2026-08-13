@@ -397,3 +397,44 @@ npm run build
 All commands completed successfully. The task remains limited to route
 wiring and fixture evidence; HackerEarth submission endpoints remain absent
 from `OBSERVED_URLS`.
+
+## Fix round 3 re-review — privacy and observer rejection
+
+### Privacy-contract hardening
+
+Fixture privacy checks now operate on the checked-in safe artifact and on
+mutations of that same artifact. The CSES checker rejects injected selected
+filenames, username/identity fields, ISO timestamps, submission/result IDs,
+CSRF/token/session-like values, source/code fields, query or signed URLs, and
+test input/output disclosures. It deliberately permits the observed empty
+`csrf_token` input and the final `OUTPUT LIMIT EXCEEDED` verdict.
+
+The HackerEarth checker allowlists the complete root, `context`,
+`aggregated_data`, and `message` key sets before applying raw bans. Mutations
+prove rejection of source/code data, request/response query fields, session or
+credential data, submission IDs, timestamps, and query-bearing signed URLs.
+The real fixture contents remain unchanged and synthetic.
+
+### Observer safety
+
+The observer regression suite now explicitly asserts that both documented
+source-bearing HackerEarth endpoints are rejected by `isObserved`:
+
+- `https://www.hackerearth.com/submit/AJAX/`
+- `https://www.hackerearth.com/response/submission-json/fixture-submission-id/AJAX/`
+
+No endpoint pattern, runtime payload collection, request-body handling, or
+parser behaviour was added.
+
+### Verification
+
+```sh
+node --test tests/adapters.test.mjs
+npm test
+npm run typecheck
+npm run build
+```
+
+The focused suite reports 33 passing tests. Full verification reports 264
+passing tests; TypeScript completes without diagnostics and the unpacked
+extension build completes successfully.
