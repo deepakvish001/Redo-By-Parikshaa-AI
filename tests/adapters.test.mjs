@@ -27,6 +27,9 @@ test('CSES and HackerEarth public practice routes are the only new adapter route
   const hackerEarthProblem = new URL(
     'https://www.hackerearth.com/practice/algorithms/graphs/breadth-first-search/practice-problems/algorithm/monk-and-the-islands/',
   );
+  const hackerEarthPublicPractice = new URL(
+    'https://www.hackerearth.com/community/problem/algorithm/make-an-array-85abd7ad/',
+  );
   const hackerEarthChallenge = new URL('https://www.hackerearth.com/challenges/');
   const hackerEarthSql = new URL('https://www.hackerearth.com/practice/sql/');
 
@@ -38,13 +41,16 @@ test('CSES and HackerEarth public practice routes are the only new adapter route
   assert.equal(new CsesAdapter().currentSlug(csesContest), null);
   assert.equal(new HackerEarthAdapter().matches(hackerEarthPractice), true);
   assert.equal(new HackerEarthAdapter().matches(hackerEarthProblem), true);
+  assert.equal(new HackerEarthAdapter().matches(hackerEarthPublicPractice), true);
   assert.equal(new HackerEarthAdapter().matches(hackerEarthChallenge), false);
   assert.equal(new HackerEarthAdapter().matches(hackerEarthSql), false);
   assert.equal(new HackerEarthAdapter().currentSlug(hackerEarthPractice), null);
   assert.equal(new HackerEarthAdapter().currentSlug(hackerEarthProblem), 'monk-and-the-islands');
+  assert.equal(new HackerEarthAdapter().currentSlug(hackerEarthPublicPractice), 'make-an-array-85abd7ad');
   assert.equal(new HackerEarthAdapter().currentSlug(hackerEarthChallenge), null);
   assert.equal(adapterFor(csesTask)?.platform, 'cses');
   assert.equal(adapterFor(hackerEarthPractice)?.platform, 'hackerearth');
+  assert.equal(adapterFor(hackerEarthPublicPractice)?.platform, 'hackerearth');
 });
 
 test('CSES submit fixture preserves the observed form contract without secret values', () => {
@@ -76,6 +82,45 @@ test('CSES result fixtures retain only final verdict evidence and the public tas
     assert.ok(document.querySelector('table caption')?.textContent?.includes('Test results'));
     assert.equal(document.querySelector('input, pre, textarea, code'), null);
   }
+});
+
+test('HackerEarth fixtures preserve the public-practice response contract without sensitive data', () => {
+  const paths = readFileSync('tests/fixtures/hackerearth-diagnostic-paths.txt', 'utf8')
+    .trim()
+    .split('\n');
+  const accepted = JSON.parse(readFileSync('tests/fixtures/hackerearth-accepted.json', 'utf8'));
+  const rejected = JSON.parse(readFileSync('tests/fixtures/hackerearth-rejected.json', 'utf8'));
+
+  assert.deepEqual(paths, [
+    'PAGE /community/problem/algorithm/make-an-array-85abd7ad/',
+    'POST /submit/AJAX/',
+    'GET /response/submission-json/:submissionId/AJAX/',
+  ]);
+
+  for (const [response, result] of [[accepted, 'AC'], [rejected, 'WA']]) {
+    assert.deepEqual(Object.keys(response), ['status', 'context', 'aggregated_data', 'message']);
+    assert.equal(typeof response.status, 'string');
+    assert.equal(typeof response.context.is_practice, 'number');
+    assert.equal(typeof response.context.event, 'number');
+    assert.equal(typeof response.context.problem_score, 'number');
+    assert.equal(response.aggregated_data.result, result);
+    assert.equal(typeof response.aggregated_data.result_status, 'string');
+    assert.equal(typeof response.aggregated_data.result_detail, 'string');
+    assert.equal(typeof response.aggregated_data.submission_score, 'number');
+    assert.equal(typeof response.aggregated_data.total_time_used, 'number');
+    assert.equal(typeof response.aggregated_data.max_memory_used, 'number');
+    assert.equal(typeof response.aggregated_data.lang, 'string');
+    assert.equal(response.message.length, 1);
+    assert.equal(typeof response.message[0].status, 'string');
+    assert.equal(typeof response.message[0].status_detail, 'string');
+    assert.equal(typeof response.message[0].score, 'number');
+    assert.equal(typeof response.message[0].time_used, 'number');
+    assert.equal(typeof response.message[0].memory_used, 'number');
+    assert.doesNotMatch(JSON.stringify(response), /https?:\/\/|csrf|cookie|token|username|source/i);
+  }
+
+  assert.equal(accepted.message[0].diff_output_url, undefined);
+  assert.equal(rejected.message[0].diff_output_url, '<redacted>');
 });
 
 /* --------------------------------------------------------- shared observer */

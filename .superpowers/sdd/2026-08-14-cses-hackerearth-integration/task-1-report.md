@@ -281,3 +281,66 @@ result/test URL, external URL, source container, or test source/output marker.
 HackerEarth diagnostic paths and final sanitised JSON remain blocked pending
 separate authenticated public-practice evidence. No endpoint or payload has
 been inferred or invented.
+
+## Fix round 2 — authenticated HackerEarth fixtures
+
+### Evidence incorporated
+
+Authenticated public-practice evidence identifies the public algorithm page
+`/community/problem/algorithm/make-an-array-85abd7ad/`, a user-initiated
+`POST /submit/AJAX/`, and a final
+`GET /response/submission-json/:submissionId/AJAX/`. The final response has
+the documented `status`, `context`, `aggregated_data`, and `message` shapes;
+the fixture contract preserves `AC` and `WA`, including the wrong-answer-only
+`diff_output_url` field with a redacted placeholder.
+
+### Added files and scope correction
+
+- `tests/fixtures/hackerearth-diagnostic-paths.txt`
+- `tests/fixtures/hackerearth-accepted.json`
+- `tests/fixtures/hackerearth-rejected.json`
+
+The HackerEarth adapter and manifest now include exactly
+`/community/problem/algorithm/*` in addition to the prior public-practice
+paths, so diagnostics can run on the authenticated public algorithm page.
+This is not a broad `/community/*` permission and does not include contests,
+hiring, assessments, hackathons, projects, SQL, data science, or file-upload
+routes.
+
+The endpoint strings are retained only as diagnostic fixture evidence.
+`OBSERVED_URLS` is intentionally unchanged: observing `POST /submit/AJAX/`
+would relay its request body, which can contain source code. Submission capture
+and endpoint registration remain deferred to the fixture-backed follow-up
+task.
+
+Both JSON fixtures use only synthetic values. They contain no submission ID,
+timestamp, source, request body, signed URL, username, CSRF/session value, or
+other credential. The rejected fixture represents the documented optional
+field as `"diff_output_url": "<redacted>"`.
+
+### TDD and verification
+
+The public community route and HackerEarth fixture-contract assertions were
+added first.
+
+```sh
+node --test tests/adapters.test.mjs
+```
+
+RED output (exit 1): the public community route did not match and the missing
+diagnostic-path fixture raised the expected `ENOENT`; 27 passed, 2 failed.
+
+After adding the exact route scope and sanitised fixtures:
+
+```sh
+node --test tests/adapters.test.mjs
+npm test
+npm run typecheck
+npm run build
+```
+
+GREEN output (all exit 0): 29 focused tests passed; 260 full tests passed;
+`tsc --noEmit` completed without diagnostics; and the unpacked extension build
+completed successfully. A fixture safety scan found no URL, CSRF, cookie,
+token, username, source, signature, or expiry value in the HackerEarth fixture
+files.

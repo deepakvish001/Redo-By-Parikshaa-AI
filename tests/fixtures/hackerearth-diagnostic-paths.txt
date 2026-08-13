@@ -1,0 +1,3 @@
+PAGE /community/problem/algorithm/make-an-array-85abd7ad/
+POST /submit/AJAX/
+GET /response/submission-json/:submissionId/AJAX/
