@@ -353,11 +353,10 @@ your own handle, the submission page is fetched for the source and, where the si
 the problem page for tags and difficulty.
 
 **Judges that poll their own API** — LeetCode, CodeChef, HackerRank, GeeksforGeeks and
-HackerEarth public practice — are
-watched by a single shared `MAIN`-world observer (`src/content/observer.ts`). It wraps `fetch`
-and `XMLHttpRequest`, and for a narrow allowlist of submission URLs it relays the request body,
-the response body and the current editor contents to the adapter, which decides what they mean.
-It never blocks, delays or rewrites a request.
+HackerEarth public practice — are watched by a single shared `MAIN`-world observer
+(`src/content/observer.ts`). It wraps `fetch` and `XMLHttpRequest`, and for a narrow allowlist
+relays only the data each adapter is permitted to use. It never blocks, delays or rewrites a
+request.
 
 The allowlist is deliberately narrow (`src/adapters/observed.ts`): the observer relays request
 bodies, and a submission request body contains your source code, so nothing broader than the
@@ -371,13 +370,19 @@ short-lived capture to the verdict. The capture expires after 15 minutes; if it 
 expired, the accepted result is not saved as a solved record.
 
 **HackerEarth is deliberately result-only.** The observer allowlists only the fixture-confirmed
-public-practice final-result poll, not the source-bearing `/submit/AJAX/` request. Its final
-response supplies the verdict and available judge details; an accepted record requires the
-current editor snapshot for source. If no editor source is available, Redo records the final
-attempt but does not save a solved record. It records the page title, canonical URL, language,
-verdict, and runtime or memory when available; HackerEarth difficulty remains `unknown` and tags
-are not recorded. Category navigation pages are not enough to authorise observation: the result
-poll is read only on an exact public programming-problem URL with a stable problem slug.
+public-practice final-result poll, never the source-bearing `/submit/AJAX/` or a Run request, and
+the HackerEarth adapter never reads a request body. Its final response supplies the verdict and
+available judge details; an accepted record requires the current editor snapshot as the only
+source fallback. If no editor source is available, Redo records the final attempt but does not
+save a solved record. It records the page title, canonical URL, language, verdict, and runtime
+or memory when available; HackerEarth difficulty remains `unknown` and tags are not recorded.
+
+The manifest deliberately injects on the public `/practice/*` family for navigation and on the
+canonical community-algorithm family, but injection is not permission to observe or track. At
+runtime, both the observer and adapter require an exact public programming-problem URL with a
+stable slug before they read a result, read editor contents, relay an exchange, or write data.
+Category pages and nested non-problem routes remain inert even though the broad public-practice
+match is injected.
 
 | Platform | Detection | Source of the code | Difficulty | Tags |
 | --- | --- | --- | --- | --- |

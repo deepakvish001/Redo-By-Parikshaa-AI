@@ -174,3 +174,79 @@ The artifact check confirmed the manifest and all five extension scripts in
 `git diff --check` passed. `npm ci` again reported the existing high-severity
 dependency advisory and pending install-script approval warnings; this fix
 round made no dependency changes.
+
+## Remediation round — worker-owned CSES result state and terminal verdicts
+
+### Root causes
+
+- CSES kept rejected-attempt accumulation and result-page deduplication inside
+  each `CsesAdapter` instance. A normal navigation or reload creates a fresh
+  instance, which both lost earlier rejected attempts and allowed the same
+  result to append another journal event.
+- HackerEarth recognised only `AC` and `WA` as terminal response codes, so
+  fixture-shaped `TLE`, `RE`, `CE`, and `MLE` responses were silently ignored.
+
+### TDD evidence
+
+The initial focused red run (`node --test tests/adapters.test.mjs`) produced
+the two expected failures: a fresh CSES accepted-result page appended a second
+accepted event (`[false, true, true]` rather than `[false, true]`), and `TLE`
+parsed as `undefined` rather than a rejected final result. No production code
+was changed before that run.
+
+### Remediation
+
+- Added a serialized worker-side CSES final-result claim. It stores only a
+  SHA-256 fingerprint of the task/result path, never the raw path or source;
+  it atomically suppresses duplicates, preserves per-task failed attempts, and
+  consumes the existing pending source only for a new acceptance. Selected
+  source storage retains its existing 15-minute expiry and never enters
+  diagnostics or result state.
+- Reworked the CSES adapter so it emits attempts, journal events, and accepted
+  submissions only after a successful new worker claim. Separate adapter/page
+  loads now accumulate rejected attempts correctly and a reload of the same
+  accepted result cannot write another event.
+- Recognised `TLE`, `RE`, `CE`, and `MLE` as known HackerEarth terminal
+  failures. Pending and unknown response codes remain ignored.
+- Corrected the integration design and README: HackerEarth is result-only and
+  editor-only for accepted source fallback; no Run/Submit request body is
+  observed or consumed. They now also distinguish broad public-route manifest
+  injection from strict runtime observer/adapter gating on exact trackable
+  problem pages.
+
+### Regression coverage
+
+- A separate-adapter CSES test renders a rejected result, then an accepted
+  result, then a reload of that accepted page. It asserts one failed attempt,
+  exactly two journal events, a solved record with two attempts, and no error.
+- A HackerEarth fixture-shaped terminal-verdict table proves TLE, RE, CE, and
+  MLE parse as failures, with a TLE exchange proving one failed attempt and
+  one journal event. The adjacent test continues to reject pending, unknown,
+  and non-practice responses.
+
+### Focused verification
+
+```sh
+node --test tests/adapters.test.mjs
+# 54 passing, 0 failing
+
+npm run typecheck
+# tsc --noEmit completed without diagnostics
+```
+
+### Full verification
+
+```sh
+npm test
+# 289 passing, 0 failing
+
+npm run typecheck
+# tsc --noEmit completed without diagnostics
+
+npm run build
+# pages, background.js, content.js, observer.js, parikshaa.js,
+# parikshaa-injected.js, manifest, and assets built successfully
+
+git diff --check
+# no whitespace errors
+```

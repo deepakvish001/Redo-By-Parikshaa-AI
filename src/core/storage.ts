@@ -5,6 +5,8 @@ import type { UpsolveItem } from './upsolve.ts';
 import {
   PLATFORMS,
   type AttemptEvent,
+  type CsesFinalResult,
+  type CsesFinalResultClaim,
   type PendingCsesSubmission,
   type Platform,
   type Settings,
@@ -20,11 +22,18 @@ const KEYS = {
   parikshaaApi: 'parikshaaApiKey',
   upsolve: 'upsolve',
   pendingCsesSubmissions: 'pendingCsesSubmissions',
+  csesFinalResultState: 'csesFinalResultState',
 } as const;
 
 export const PENDING_CSES_SUBMISSION_TTL_MS = 15 * 60_000;
 
 let pendingCsesOperations: Promise<void> = Promise.resolve();
+
+interface CsesFinalResultState {
+  failedAttempts: Record<string, number>;
+  /** SHA-256 fingerprints keep raw CSES result paths out of durable storage. */
+  seenResultFingerprints: Record<string, true>;
+}
 
 /** Aggregate counters that do not belong to any single problem. */
 export interface Meta {
@@ -104,6 +113,19 @@ export function isValidPendingCsesSubmission(
   ) && Number.isFinite(value.submittedAt);
 }
 
+/** Validates the privacy-preserving, final-result worker message boundary. */
+export function isValidCsesFinalResult(result: unknown): result is CsesFinalResult {
+  if (!result || typeof result !== 'object') return false;
+  const value = result as Partial<CsesFinalResult>;
+  return typeof value.taskId === 'string'
+    && value.taskId.trim().length > 0
+    && typeof value.resultPath === 'string'
+    && /^\/problemset\/result\/[^/?#]+\/?$/.test(value.resultPath)
+    && typeof value.verdict === 'string'
+    && value.verdict.trim().length > 0
+    && typeof value.accepted === 'boolean';
+}
+
 /**
  * `chrome.storage.local` does not provide a compare-and-set. Pending CSES
  * records share one map, so all reads and writes are sequenced in this worker
@@ -134,6 +156,30 @@ async function readPendingCsesSubmissions(now: number): Promise<Record<string, P
     await chrome.storage.local.set({ [KEYS.pendingCsesSubmissions]: fresh });
   }
   return fresh;
+}
+
+function normaliseCsesFinalResultState(value: unknown): CsesFinalResultState {
+  if (!value || typeof value !== 'object') {
+    return { failedAttempts: {}, seenResultFingerprints: {} };
+  }
+  const state = value as Partial<CsesFinalResultState>;
+  const failedAttempts = Object.fromEntries(
+    Object.entries(state.failedAttempts ?? {}).filter(
+      ([taskId, count]) => taskId.trim().length > 0 && Number.isSafeInteger(count) && count > 0,
+    ),
+  ) as Record<string, number>;
+  const seenResultFingerprints = Object.fromEntries(
+    Object.entries(state.seenResultFingerprints ?? {}).filter(
+      ([fingerprint, seen]) => /^[a-f0-9]{64}$/.test(fingerprint) && seen === true,
+    ),
+  ) as Record<string, true>;
+  return { failedAttempts, seenResultFingerprints };
+}
+
+async function csesResultFingerprint(result: CsesFinalResult): Promise<string> {
+  const data = new TextEncoder().encode(`${result.taskId}:${result.resultPath}`);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /** Saves one selected CSES file per task and prunes every expired capture. */
@@ -180,6 +226,44 @@ export async function consumePendingCsesSubmission(
     delete pending[taskId];
     await chrome.storage.local.set({ [KEYS.pendingCsesSubmissions]: pending });
     return submission;
+  });
+}
+
+/**
+ * Claims one final CSES result in the worker before a page adapter emits any
+ * journal event. The claim, failed-attempt accumulator, and accepted-source
+ * consumption share one queue so navigation/reload cannot duplicate a result
+ * or lose earlier failures.
+ */
+export async function claimCsesFinalResult(
+  result: CsesFinalResult,
+  now = Date.now(),
+): Promise<CsesFinalResultClaim> {
+  if (!isValidCsesFinalResult(result)) throw new Error('CSES final result is malformed.');
+  const fingerprint = await csesResultFingerprint(result);
+  return withPendingCsesLock(async () => {
+    const state = normaliseCsesFinalResultState(
+      await readKey<unknown>(KEYS.csesFinalResultState, undefined),
+    );
+    if (state.seenResultFingerprints[fingerprint]) return { recorded: false };
+
+    state.seenResultFingerprints[fingerprint] = true;
+    if (!result.accepted) {
+      state.failedAttempts[result.taskId] = (state.failedAttempts[result.taskId] ?? 0) + 1;
+      await chrome.storage.local.set({ [KEYS.csesFinalResultState]: state });
+      return { recorded: true };
+    }
+
+    const pending = await readPendingCsesSubmissions(now);
+    const source = pending[result.taskId];
+    if (source) delete pending[result.taskId];
+    const attempts = (state.failedAttempts[result.taskId] ?? 0) + 1;
+    delete state.failedAttempts[result.taskId];
+    await chrome.storage.local.set({
+      [KEYS.csesFinalResultState]: state,
+      [KEYS.pendingCsesSubmissions]: pending,
+    });
+    return { recorded: true, attempts, ...(source ? { pending: source } : {}) };
   });
 }
 

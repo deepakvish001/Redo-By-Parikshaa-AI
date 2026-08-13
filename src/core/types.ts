@@ -83,6 +83,24 @@ export interface PendingCsesSubmission {
   code: string;
 }
 
+/** A final CSES result, stripped to the data needed for worker-side claiming. */
+export interface CsesFinalResult {
+  taskId: string;
+  /** Path only: never a query string, source file, or account identifier. */
+  resultPath: string;
+  verdict: string;
+  accepted: boolean;
+}
+
+/** The worker's one-shot decision for a final CSES result page. */
+export interface CsesFinalResultClaim {
+  recorded: boolean;
+  /** Present only for a newly claimed accepted result. */
+  attempts?: number;
+  /** Consumed with a newly claimed accepted result, if it is still fresh. */
+  pending?: PendingCsesSubmission;
+}
+
 /**
  * Everything that happens to a problem other than a judge verdict: opening it,
  * solving it, revising it, taking a hint, a sync succeeding or failing, notes

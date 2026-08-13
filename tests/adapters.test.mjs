@@ -524,7 +524,22 @@ test('CSES: duplicate final result renders create one rejection and one accepted
       },
     },
   });
+  const finalState = { failedAttempts: {}, seenResultPaths: new Set() };
   globalThis.chrome.runtime.sendMessage = async (request) => {
+    if (request.type === 'cses:result:claim') {
+      const { result } = request;
+      if (finalState.seenResultPaths.has(result.resultPath)) return { ok: true, data: { recorded: false } };
+      finalState.seenResultPaths.add(result.resultPath);
+      if (!result.accepted) {
+        finalState.failedAttempts[result.taskId] = (finalState.failedAttempts[result.taskId] ?? 0) + 1;
+        return { ok: true, data: { recorded: true } };
+      }
+      const pending = stored.pendingCsesSubmissions[result.taskId];
+      delete stored.pendingCsesSubmissions[result.taskId];
+      const attempts = (finalState.failedAttempts[result.taskId] ?? 0) + 1;
+      delete finalState.failedAttempts[result.taskId];
+      return { ok: true, data: { recorded: true, pending, attempts } };
+    }
     if (request.type !== 'cses:pending:consume') return { ok: true, data: { stored: true } };
     const pending = stored.pendingCsesSubmissions[request.taskId];
     delete stored.pendingCsesSubmissions[request.taskId];
@@ -538,10 +553,15 @@ test('CSES: duplicate final result renders create one rejection and one accepted
   };
   const adapter = new CsesAdapter();
 
-  for (const html of [rejected, rejected, accepted, accepted]) {
+  for (const [html, resultPath] of [
+    [rejected, '/problemset/result/rejected-fixture/'],
+    [rejected, '/problemset/result/rejected-fixture/'],
+    [accepted, '/problemset/result/accepted-fixture/'],
+    [accepted, '/problemset/result/accepted-fixture/'],
+  ]) {
     const { document } = parseHTML(html);
     globalThis.document = document;
-    globalThis.window = { location: new URL('https://cses.fi/problemset/result/fixture/') };
+    globalThis.window = { location: new URL(`https://cses.fi${resultPath}`) };
     adapter.start(context);
     await settleCsesAdapter();
   }
@@ -557,6 +577,70 @@ test('CSES: duplicate final result renders create one rejection and one accepted
     code: 'captured source',
   }]);
   assert.deepEqual(stored.pendingCsesSubmissions, {});
+});
+
+test('CSES: worker-owned final state survives fresh result pages without duplicate journal events', async () => {
+  const rejected = readFileSync('tests/fixtures/cses-result-rejected.html', 'utf8');
+  const accepted = readFileSync('tests/fixtures/cses-result-accepted.html', 'utf8');
+  const events = [];
+  const attempts = [];
+  const solved = [];
+  const errors = [];
+  const stored = installCsesStorage({
+    pendingCsesSubmissions: {
+      1068: {
+        taskId: '1068', submittedAt: Date.now(), filename: 'solution.cpp', language: 'C++', code: 'captured source',
+      },
+    },
+  });
+  const finalState = { failedAttempts: {}, seenResultPaths: new Set() };
+  globalThis.chrome.runtime.sendMessage = async (request) => {
+    if (request.type === 'cses:result:claim') {
+      const { result } = request;
+      if (finalState.seenResultPaths.has(result.resultPath)) return { ok: true, data: { recorded: false } };
+      finalState.seenResultPaths.add(result.resultPath);
+      if (!result.accepted) {
+        finalState.failedAttempts[result.taskId] = (finalState.failedAttempts[result.taskId] ?? 0) + 1;
+        return { ok: true, data: { recorded: true } };
+      }
+      const pending = stored.pendingCsesSubmissions[result.taskId];
+      delete stored.pendingCsesSubmissions[result.taskId];
+      const count = (finalState.failedAttempts[result.taskId] ?? 0) + 1;
+      delete finalState.failedAttempts[result.taskId];
+      return { ok: true, data: { recorded: true, pending, attempts: count } };
+    }
+    if (request.type === 'cses:pending:consume') {
+      const pending = stored.pendingCsesSubmissions[request.taskId];
+      delete stored.pendingCsesSubmissions[request.taskId];
+      return { ok: true, data: { pending } };
+    }
+    return { ok: true, data: { stored: true } };
+  };
+  const context = {
+    onAccepted(submission) { solved.push(submission); },
+    onAttempt(problemKey) { attempts.push(problemKey); },
+    onEvent(slug, event) { events.push({ slug, event }); },
+    onError(message) { errors.push(message); },
+  };
+
+  for (const [html, resultPath] of [
+    [rejected, '/problemset/result/rejected-fixture/'],
+    [accepted, '/problemset/result/accepted-fixture/'],
+    [accepted, '/problemset/result/accepted-fixture/'],
+  ]) {
+    const { document } = parseHTML(html);
+    globalThis.document = document;
+    globalThis.window = { location: new URL(`https://cses.fi${resultPath}`) };
+    new CsesAdapter().start(context);
+    await settleCsesAdapter();
+  }
+
+  assert.deepEqual(attempts, ['cses:1068']);
+  assert.deepEqual(events.map(({ event }) => event.accepted), [false, true]);
+  assert.deepEqual(solved.map(({ attempts: count, code }) => ({ attempts: count, code })), [{
+    attempts: 2, code: 'captured source',
+  }]);
+  assert.deepEqual(errors, []);
 });
 
 test('HackerEarth fixtures preserve the public-practice response contract without sensitive data', () => {
@@ -744,16 +828,63 @@ test('HackerEarth: accepted events omit unavailable runtime and memory', () => {
   assert.equal(Object.hasOwn(events[0], 'memory'), false);
 });
 
-test('HackerEarth: assessment routes and non-final or non-practice responses are ignored', () => {
+test('HackerEarth: assessment routes and pending, unknown, or non-practice responses are ignored', () => {
   const accepted = readFileSync('tests/fixtures/hackerearth-accepted.json', 'utf8');
   const pending = mutateJson(accepted, (value) => { value.status = 'queued'; });
   const nonPractice = mutateJson(accepted, (value) => { value.context.is_practice = 0; });
-  const unrecognised = mutateJson(accepted, (value) => { value.aggregated_data.result = 'TLE'; });
+  const unrecognised = mutateJson(accepted, (value) => {
+    value.aggregated_data.result = 'UNKNOWN';
+    value.message[0].status = 'UNKNOWN';
+  });
 
   assert.equal(new HackerEarthAdapter().matches(new URL('https://www.hackerearth.com/assessment/test/')), false);
   assert.equal(readHackerEarthResult(HACKEREARTH_RESULT_URL, pending), undefined);
   assert.equal(readHackerEarthResult(HACKEREARTH_RESULT_URL, nonPractice), undefined);
   assert.equal(readHackerEarthResult(HACKEREARTH_RESULT_URL, unrecognised), undefined);
+});
+
+test('HackerEarth: fixture-shaped terminal failures beyond WA create failed attempts and journal events', () => {
+  const accepted = readFileSync('tests/fixtures/hackerearth-accepted.json', 'utf8');
+  const terminalFailures = ['TLE', 'RE', 'CE', 'MLE'];
+
+  for (const code of terminalFailures) {
+    const response = mutateJson(accepted, (value) => {
+      value.aggregated_data.result = code;
+      value.aggregated_data.result_status = `fixture-${code.toLowerCase()}`;
+      value.aggregated_data.result_detail = 'sanitized failure';
+      value.message[0].status = code;
+      value.message[0].status_detail = 'sanitized failure';
+    });
+    const result = readHackerEarthResult(HACKEREARTH_RESULT_URL, response);
+    assert.equal(result?.accepted, false, code);
+    assert.equal(result?.status, `fixture-${code.toLowerCase()}`, code);
+  }
+
+  const tle = mutateJson(accepted, (value) => {
+    value.aggregated_data.result = 'TLE';
+    value.aggregated_data.result_status = 'fixture-tle';
+    value.aggregated_data.result_detail = 'sanitized failure';
+    value.message[0].status = 'TLE';
+    value.message[0].status_detail = 'sanitized failure';
+  });
+  const attempts = [];
+  const events = [];
+  const publish = installHackerEarthPage();
+  new HackerEarthAdapter().start({
+    onAccepted() {},
+    onAttempt(problemKey) { attempts.push(problemKey); },
+    onEvent(slug, event) { events.push({ slug, event }); },
+    onError(message) { throw new Error(message); },
+  });
+  publish({
+    url: HACKEREARTH_RESULT_URL.replace('fixture-submission-id', 'fixture-tle-id'),
+    responseBody: tle,
+  });
+
+  assert.deepEqual(attempts, ['hackerearth:make-an-array-85abd7ad']);
+  assert.deepEqual(events.map(({ slug, event }) => ({ slug, accepted: event.accepted, verdict: event.verdict })), [{
+    slug: 'make-an-array-85abd7ad', accepted: false, verdict: 'fixture-tle',
+  }]);
 });
 
 test('HackerEarth: final result polls record one failure and one editor-backed acceptance', () => {

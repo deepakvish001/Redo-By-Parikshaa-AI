@@ -47,8 +47,9 @@ data store.
 
 ### Manifest and route isolation
 
-Add CSES and HackerEarth host permissions. Content scripts and the MAIN-world
-observer will be scoped narrowly:
+Add CSES and HackerEarth host permissions. The manifest injects content and
+MAIN-world scripts across the approved public route families so practice
+navigation and canonical pages can initialise normally:
 
 - CSES: the problem-set and normal submission pages required to associate a
   submitted solution with `/problemset/task/<id>`.
@@ -59,9 +60,12 @@ observer will be scoped narrowly:
 
 No script will be declared for any other HackerEarth `/community/` route, or
 for assessment, contest, hiring, hackathon, project, SQL, data-science,
-file-upload, or recruitment routes. Each adapter also verifies the active
-route before it processes any observed request, so a broad host permission
-cannot accidentally turn into tracking outside the declared scope.
+file-upload, or recruitment routes. Manifest injection is not tracking
+authorisation: at runtime the observer and adapter both require an exact,
+stable public programming-problem slug before they read a result response,
+read editor contents, relay an exchange, or create data. Category pages and
+non-problem nested pages under the broadly injected `/practice/*` family are
+therefore inert.
 
 ### CSES form lifecycle
 
@@ -88,10 +92,14 @@ shared observer can read. `CsesAdapter` therefore uses a separate lifecycle:
    records are one per task and expire after 15 minutes, preventing an old
    source file from being attached to a later result.
 2. On the normal CSES result page, parse the final DOM verdict and its task
-   identifier. Match it to the unexpired pending record for that task.
-3. Record a rejected final verdict as one submit attempt. On an accepted
-   verdict, consume the pending record and emit `AcceptedSubmission` with its
-   source, language, title, and canonical task URL.
+   identifier. The worker atomically claims the final result using an opaque
+   fingerprint, accumulates rejected attempts by task, and consumes any fresh
+   pending record only for a newly claimed acceptance. This state is serialized
+   in the worker, so it survives separate content-page adapters and reloads;
+   raw result paths and source never enter this result state.
+3. Record a newly claimed rejected final verdict as one submit attempt. On a
+   newly claimed accepted verdict, emit `AcceptedSubmission` with its source,
+   language, title, canonical task URL, and the worker's accumulated count.
 
 This reads no arbitrary local file: it accesses only the file already selected
 by the user in CSES's own submission form. It never changes the selected file,
@@ -107,20 +115,22 @@ network observer. It owns:
 - route matching and stable problem-slug generation;
 - public page metadata extraction (title, difficulty when available, tags when
   available, and canonical URL);
-- parsing its own Run/Submit request and verdict response;
-- source and language recovery from the request body or editor fallback;
+- parsing the fixture-confirmed final-result response only;
+- source recovery from the current editor only;
 - per-problem attempt counts and result deduplication; and
 - mapping the site’s wording to `AttemptEvent` without inventing unavailable
   judge statistics.
 
 ### Shared platform wiring
 
-The shared observer remains passive and is used only for HackerEarth. It only
-clones and relays responses for explicitly allowlisted HackerEarth endpoints;
-it never delays, rewrites, or submits page traffic. Exact endpoint patterns
-are confirmed with a logged-in public-practice smoke session before they enter
-`OBSERVED_URLS`; diagnostics report only origin and path, never query strings
-or source code.
+The shared observer remains passive across supported judges. For HackerEarth,
+it allows only the fixture-confirmed final-result poll and never the
+source-bearing Run/Submit request. The HackerEarth adapter does not read a
+request body: accepted source recovery falls back only to the current editor.
+The observer never delays, rewrites, or submits page traffic. Exact endpoint
+patterns are confirmed with a logged-in public-practice smoke session before
+they enter `OBSERVED_URLS`; diagnostics report only origin and path, never
+query strings or source code.
 
 ## Data flow
 
@@ -129,8 +139,9 @@ or source code.
    current revision panel.
 2. CSES briefly holds a native submit only until it persists the user-selected
    source file, re-submits the untouched form once, then reads the final
-   verdict from the result-page DOM. HackerEarth observes an allowlisted Run
-   or Submit endpoint and parses the final response.
+   verdict from the result-page DOM. HackerEarth observes its allowlisted
+   final-result poll and parses that response without inspecting a Run or
+   Submit request body.
 3. The platform records an `AttemptEvent` for a final result. Pending results
    are ignored; duplicate HackerEarth result polls and duplicate CSES result
    page renders are recorded once.
@@ -155,10 +166,11 @@ or source code.
 ## Tests and verification
 
 - Unit tests cover CSES form capture, file-extension language mapping, pending
-  record expiry, accepted and rejected result-page DOMs, and duplicate result
-  renders. HackerEarth tests cover URL scoping, metadata extraction, accepted
-  and rejected verdicts, pending responses, duplicates, editor source fallback,
-  missing source, and unavailable judge metrics.
+  record expiry, separate-adapter result claims, failed-attempt carryover, and
+  duplicate result-page reloads. HackerEarth tests cover URL scoping, metadata
+  extraction, accepted and terminal rejected verdicts (WA, TLE, RE, CE, MLE),
+  pending/unknown responses, duplicates, editor source fallback, missing
+  source, and unavailable judge metrics.
 - Observer tests assert that only confirmed public-practice HackerEarth
   endpoints are relayed.
 - Tests assert that assessment, contest, and other excluded HackerEarth paths

@@ -7,7 +7,7 @@ import {
 import { onExchange, parseJson } from './exchange.ts';
 import type { AdapterContext, PlatformAdapter } from './types.ts';
 
-const FINAL_RESULTS = new Set(['AC', 'WA']);
+const FINAL_RESULTS = new Set(['AC', 'WA', 'TLE', 'RE', 'CE', 'MLE']);
 const PENDING_STATUS = /queued|compiling|running|processing|pending/i;
 
 export interface HackerEarthResult {

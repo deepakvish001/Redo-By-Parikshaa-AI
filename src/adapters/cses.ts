@@ -90,9 +90,6 @@ function resultTitle(document_: Document): string | undefined {
 export class CsesAdapter implements PlatformAdapter {
   readonly platform = 'cses' as const;
 
-  private readonly failedAttempts = new Map<string, number>();
-  private readonly renderedResults = new Set<string>();
-
   matches(url: URL): boolean {
     return url.hostname === 'cses.fi' && PROBLEMSET_PATH.test(url.pathname);
   }
@@ -180,12 +177,18 @@ export class CsesAdapter implements PlatformAdapter {
   private async processResult(context: AdapterContext, url: URL): Promise<void> {
     const result = parseCsesResult(document, url.href);
     if (!result) return;
-    const renderKey = `${url.href}:${result.taskId}:${result.verdict}`;
-    if (this.renderedResults.has(renderKey)) return;
-    this.renderedResults.add(renderKey);
+    const claim = await send({
+      type: 'cses:result:claim',
+      result: {
+        taskId: result.taskId,
+        resultPath: url.pathname,
+        verdict: result.verdict,
+        accepted: result.accepted,
+      },
+    });
+    if (!claim.recorded) return;
 
     if (!result.accepted) {
-      this.failedAttempts.set(result.taskId, (this.failedAttempts.get(result.taskId) ?? 0) + 1);
       context.onAttempt(`cses:${result.taskId}`);
       context.onEvent(result.taskId, {
         at: Date.now(), kind: 'submit', verdict: result.verdict, accepted: false,
@@ -193,18 +196,15 @@ export class CsesAdapter implements PlatformAdapter {
       return;
     }
 
-    const { pending } = await send({ type: 'cses:pending:consume', taskId: result.taskId });
     context.onEvent(result.taskId, {
       at: Date.now(), kind: 'submit', verdict: result.verdict, accepted: true,
-      language: pending?.language,
+      language: claim.pending?.language,
     });
-    if (!pending) {
+    if (!claim.pending) {
       context.onError('Accepted on CSES, but the selected source file could not be captured.');
       return;
     }
 
-    const attempts = (this.failedAttempts.get(result.taskId) ?? 0) + 1;
-    this.failedAttempts.delete(result.taskId);
     context.onAccepted({
       platform: 'cses',
       problemId: result.taskId,
@@ -213,9 +213,9 @@ export class CsesAdapter implements PlatformAdapter {
       url: `https://cses.fi/problemset/task/${result.taskId}/`,
       difficulty: 'unknown',
       tags: [],
-      language: pending.language,
-      code: pending.code,
-      attempts,
+      language: claim.pending.language,
+      code: claim.pending.code,
+      attempts: claim.attempts ?? 1,
       runtimeNote: result.runtimeNote,
       memoryNote: result.memoryNote,
     } satisfies AcceptedSubmission);
