@@ -16,8 +16,10 @@ export const HACKEREARTH_PUBLIC_PRACTICE_RESULT_URL =
 
 const HACKEREARTH_PROGRAMMING_PRACTICE_PATH =
   /^\/practice\/(?:algorithms|data-structures|basic-programming|maths)(?:\/|$)/;
+const HACKEREARTH_PRACTICE_PROBLEM_PATH =
+  /^\/practice\/(?:algorithms|data-structures|basic-programming|maths)\/(?:[^/]+\/)*practice-problems\/(?:algorithm|data-structure)\/([^/?#]+)\/?$/;
 const HACKEREARTH_COMMUNITY_ALGORITHM_PATH =
-  /^\/community\/problem\/algorithm\/[^/?#]+\/?$/;
+  /^\/community\/problem\/algorithm\/([^/?#]+)\/?$/;
 
 export const OBSERVED_URLS: RegExp[] = [
   // LeetCode polls this until the judge finishes. The id is numeric for a
@@ -55,12 +57,33 @@ export function isHackerEarthPublicPracticePage(href: string): boolean {
 }
 
 /**
+ * A stable slug exists only on these exact public programming-problem routes.
+ * Category pages are useful for adapter navigation, but must never authorise
+ * an observer exchange or editor-source read.
+ */
+export function hackerEarthTrackableProblemSlug(href: string): string | null {
+  try {
+    const url = new URL(href);
+    if (url.hostname !== 'www.hackerearth.com') return null;
+    return HACKEREARTH_PRACTICE_PROBLEM_PATH.exec(url.pathname)?.[1]
+      ?? HACKEREARTH_COMMUNITY_ALGORITHM_PATH.exec(url.pathname)?.[1]
+      ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function isHackerEarthTrackableProblemPage(href: string): boolean {
+  return hackerEarthTrackableProblemSlug(href) !== null;
+}
+
+/**
  * HackerEarth's result endpoint is shared by public and excluded practice
  * pages, so endpoint matching alone cannot authorise source capture there.
  */
 export function isObservedOnPage(url: string, pageHref: string): boolean {
   if (!isObserved(url)) return false;
-  return !HACKEREARTH_PUBLIC_PRACTICE_RESULT_URL.test(url) || isHackerEarthPublicPracticePage(pageHref);
+  return !HACKEREARTH_PUBLIC_PRACTICE_RESULT_URL.test(url) || isHackerEarthTrackableProblemPage(pageHref);
 }
 
 export const OBSERVER_CHANNEL = 'redo-observer';

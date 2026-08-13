@@ -376,7 +376,8 @@ response supplies the verdict and available judge details; an accepted record re
 current editor snapshot for source. If no editor source is available, Redo records the final
 attempt but does not save a solved record. It records the page title, canonical URL, language,
 verdict, and runtime or memory when available; HackerEarth difficulty remains `unknown` and tags
-are not recorded.
+are not recorded. Category navigation pages are not enough to authorise observation: the result
+poll is read only on an exact public programming-problem URL with a stable problem slug.
 
 | Platform | Detection | Source of the code | Difficulty | Tags |
 | --- | --- | --- | --- | --- |

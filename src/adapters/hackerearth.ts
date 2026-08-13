@@ -1,14 +1,12 @@
 import type { AcceptedSubmission, AttemptEvent } from '../core/types.ts';
 import {
   HACKEREARTH_PUBLIC_PRACTICE_RESULT_URL,
+  hackerEarthTrackableProblemSlug,
   isHackerEarthPublicPracticePage,
 } from './observed.ts';
 import { onExchange, parseJson } from './exchange.ts';
 import type { AdapterContext, PlatformAdapter } from './types.ts';
 
-const PROBLEM_PATH =
-  /^\/practice\/(?:algorithms|data-structures|basic-programming|maths)\/(?:[^/]+\/)*practice-problems\/(?:algorithm|data-structure)\/([^/?#]+)\/?$/;
-const COMMUNITY_ALGORITHM_PATH = /^\/community\/problem\/algorithm\/([^/?#]+)\/?$/;
 const FINAL_RESULTS = new Set(['AC', 'WA']);
 const PENDING_STATUS = /queued|compiling|running|processing|pending/i;
 
@@ -135,7 +133,7 @@ export class HackerEarthAdapter implements PlatformAdapter {
 
   currentSlug(url: URL): string | null {
     if (!this.matches(url)) return null;
-    return PROBLEM_PATH.exec(url.pathname)?.[1] ?? COMMUNITY_ALGORITHM_PATH.exec(url.pathname)?.[1] ?? null;
+    return hackerEarthTrackableProblemSlug(url.href);
   }
 
   start(context: AdapterContext): () => void {
