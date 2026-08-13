@@ -53,6 +53,43 @@ test('CSES and HackerEarth public practice routes are the only new adapter route
   assert.equal(adapterFor(hackerEarthPublicPractice)?.platform, 'hackerearth');
 });
 
+test('HackerEarth excludes nearby community and non-programming routes', () => {
+  const adapter = new HackerEarthAdapter();
+  const excluded = [
+    'https://www.hackerearth.com/community/',
+    'https://www.hackerearth.com/community/problem/data-science/example/',
+    'https://www.hackerearth.com/community/problem/algorithm/example/extra/',
+    'https://www.hackerearth.com/challenges/',
+    'https://www.hackerearth.com/contests/',
+    'https://www.hackerearth.com/hiring/',
+    'https://www.hackerearth.com/assessment/',
+    'https://www.hackerearth.com/recruitment/',
+    'https://www.hackerearth.com/hackathons/',
+    'https://www.hackerearth.com/projects/',
+    'https://www.hackerearth.com/practice/sql/',
+    'https://www.hackerearth.com/practice/data-science/',
+    'https://www.hackerearth.com/practice/file-upload/',
+  ];
+
+  for (const href of excluded) {
+    assert.equal(adapter.matches(new URL(href)), false, href);
+    assert.equal(adapter.currentSlug(new URL(href)), null, href);
+  }
+});
+
+test('the manifest declares only the two approved HackerEarth route families', () => {
+  const manifest = JSON.parse(readFileSync('src/manifest.json', 'utf8'));
+  const expected = [
+    'https://www.hackerearth.com/practice/*',
+    'https://www.hackerearth.com/community/problem/algorithm/*',
+  ];
+  const hackerEarthMatches = (values) => values.filter((value) => value.includes('hackerearth.com'));
+
+  assert.deepEqual(hackerEarthMatches(manifest.host_permissions), expected);
+  assert.deepEqual(hackerEarthMatches(manifest.content_scripts[0].matches), expected);
+  assert.deepEqual(hackerEarthMatches(manifest.content_scripts[1].matches), expected);
+});
+
 test('CSES submit fixture preserves the observed form contract without secret values', () => {
   const { document } = parseHTML(readFileSync('tests/fixtures/cses-submit-form.html', 'utf8'));
   const form = document.querySelector('form');
@@ -88,8 +125,10 @@ test('HackerEarth fixtures preserve the public-practice response contract withou
   const paths = readFileSync('tests/fixtures/hackerearth-diagnostic-paths.txt', 'utf8')
     .trim()
     .split('\n');
-  const accepted = JSON.parse(readFileSync('tests/fixtures/hackerearth-accepted.json', 'utf8'));
-  const rejected = JSON.parse(readFileSync('tests/fixtures/hackerearth-rejected.json', 'utf8'));
+  const acceptedRaw = readFileSync('tests/fixtures/hackerearth-accepted.json', 'utf8');
+  const rejectedRaw = readFileSync('tests/fixtures/hackerearth-rejected.json', 'utf8');
+  const accepted = JSON.parse(acceptedRaw);
+  const rejected = JSON.parse(rejectedRaw);
 
   assert.deepEqual(paths, [
     'PAGE /community/problem/algorithm/make-an-array-85abd7ad/',
@@ -116,7 +155,16 @@ test('HackerEarth fixtures preserve the public-practice response contract withou
     assert.equal(typeof response.message[0].score, 'number');
     assert.equal(typeof response.message[0].time_used, 'number');
     assert.equal(typeof response.message[0].memory_used, 'number');
-    assert.doesNotMatch(JSON.stringify(response), /https?:\/\/|csrf|cookie|token|username|source/i);
+    assert.doesNotMatch(
+      JSON.stringify(response),
+      /https?:\/\/|csrf|cookie|token|username|source|signature|expires/i,
+    );
+  }
+
+  for (const fixture of [acceptedRaw, rejectedRaw]) {
+    assert.doesNotMatch(fixture, /"(?:submission_?)?id"\s*:/i);
+    assert.doesNotMatch(fixture, /"(?:timestamp|submitted_at|created_at|updated_at)"\s*:/i);
+    assert.doesNotMatch(fixture, /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}|\b1[5-9]\d{11,12}\b/);
   }
 
   assert.equal(accepted.message[0].diff_output_url, undefined);

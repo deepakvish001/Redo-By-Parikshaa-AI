@@ -344,3 +344,56 @@ GREEN output (all exit 0): 29 focused tests passed; 260 full tests passed;
 completed successfully. A fixture safety scan found no URL, CSRF, cookie,
 token, username, source, signature, or expiry value in the HackerEarth fixture
 files.
+
+## Fix round 3 — approved HackerEarth canonical-route boundary
+
+### Policy correction
+
+The approved HackerEarth boundary is now documented and tested as exactly two
+public route families:
+
+1. `https://www.hackerearth.com/practice/*` for practice listing and
+   navigation; and
+2. `https://www.hackerearth.com/community/problem/algorithm/*` for canonical
+   public programming-problem pages reached from the practice surface.
+
+This corrects the prior URL-boundary assumption without broadening product
+scope. Every other `/community/` route remains excluded, as do contests,
+hiring, assessments, recruitment, hackathons, projects, SQL, data-science,
+file-upload, and non-programming routes.
+
+### Changes
+
+- Updated the design spec's hard scope boundaries and manifest/route-isolation
+  sections with the exact two-route policy and canonical-route rationale.
+- Added adapter route regression cases for nearby excluded community and
+  non-programming routes.
+- Added a manifest contract test that permits only the two approved
+  HackerEarth match patterns across host permissions, observer, and content
+  scripts.
+- Extended HackerEarth fixture privacy checks to reject submission-ID fields,
+  timestamp fields, ISO timestamps, and epoch timestamps, alongside URLs and
+  credential/source markers.
+- Added no endpoint observation, parser, request-body, or source-capture
+  behavior.
+
+### Verification
+
+```sh
+node --test tests/adapters.test.mjs
+```
+
+Output (exit 0): 31 focused tests passed, including canonical-route, exclusion,
+manifest, and fixture-privacy checks.
+
+Full verification was then run with:
+
+```sh
+npm test
+npm run typecheck
+npm run build
+```
+
+All commands completed successfully. The task remains limited to route
+wiring and fixture evidence; HackerEarth submission endpoints remain absent
+from `OBSERVED_URLS`.

@@ -20,11 +20,14 @@ and analytics systems.
 
 ## Hard scope boundaries
 
-- HackerEarth support is limited to public `www.hackerearth.com/practice/`
-  programming-problem routes.
-- HackerEarth assessments, recruitment tests, private links, contests,
-  hackathons, projects, SQL, data-science, file-upload, and non-programming
-  question types are ignored.
+- HackerEarth support has exactly two public route families:
+  `www.hackerearth.com/practice/*` for practice listing and navigation, and
+  `www.hackerearth.com/community/problem/algorithm/*` for canonical public
+  programming-problem pages. The canonical route is required because public
+  practice problems resolve there after navigation from the practice surface.
+- All other HackerEarth `/community/` routes, assessments, recruitment tests,
+  private links, contests, hiring, hackathons, projects, SQL, data-science,
+  file-upload, and non-programming question types are ignored.
 - CSES support is limited to the public problem set and its normal submission
   flow; CSES contests are ignored.
 - The extension does not solve, generate, paste, or submit code. It only
@@ -49,12 +52,16 @@ observer will be scoped narrowly:
 
 - CSES: the problem-set and normal submission pages required to associate a
   submitted solution with `/problemset/task/<id>`.
-- HackerEarth: `https://www.hackerearth.com/practice/*` only.
+- HackerEarth: exactly `https://www.hackerearth.com/practice/*` and
+  `https://www.hackerearth.com/community/problem/algorithm/*`. The first
+  scope covers public practice listing/navigation; the second is the canonical
+  public programming-problem route reached from that surface.
 
-No script will be declared for HackerEarth assessment, contest, hackathon, or
-recruitment routes. Each adapter also verifies the active route before it
-processes any observed request, so a broad host permission cannot accidentally
-turn into tracking outside the declared scope.
+No script will be declared for any other HackerEarth `/community/` route, or
+for assessment, contest, hiring, hackathon, project, SQL, data-science,
+file-upload, or recruitment routes. Each adapter also verifies the active
+route before it processes any observed request, so a broad host permission
+cannot accidentally turn into tracking outside the declared scope.
 
 ### CSES form lifecycle
 
