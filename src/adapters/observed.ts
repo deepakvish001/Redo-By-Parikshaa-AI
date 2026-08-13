@@ -14,6 +14,11 @@
 export const HACKEREARTH_PUBLIC_PRACTICE_RESULT_URL =
   /^https:\/\/www\.hackerearth\.com\/response\/submission-json\/([^/?#]+)\/AJAX\/?(?:[?#]|$)/i;
 
+const HACKEREARTH_PROGRAMMING_PRACTICE_PATH =
+  /^\/practice\/(?:algorithms|data-structures|basic-programming|maths)(?:\/|$)/;
+const HACKEREARTH_COMMUNITY_ALGORITHM_PATH =
+  /^\/community\/problem\/algorithm\/[^/?#]+\/?$/;
+
 export const OBSERVED_URLS: RegExp[] = [
   // LeetCode polls this until the judge finishes. The id is numeric for a
   // submit and `runcode_…` for a run, and the path picked up a `/v2/` segment
@@ -33,6 +38,29 @@ export const OBSERVED_URLS: RegExp[] = [
 
 export function isObserved(url: string): boolean {
   return OBSERVED_URLS.some((pattern) => pattern.test(url));
+}
+
+/** Only these HackerEarth pages may receive public-practice result exchanges. */
+export function isHackerEarthPublicPracticePage(href: string): boolean {
+  try {
+    const url = new URL(href);
+    return (
+      url.hostname === 'www.hackerearth.com' &&
+      (HACKEREARTH_PROGRAMMING_PRACTICE_PATH.test(url.pathname) ||
+        HACKEREARTH_COMMUNITY_ALGORITHM_PATH.test(url.pathname))
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * HackerEarth's result endpoint is shared by public and excluded practice
+ * pages, so endpoint matching alone cannot authorise source capture there.
+ */
+export function isObservedOnPage(url: string, pageHref: string): boolean {
+  if (!isObserved(url)) return false;
+  return !HACKEREARTH_PUBLIC_PRACTICE_RESULT_URL.test(url) || isHackerEarthPublicPracticePage(pageHref);
 }
 
 export const OBSERVER_CHANNEL = 'redo-observer';

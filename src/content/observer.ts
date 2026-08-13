@@ -14,7 +14,7 @@
 import { wrapFetch } from './wrap-fetch.ts';
 import {
   OBSERVER_CHANNEL,
-  isObserved,
+  isObservedOnPage,
   summarisePath,
   type DiagnosticsToggle,
   type EditorReply,
@@ -147,6 +147,10 @@ function publish(
   requestBody: string | undefined,
   responseBody: string,
 ): void {
+  // An allowlisted HackerEarth result path is not enough on its own: the page
+  // must also be a public programming-practice route before editor source is
+  // read or an exchange is emitted.
+  if (!isObservedOnPage(url, window.location.href)) return;
   relay({
     url,
     method,
@@ -160,8 +164,8 @@ function publish(
 /* --- fetch --- */
 
 wrapFetch(window, {
-  onRequest: (url, method) => glimpse(url, method, isObserved(url)),
-  watch: isObserved,
+  onRequest: (url, method) => glimpse(url, method, isObservedOnPage(url, window.location.href)),
+  watch: (url) => isObservedOnPage(url, window.location.href),
   onResponse: (url, method, init, response) => {
     // Cloning keeps the page's own copy of the body intact.
     response
@@ -196,8 +200,9 @@ XMLHttpRequest.prototype.open = function patchedOpen(
 
 XMLHttpRequest.prototype.send = function patchedSend(this: XMLHttpRequest, ...args: unknown[]) {
   const request = pending.get(this);
-  if (request) glimpse(request.url, request.method, isObserved(request.url));
-  if (request && isObserved(request.url)) {
+  const observed = request ? isObservedOnPage(request.url, window.location.href) : false;
+  if (request) glimpse(request.url, request.method, observed);
+  if (request && observed) {
     request.body = bodyToString(args[0]);
     this.addEventListener('load', () => {
       try {

@@ -365,15 +365,18 @@ submission endpoints is ever read.
 
 **CSES Problem Set** uses its normal file-upload form rather than an observed request. Redo
 briefly waits only long enough to read the file you already selected and save it in local
-extension storage, then re-submits the unchanged native form exactly once. On a fixture-verified
-final result page, it joins that short-lived capture to the verdict. The capture expires after
-15 minutes; if it is missing or expired, the accepted result is not saved as a solved record.
+extension storage; it does not initiate an independent submission. It then replays that unchanged
+user-initiated native form exactly once. On a fixture-verified final result page, it joins that
+short-lived capture to the verdict. The capture expires after 15 minutes; if it is missing or
+expired, the accepted result is not saved as a solved record.
 
 **HackerEarth is deliberately result-only.** The observer allowlists only the fixture-confirmed
 public-practice final-result poll, not the source-bearing `/submit/AJAX/` request. Its final
 response supplies the verdict and available judge details; an accepted record requires the
 current editor snapshot for source. If no editor source is available, Redo records the final
-attempt but does not save a solved record.
+attempt but does not save a solved record. It records the page title, canonical URL, language,
+verdict, and runtime or memory when available; HackerEarth difficulty remains `unknown` and tags
+are not recorded.
 
 | Platform | Detection | Source of the code | Difficulty | Tags |
 | --- | --- | --- | --- | --- |
@@ -384,7 +387,7 @@ attempt but does not save a solved record.
 | HackerRank | submissions poll | response, else submit request | — | — |
 | GeeksforGeeks | practice API poll | submit request, else editor | from the page header | — |
 | CSES | native submit form + result page | selected submission file | — | — |
-| HackerEarth | public-practice verdict endpoint | current editor only (result-only policy) | from page when available | from page when available |
+| HackerEarth | public-practice verdict endpoint | current editor only (result-only policy) | unknown | — |
 
 CSES support is limited to `cses.fi/problemset/`; contests are excluded. HackerEarth support is
 limited to `https://www.hackerearth.com/practice/*` and canonical public programming-problem

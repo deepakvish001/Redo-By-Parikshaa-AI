@@ -66,3 +66,61 @@ their own CSES and HackerEarth solutions in Chrome. They were not automated or
 performed by this documentation-only task. The README now records the exact
 three checks required before release and the data that must not be captured or
 shared.
+
+## Fix round 1 — observer route privacy and documentation correction
+
+### Root cause and fix
+
+The MAIN-world observer previously applied the global endpoint allowlist before
+the HackerEarth adapter could reject an excluded page. Because HackerEarth's
+final-result endpoint is shared, an allowlisted result response on an excluded
+`/practice/sql/`, data-science, file-upload, or non-programming page could be
+relayed and cause an editor-source read before adapter-level route validation.
+
+`isObservedOnPage(url, pageHref)` now requires the shared
+`isHackerEarthPublicPracticePage` route predicate for HackerEarth's
+fixture-confirmed result endpoint. The predicate permits only the public
+programming categories and canonical `/community/problem/algorithm/*` pages;
+the adapter consumes the same predicate. The fetch and XHR observers apply it
+before attaching response observation, and `publish` applies it again directly
+before reading editor code or emitting an exchange.
+
+### Regression coverage
+
+Added an MAIN-world observer regression that loads the observer on
+`https://www.hackerearth.com/practice/sql/`, issues an otherwise allowlisted
+HackerEarth final-result request, and proves that Monaco editor source is not
+read and no exchange is posted.
+
+### Documentation correction
+
+The README now says that CSES does not initiate an independent submission: it
+replays the unchanged user-initiated native form once after local persistence.
+It also records HackerEarth's implemented metadata boundary: title, canonical
+URL, language, verdict, and available runtime/memory; difficulty remains
+unknown and tags are not recorded.
+
+### Fix-round verification
+
+The new observer regression first failed as intended against the prior
+endpoint-only gate: it recorded one Monaco editor read on the excluded SQL
+page (`1 !== 0`). After the page-aware gate, the focused observer and adapter
+run passed (53 passing, 0 failing), followed by:
+
+```sh
+npm ci
+npm test
+# 284 passing, 0 failing
+
+npm run typecheck
+# tsc --noEmit completed without diagnostics
+
+npm run build
+# rebuilt manifest, all extension scripts, icons, and panel/focus/options assets
+```
+
+The build artifact check confirmed `dist/manifest.json`, `background.js`,
+`content.js`, `observer.js`, `parikshaa.js`, and `parikshaa-injected.js`.
+`git diff --check` also passed. As before, `npm ci` reported one existing
+high-severity dependency advisory and pending install-script approval warnings;
+this fix round did not change dependencies.

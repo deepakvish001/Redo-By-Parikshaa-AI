@@ -1,10 +1,11 @@
 import type { AcceptedSubmission, AttemptEvent } from '../core/types.ts';
-import { HACKEREARTH_PUBLIC_PRACTICE_RESULT_URL } from './observed.ts';
+import {
+  HACKEREARTH_PUBLIC_PRACTICE_RESULT_URL,
+  isHackerEarthPublicPracticePage,
+} from './observed.ts';
 import { onExchange, parseJson } from './exchange.ts';
 import type { AdapterContext, PlatformAdapter } from './types.ts';
 
-const PROGRAMMING_PRACTICE_PATH =
-  /^\/practice\/(?:algorithms|data-structures|basic-programming|maths)(?:\/|$)/;
 const PROBLEM_PATH =
   /^\/practice\/(?:algorithms|data-structures|basic-programming|maths)\/(?:[^/]+\/)*practice-problems\/(?:algorithm|data-structure)\/([^/?#]+)\/?$/;
 const COMMUNITY_ALGORITHM_PATH = /^\/community\/problem\/algorithm\/([^/?#]+)\/?$/;
@@ -129,10 +130,7 @@ export class HackerEarthAdapter implements PlatformAdapter {
   private readonly seenFinalResults = new Set<string>();
 
   matches(url: URL): boolean {
-    return (
-      url.hostname === 'www.hackerearth.com' &&
-      (PROGRAMMING_PRACTICE_PATH.test(url.pathname) || COMMUNITY_ALGORITHM_PATH.test(url.pathname))
-    );
+    return isHackerEarthPublicPracticePage(url.href);
   }
 
   currentSlug(url: URL): string | null {
