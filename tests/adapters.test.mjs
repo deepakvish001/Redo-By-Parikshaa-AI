@@ -16,7 +16,10 @@ import { firstString, parseJson, pick } from '../src/adapters/exchange.ts';
 import { CsesAdapter, languageFromFilename, parseCsesResult } from '../src/adapters/cses.ts';
 import { HackerEarthAdapter } from '../src/adapters/hackerearth.ts';
 import { adapterFor } from '../src/adapters/index.ts';
-import { storePendingCsesSubmission } from '../src/background/cses-pending.ts';
+import {
+  consumePendingCsesSubmission,
+  storePendingCsesSubmission,
+} from '../src/background/cses-pending.ts';
 import {
   getFreshPendingCsesSubmission,
   isPendingCsesSubmissionFresh,
@@ -242,8 +245,8 @@ function installCsesStorage(initial = {}) {
   return values;
 }
 
-function installRacingCsesStorage() {
-  const values = {};
+function installRacingCsesStorage(initial = {}) {
+  const values = structuredClone(initial);
   globalThis.chrome = {
     storage: {
       local: {
@@ -302,6 +305,21 @@ test('CSES: concurrent pending saves for different tasks keep both selected file
   await Promise.all([savePendingCsesSubmission(first, 10), savePendingCsesSubmission(second, 10)]);
 
   assert.deepEqual(stored.pendingCsesSubmissions, { 1068: first, 1193: second });
+});
+
+test('CSES: worker consumption of task 1068 keeps a concurrent task 1193 capture', async () => {
+  const now = Date.now();
+  const first = { taskId: '1068', submittedAt: now, filename: 'first.cpp', language: 'C++', code: 'first source' };
+  const second = { taskId: '1193', submittedAt: now, filename: 'second.py', language: 'Python', code: 'second source' };
+  const stored = installRacingCsesStorage({ pendingCsesSubmissions: { 1068: first } });
+
+  const [consumed] = await Promise.all([
+    consumePendingCsesSubmission('1068'),
+    storePendingCsesSubmission(second),
+  ]);
+
+  assert.deepEqual(consumed.pending, first);
+  assert.deepEqual(stored.pendingCsesSubmissions, { 1193: second });
 });
 
 test('CSES: malformed pending worker payloads reject without storing source', async () => {
@@ -470,6 +488,12 @@ test('CSES: duplicate final result renders create one rejection and one accepted
       },
     },
   });
+  globalThis.chrome.runtime.sendMessage = async (request) => {
+    if (request.type !== 'cses:pending:consume') return { ok: true, data: { stored: true } };
+    const pending = stored.pendingCsesSubmissions[request.taskId];
+    delete stored.pendingCsesSubmissions[request.taskId];
+    return { ok: true, data: { pending } };
+  };
   const context = {
     onAccepted(submission) { solved.push(submission); },
     onAttempt(problemKey) { attempts.push(problemKey); },

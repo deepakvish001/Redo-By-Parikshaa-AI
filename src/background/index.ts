@@ -35,7 +35,7 @@ import type {
   Recall,
   SolvedProblem,
 } from '../core/types.ts';
-import { storePendingCsesSubmission } from './cses-pending.ts';
+import { consumePendingCsesSubmission, storePendingCsesSubmission } from './cses-pending.ts';
 import { getCachedContests, refreshContests, sendContestReminders } from './contests.ts';
 import { focusState, startPause, watchNavigation } from './focus.ts';
 import { applyBackup, currentBackup, pullBackup, pushBackup } from './backup.ts';
@@ -288,6 +288,9 @@ async function handle(request: Request): Promise<unknown> {
 
     case 'cses:pending':
       return storePendingCsesSubmission(request.pending);
+
+    case 'cses:pending:consume':
+      return consumePendingCsesSubmission(request.taskId);
 
     case 'page:context': {
       const problem = await getProblem(`${request.platform}:${request.slug}`);

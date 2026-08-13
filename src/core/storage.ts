@@ -168,6 +168,21 @@ export async function clearPendingCsesSubmission(taskId: string, now = Date.now(
   });
 }
 
+/** Atomically reads and removes a fresh CSES source capture for one task. */
+export async function consumePendingCsesSubmission(
+  taskId: string,
+  now = Date.now(),
+): Promise<PendingCsesSubmission | undefined> {
+  return withPendingCsesLock(async () => {
+    const pending = await readPendingCsesSubmissions(now);
+    const submission = pending[taskId];
+    if (!submission) return undefined;
+    delete pending[taskId];
+    await chrome.storage.local.set({ [KEYS.pendingCsesSubmissions]: pending });
+    return submission;
+  });
+}
+
 export async function getSettings(): Promise<Settings> {
   const stored = await readKey<Partial<Settings>>(KEYS.settings, {});
   // Merged per-section so a settings shape added in a later version still gets

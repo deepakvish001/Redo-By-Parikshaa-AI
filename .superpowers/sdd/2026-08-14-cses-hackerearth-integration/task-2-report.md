@@ -90,3 +90,31 @@ tests and zero failures. New coverage proves that:
 
 `npm test`, `npm run typecheck`, `npm run build`, and `git diff --check`
 passed after the fix. The full suite reported 274 passing tests.
+
+## Fix round 2 — worker-owned result consumption
+
+### Review finding addressed
+
+The result-page content adapter no longer imports or invokes pending CSES
+storage helpers. On a final accepted result it sends the typed
+`cses:pending:consume` message; the service worker validates the task id and
+performs a single serialized read-and-clear operation. This makes pending-map
+mutation worker-owned across submit and result content-script contexts while
+preserving the one-shot native submit lifecycle.
+
+### TDD evidence
+
+The new regression initially failed because the worker did not expose a
+consume operation. It starts with a capture for task `1068`, concurrently
+consumes that task through the worker boundary and saves task `1193`, then
+asserts that the consumed source is `1068` and storage retains only `1193`.
+
+After adding the typed consume request and atomic worker helper,
+`node --test tests/adapters.test.mjs` reported 44 passing tests. The
+duplicate-result regression also verifies that the adapter requests the new
+worker consume message rather than accessing pending storage directly.
+
+### Verification
+
+`npm test`, `npm run typecheck`, `npm run build`, and `git diff --check`
+passed after this fix round. The full suite reported 275 passing tests.

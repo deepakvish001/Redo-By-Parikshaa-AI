@@ -1,4 +1,3 @@
-import { clearPendingCsesSubmission, getFreshPendingCsesSubmission } from '../core/storage.ts';
 import type { AcceptedSubmission } from '../core/types.ts';
 import { send } from '../core/messages.ts';
 import type { AdapterContext, PlatformAdapter } from './types.ts';
@@ -194,7 +193,7 @@ export class CsesAdapter implements PlatformAdapter {
       return;
     }
 
-    const pending = await getFreshPendingCsesSubmission(result.taskId, Date.now());
+    const { pending } = await send({ type: 'cses:pending:consume', taskId: result.taskId });
     context.onEvent(result.taskId, {
       at: Date.now(), kind: 'submit', verdict: result.verdict, accepted: true,
       language: pending?.language,
@@ -220,6 +219,5 @@ export class CsesAdapter implements PlatformAdapter {
       runtimeNote: result.runtimeNote,
       memoryNote: result.memoryNote,
     } satisfies AcceptedSubmission);
-    await clearPendingCsesSubmission(result.taskId, Date.now());
   }
 }
