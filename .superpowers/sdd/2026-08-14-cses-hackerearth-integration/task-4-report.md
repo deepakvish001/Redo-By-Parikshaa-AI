@@ -250,3 +250,58 @@ npm run build
 git diff --check
 # no whitespace errors
 ```
+
+## Remediation round 2 — durable-state documentation and direct storage regression
+
+### Documentation corrections
+
+- Corrected the README's old browser-session claim. For CSES, the selected
+  source is durable for 15 minutes, while rejected-attempt accumulation and
+  opaque result fingerprints live in worker-owned local storage. Reloading or
+  closing a tab therefore does not reset a pending CSES sequence or permit the
+  same result page to append another journal event; only the selected source
+  capture expires after 15 minutes.
+- Corrected the design's HackerEarth metadata description: the current adapter
+  extracts the page title and canonical URL, but records `unknown` difficulty
+  and no tags. It does not currently extract page difficulty or tags.
+
+### Direct production-storage regression
+
+No reusable storage harness existed outside the adapter tests' in-memory
+message mocks. Added `tests/cses-storage.test.mjs`, a filesystem-backed
+`chrome.storage.local` harness that invokes production
+`claimCsesFinalResult`, `savePendingCsesSubmission`, and
+`getFreshPendingCsesSubmission` directly. It proves:
+
+- a rejected CSES result followed by two concurrent claims of the same
+  acceptance yields one accepted claim with two attempts and one duplicate
+  rejection;
+- worker state persists opaque 64-character fingerprints (not source or raw
+  result paths) across a fresh load of the production storage module;
+- expired selected source is pruned; and
+- consuming task `1068` leaves task `1193`'s fresh pending source untouched.
+
+The test is a characterization regression for already-correct production
+semantics, so its first direct run was green:
+
+```sh
+node --test tests/cses-storage.test.mjs
+# 1 passing, 0 failing
+```
+
+### Full verification
+
+```sh
+npm test
+# 290 passing, 0 failing
+
+npm run typecheck
+# tsc --noEmit completed without diagnostics
+
+npm run build
+# pages, background.js, content.js, observer.js, parikshaa.js,
+# parikshaa-injected.js, manifest, and assets built successfully
+
+git diff --check
+# no whitespace errors
+```

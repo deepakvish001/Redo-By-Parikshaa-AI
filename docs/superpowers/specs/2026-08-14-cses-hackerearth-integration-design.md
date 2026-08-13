@@ -113,8 +113,8 @@ extension storage.
 network observer. It owns:
 
 - route matching and stable problem-slug generation;
-- public page metadata extraction (title, difficulty when available, tags when
-  available, and canonical URL);
+- public page title and canonical URL extraction; difficulty is currently
+  recorded as `unknown` and tags as an empty list;
 - parsing the fixture-confirmed final-result response only;
 - source recovery from the current editor only;
 - per-problem attempt counts and result deduplication; and

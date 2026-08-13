@@ -459,7 +459,12 @@ watches — it never alters a request.
   those inputs are unavailable.
 - HackerEarth tracking intentionally excludes assessments, private tests, contests, challenges,
   hackathons, hiring, projects, SQL, data-science, file-upload, and non-programming routes.
-- Attempt counts are per browser session, so they reset when you close the tab.
+- CSES keeps its selected source capture for 15 minutes in local extension
+  storage. Its worker also persists rejected-attempt accumulation and opaque
+  final-result fingerprints, so closing or reloading a tab does not reset a
+  still-pending CSES attempt sequence or allow the same result page to append
+  another journal event. The source capture still expires after 15 minutes;
+  accepted results without a fresh capture do not create a solved record.
 - Parikshaa sync needs a parikshaa.org tab to have been open at some point in the last hour;
   otherwise problems queue until the session refreshes.
 - Storage is `chrome.storage.local`, which is capped around 10 MB — thousands of solutions, but
