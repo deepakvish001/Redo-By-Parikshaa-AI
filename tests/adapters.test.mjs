@@ -12,6 +12,39 @@ import {
 import { readVerdict, submissionIdFromPath } from '../src/adapters/leetcode.ts';
 import { isObserved, summarisePath } from '../src/adapters/observed.ts';
 import { firstString, parseJson, pick } from '../src/adapters/exchange.ts';
+import { CsesAdapter } from '../src/adapters/cses.ts';
+import { HackerEarthAdapter } from '../src/adapters/hackerearth.ts';
+import { adapterFor } from '../src/adapters/index.ts';
+import { PLATFORM_LABELS } from '../src/core/types.ts';
+
+/* --------------------------------------------------------- platform scope */
+
+test('CSES and HackerEarth public practice routes are the only new adapter routes', () => {
+  const csesTask = new URL('https://cses.fi/problemset/task/1193/');
+  const csesContest = new URL('https://cses.fi/contest/123/task/1');
+  const hackerEarthPractice = new URL('https://www.hackerearth.com/practice/algorithms/');
+  const hackerEarthProblem = new URL(
+    'https://www.hackerearth.com/practice/algorithms/graphs/breadth-first-search/practice-problems/algorithm/monk-and-the-islands/',
+  );
+  const hackerEarthChallenge = new URL('https://www.hackerearth.com/challenges/');
+  const hackerEarthSql = new URL('https://www.hackerearth.com/practice/sql/');
+
+  assert.equal(PLATFORM_LABELS.cses, 'CSES');
+  assert.equal(PLATFORM_LABELS.hackerearth, 'HackerEarth');
+  assert.equal(new CsesAdapter().matches(csesTask), true);
+  assert.equal(new CsesAdapter().matches(csesContest), false);
+  assert.equal(new CsesAdapter().currentSlug(csesTask), '1193');
+  assert.equal(new CsesAdapter().currentSlug(csesContest), null);
+  assert.equal(new HackerEarthAdapter().matches(hackerEarthPractice), true);
+  assert.equal(new HackerEarthAdapter().matches(hackerEarthProblem), true);
+  assert.equal(new HackerEarthAdapter().matches(hackerEarthChallenge), false);
+  assert.equal(new HackerEarthAdapter().matches(hackerEarthSql), false);
+  assert.equal(new HackerEarthAdapter().currentSlug(hackerEarthPractice), null);
+  assert.equal(new HackerEarthAdapter().currentSlug(hackerEarthProblem), 'monk-and-the-islands');
+  assert.equal(new HackerEarthAdapter().currentSlug(hackerEarthChallenge), null);
+  assert.equal(adapterFor(csesTask)?.platform, 'cses');
+  assert.equal(adapterFor(hackerEarthPractice)?.platform, 'hackerearth');
+});
 
 /* --------------------------------------------------------- shared observer */
 

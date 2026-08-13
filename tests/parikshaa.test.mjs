@@ -7,6 +7,7 @@ import {
   parikshaaLanguage,
   readStoredSession,
 } from '../src/core/parikshaa.ts';
+import { syncToParikshaa } from '../src/background/parikshaa-sync.ts';
 
 const NOW = Date.UTC(2026, 0, 15, 12, 0, 0);
 
@@ -50,6 +51,18 @@ test('versioned Codeforces labels resolve without matching stray letters', () =>
 test('a language Parikshaa cannot store returns nothing rather than guessing', () => {
   assert.equal(parikshaaLanguage('Erlang'), undefined);
   assert.equal(parikshaaLanguage('Racket'), undefined);
+});
+
+test('unsupported platforms receive the neutral LeetCode-only sync reason', async () => {
+  const state = await syncToParikshaa(
+    { platform: 'cses' },
+    { parikshaa: { enabled: true } },
+  );
+
+  assert.deepEqual(state, {
+    status: 'skipped',
+    reason: 'Parikshaa problems are matched by LeetCode slug, so this platform is not synced.',
+  });
 });
 
 test('JWT claims are decoded without verification', () => {

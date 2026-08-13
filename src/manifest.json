@@ -18,6 +18,8 @@
     "https://atcoder.jp/*",
     "https://www.codechef.com/*",
     "https://www.hackerrank.com/*",
+    "https://cses.fi/problemset/*",
+    "https://www.hackerearth.com/practice/*",
     "https://www.geeksforgeeks.org/*",
     "https://practiceapi.geeksforgeeks.org/*",
     "https://api.github.com/*",
@@ -51,6 +53,8 @@
         "https://leetcode.cn/*",
         "https://www.codechef.com/*",
         "https://www.hackerrank.com/*",
+        "https://cses.fi/problemset/*",
+        "https://www.hackerearth.com/practice/*",
         "https://www.geeksforgeeks.org/problems/*"
       ],
       "js": [
@@ -68,6 +72,8 @@
         "https://atcoder.jp/*",
         "https://www.codechef.com/*",
         "https://www.hackerrank.com/*",
+        "https://cses.fi/problemset/*",
+        "https://www.hackerearth.com/practice/*",
         "https://www.geeksforgeeks.org/problems/*"
       ],
       "js": [
