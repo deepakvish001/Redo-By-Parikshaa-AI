@@ -11,8 +11,8 @@ and analytics systems.
 
 - Track accepted CSES problem-set submissions.
 - Track accepted HackerEarth public-practice programming submissions.
-- Record runs, submissions, verdicts, source, language, and available runtime
-  or memory details.
+- Record submissions, verdicts, source, language, and available runtime or
+  memory details; record Runs where a platform exposes that action.
 - Deduplicate repeated result polls.
 - Make the new platforms opt-out toggles with the same default as existing
   platforms.
@@ -56,61 +56,101 @@ recruitment routes. Each adapter also verifies the active route before it
 processes any observed request, so a broad host permission cannot accidentally
 turn into tracking outside the declared scope.
 
-### Adapters
+### CSES form lifecycle
 
-Create `CsesAdapter` and `HackerEarthAdapter` implementing `PlatformAdapter`.
-Each adapter owns:
+CSES uses a native file-upload submit form at
+`/problemset/submit/<task-id>/`, rather than a fetch/XHR request that the
+shared observer can read. `CsesAdapter` therefore uses a separate lifecycle:
+
+1. On an eligible form submit, read only the source file the user selected for
+   that CSES submission. Save a temporary `PendingCsesSubmission` record
+   before page navigation:
+
+   ```ts
+   interface PendingCsesSubmission {
+     taskId: string;
+     submittedAt: number;
+     filename: string;
+     language: string;
+     code: string;
+   }
+   ```
+
+   The language is derived from the selected filename extension. Pending
+   records are one per task and expire after 15 minutes, preventing an old
+   source file from being attached to a later result.
+2. On the normal CSES result page, parse the final DOM verdict and its task
+   identifier. Match it to the unexpired pending record for that task.
+3. Record a rejected final verdict as one submit attempt. On an accepted
+   verdict, consume the pending record and emit `AcceptedSubmission` with its
+   source, language, title, and canonical task URL.
+
+This reads no arbitrary local file: it accesses only the file already selected
+by the user in CSES's own submission form. It never submits, modifies, or
+delays the form.
+
+### HackerEarth adapter
+
+`HackerEarthAdapter` implements `PlatformAdapter` through the existing passive
+network observer. It owns:
 
 - route matching and stable problem-slug generation;
 - public page metadata extraction (title, difficulty when available, tags when
   available, and canonical URL);
-- parsing its own submit/run request and verdict response;
+- parsing its own Run/Submit request and verdict response;
 - source and language recovery from the request body or editor fallback;
 - per-problem attempt counts and result deduplication; and
 - mapping the site’s wording to `AttemptEvent` without inventing unavailable
   judge statistics.
 
-The shared observer remains passive: it only clones and relays responses for
-explicitly allowlisted platform endpoints. It never delays, rewrites, or
-submits page traffic. Exact endpoint patterns are confirmed with a logged-in
-public-practice smoke session before they enter `OBSERVED_URLS`; diagnostics
-report only origin and path, never query strings or source code.
+### Shared platform wiring
+
+The shared observer remains passive and is used only for HackerEarth. It only
+clones and relays responses for explicitly allowlisted HackerEarth endpoints;
+it never delays, rewrites, or submits page traffic. Exact endpoint patterns
+are confirmed with a logged-in public-practice smoke session before they enter
+`OBSERVED_URLS`; diagnostics report only origin and path, never query strings
+or source code.
 
 ## Data flow
 
-1. A user opens an eligible public-practice problem.
-2. The adapter derives its slug and requests existing problem context; due
-   records can show the current revision panel.
-3. A user-initiated Run or Submit reaches an allowlisted platform endpoint.
-4. The MAIN-world observer relays the request/response pair to the isolated
-   content script, which gives it only to the matching adapter.
-5. The adapter records an `AttemptEvent` for a final result. Pending results
-   are ignored; duplicate submission IDs or equivalent final responses are
-   recorded once.
-6. On accepted submission, the adapter requires source and language. It emits
+1. A user opens an eligible public-practice problem. The adapter derives its
+   slug and requests existing problem context; due records can show the
+   current revision panel.
+2. CSES captures the user-selected source file immediately before a native
+   form navigation, then reads the final verdict from the result-page DOM.
+   HackerEarth observes an allowlisted Run or Submit endpoint and parses the
+   final response.
+3. The platform records an `AttemptEvent` for a final result. Pending results
+   are ignored; duplicate HackerEarth result polls and duplicate CSES result
+   page renders are recorded once.
+4. On accepted submission, the adapter requires source and language. It emits
    `AcceptedSubmission`, which uses the existing local storage, GitHub sync,
    revision scheduling, journal, and analytics flow.
-7. Parikshaa state is `skipped` with the generic reason that only LeetCode
+5. Parikshaa state is `skipped` with the generic reason that only LeetCode
    slug matching is supported.
 
 ## Failure handling
 
-- An unknown endpoint, unrecognised payload, missing source, or missing stable
-  problem identifier never creates an accepted record.
+- An unrecognised CSES result DOM, unknown HackerEarth endpoint or payload,
+  missing source, expired pending CSES source, or missing stable problem
+  identifier never creates an accepted record.
 - The user gets a short actionable toast for an accepted result whose source
   cannot be captured; optional diagnostics enable maintainer troubleshooting.
-- A changed endpoint must first be observed through diagnostics and tested
-  with a fixture before it becomes allowlisted.
+- A changed HackerEarth endpoint must first be observed through diagnostics
+  and tested with a fixture before it becomes allowlisted.
 - No network request or content data from an excluded HackerEarth route is
   observed or persisted.
 
 ## Tests and verification
 
-- Unit tests cover URL scoping, metadata extraction, accepted and rejected
-  verdicts, pending responses, duplicates, editor source fallback, missing
-  source, and unavailable judge metrics for both adapters.
-- Observer tests assert that only the confirmed CSES and public-practice
-  HackerEarth endpoints are relayed.
+- Unit tests cover CSES form capture, file-extension language mapping, pending
+  record expiry, accepted and rejected result-page DOMs, and duplicate result
+  renders. HackerEarth tests cover URL scoping, metadata extraction, accepted
+  and rejected verdicts, pending responses, duplicates, editor source fallback,
+  missing source, and unavailable judge metrics.
+- Observer tests assert that only confirmed public-practice HackerEarth
+  endpoints are relayed.
 - Tests assert that assessment, contest, and other excluded HackerEarth paths
   cannot match either adapter.
 - Existing Parikshaa tests change the unsupported-platform message to be
