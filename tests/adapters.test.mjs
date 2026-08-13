@@ -25,7 +25,32 @@ import {
   isPendingCsesSubmissionFresh,
   savePendingCsesSubmission,
 } from '../src/core/storage.ts';
+import { computeStats } from '../src/core/analytics.ts';
 import { PLATFORM_LABELS } from '../src/core/types.ts';
+
+const STATS_NOW = Date.UTC(2026, 0, 15, 12, 0, 0);
+const STATS_INTERVALS = [1, 3, 7, 21, 45, 90];
+
+function makeProblem(overrides = {}) {
+  const { revision, ...rest } = overrides;
+  return {
+    id: `leetcode:${rest.slug ?? 'two-sum'}`,
+    platform: 'leetcode',
+    problemId: '1',
+    slug: 'two-sum',
+    title: 'Two Sum',
+    url: 'https://leetcode.com/problems/two-sum/',
+    difficulty: 'easy',
+    tags: ['array'],
+    language: 'Python3',
+    code: 'print(1)',
+    solvedAt: STATS_NOW,
+    attempts: 1,
+    github: { status: 'synced', path: 'leetcode/easy/0001-two-sum/solution.py' },
+    ...rest,
+    revision: { stage: 0, ease: 1, dueAt: STATS_NOW + 86_400_000, reviewCount: 0, lapses: 0, ...revision },
+  };
+}
 
 function assertSanitisedCsesFixture(raw) {
   assert.doesNotMatch(raw, /<input[^>]*type=["']file["'][^>]*\bvalue=/i);
@@ -120,6 +145,17 @@ test('CSES and HackerEarth public practice routes are the only new adapter route
   assert.equal(adapterFor(csesTask)?.platform, 'cses');
   assert.equal(adapterFor(hackerEarthPractice)?.platform, 'hackerearth');
   assert.equal(adapterFor(hackerEarthPublicPractice)?.platform, 'hackerearth');
+});
+
+test('analytics counts CSES and HackerEarth solved records by platform', () => {
+  assert.equal(
+    computeStats([makeProblem({ platform: 'cses' })], STATS_INTERVALS, STATS_NOW).byPlatform.cses,
+    1,
+  );
+  assert.equal(
+    computeStats([makeProblem({ platform: 'hackerearth' })], STATS_INTERVALS, STATS_NOW).byPlatform.hackerearth,
+    1,
+  );
 });
 
 test('HackerEarth excludes nearby community and non-programming routes', () => {

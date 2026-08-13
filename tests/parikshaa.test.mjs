@@ -63,6 +63,7 @@ test('unsupported platforms receive the neutral LeetCode-only sync reason', asyn
     status: 'skipped',
     reason: 'Parikshaa problems are matched by LeetCode slug, so this platform is not synced.',
   });
+  assert.doesNotMatch(state.reason, /Codeforces/);
 });
 
 test('JWT claims are decoded without verification', () => {
