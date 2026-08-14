@@ -2,11 +2,12 @@
 
 **The developer’s word for “do it again”.** A Chrome extension for people who grind DSA and then forget it.
 
-When a submission is accepted on **LeetCode, Codeforces, AtCoder, CodeChef, HackerRank** or
-**GeeksforGeeks**, the extension commits the solution to a GitHub repository you own, ticks the
-problem off on [Parikshaa](https://parikshaa.org) if it has a match there, and puts it on a
-spaced-repetition schedule. Days later the toolbar badge tells you what is due; you re-solve
-the problem on the site, rate how it went, and the schedule adapts.
+When a submission is accepted on **LeetCode, Codeforces, AtCoder, CodeChef, HackerRank,
+GeeksforGeeks, CSES** or **HackerEarth public practice**, the extension commits the solution to a
+GitHub repository you own, ticks the problem off on [Parikshaa](https://parikshaa.org) when its
+LeetCode slug has a match there, and puts it on a spaced-repetition schedule. Days later the
+toolbar badge tells you what is due; you re-solve the problem on the site, rate how it went, and
+the schedule adapts.
 
 Solving is the easy part. Remembering three months later is the part nothing else helps with.
 
@@ -14,8 +15,9 @@ Solving is the easy part. Remembering three months later is the part nothing els
 
 ## What it does
 
-- **Tracks six judges** — LeetCode, Codeforces, AtCoder, CodeChef, HackerRank and
-  GeeksforGeeks — behind one adapter interface, each toggleable in options.
+- **Tracks eight judges** — LeetCode, Codeforces, AtCoder, CodeChef, HackerRank,
+  GeeksforGeeks, CSES and HackerEarth public practice — behind one adapter interface, each
+  toggleable in options.
 - **Auto-commits accepted solutions** to a repo of your choice, organised as
   `leetcode/medium/0011-container-with-most-water/solution.py`, with a per-problem `README.md`
   holding the link, tags, difficulty, judge stats and your own notes.
@@ -151,7 +153,7 @@ explanation is indistinguishable from a hijacked browser, and it leaves nowhere 
 escape hatch — so the page says what happened, shows the problem with one button, and carries
 the emergency pause.
 
-Never gated: the six judges, Parikshaa, GitHub, Google sign-in, Gmail, Calendar, `localhost`,
+Never gated: the eight judges, Parikshaa, GitHub, Google sign-in, Gmail, Calendar, `localhost`,
 anything that is not an ordinary web page, and whatever you add to the allowlist. An extension
 that locks someone out of their mail gets uninstalled the first morning it does so.
 
@@ -229,8 +231,9 @@ revision can be closed out without leaving the page.
 
 ### Details worth knowing
 
-- **LeetCode only.** Parikshaa problems are matched by LeetCode slug, so Codeforces
-  submissions are marked `skipped` rather than sent on a lookup that cannot match.
+- **LeetCode only.** Parikshaa problems are matched by LeetCode slug, so every non-LeetCode
+  platform — including CSES and HackerEarth — is marked `skipped` rather than sent on a lookup
+  that cannot match.
 - **A problem with no Parikshaa counterpart is skipped**, not created.
 - **Expired sessions wait rather than break.** Supabase access tokens last about an hour.
   Refreshing one from here would rotate the refresh token and sign you out of the website, so
@@ -340,22 +343,46 @@ your-solutions-repo/
 
 ## How detection works
 
-Judges fall into two camps, and there is one mechanism for each.
+Judges use either a rendered verdict, a passive verdict-response observer, or CSES's native
+submission form lifecycle. In every case, Redo observes a submission initiated by you; it never
+generates, pastes, or submits code.
 
 **Judges that render verdicts into HTML** — Codeforces, AtCoder — are watched with a
 `MutationObserver` over the submissions table. When a row reaches an accepted verdict under
 your own handle, the submission page is fetched for the source and, where the site has one,
 the problem page for tags and difficulty.
 
-**Judges that poll their own API** — LeetCode, CodeChef, HackerRank, GeeksforGeeks — are
-watched by a single shared `MAIN`-world observer (`src/content/observer.ts`). It wraps `fetch`
-and `XMLHttpRequest`, and for a narrow allowlist of submission URLs it relays the request body,
-the response body and the current editor contents to the adapter, which decides what they mean.
-It never blocks, delays or rewrites a request.
+**Judges that poll their own API** — LeetCode, CodeChef, HackerRank, GeeksforGeeks and
+HackerEarth public practice — are watched by a single shared `MAIN`-world observer
+(`src/content/observer.ts`). It wraps `fetch` and `XMLHttpRequest`, and for a narrow allowlist
+relays only the data each adapter is permitted to use. It never blocks, delays or rewrites a
+request.
 
 The allowlist is deliberately narrow (`src/adapters/observed.ts`): the observer relays request
 bodies, and a submission request body contains your source code, so nothing broader than the
 submission endpoints is ever read.
+
+**CSES Problem Set** uses its normal file-upload form rather than an observed request. Redo
+briefly waits only long enough to read the file you already selected and save it in local
+extension storage; it does not initiate an independent submission. It then replays that unchanged
+user-initiated native form exactly once. On a fixture-verified final result page, it joins that
+short-lived capture to the verdict. The capture expires after 15 minutes; if it is missing or
+expired, the accepted result is not saved as a solved record.
+
+**HackerEarth is deliberately result-only.** The observer allowlists only the fixture-confirmed
+public-practice final-result poll, never the source-bearing `/submit/AJAX/` or a Run request, and
+the HackerEarth adapter never reads a request body. Its final response supplies the verdict and
+available judge details; an accepted record requires the current editor snapshot as the only
+source fallback. If no editor source is available, Redo records the final attempt but does not
+save a solved record. It records the page title, canonical URL, language, verdict, and runtime
+or memory when available; HackerEarth difficulty remains `unknown` and tags are not recorded.
+
+The manifest deliberately injects on the public `/practice/*` family for navigation and on the
+canonical community-algorithm family, but injection is not permission to observe or track. At
+runtime, both the observer and adapter require an exact public programming-problem URL with a
+stable slug before they read a result, read editor contents, relay an exchange, or write data.
+Category pages and nested non-problem routes remain inert even though the broad public-practice
+match is injected.
 
 | Platform | Detection | Source of the code | Difficulty | Tags |
 | --- | --- | --- | --- | --- |
@@ -365,6 +392,14 @@ submission endpoints is ever read.
 | CodeChef | `api/ide` poll | submit request, else editor | — | — |
 | HackerRank | submissions poll | response, else submit request | — | — |
 | GeeksforGeeks | practice API poll | submit request, else editor | from the page header | — |
+| CSES | native submit form + result page | selected submission file | — | — |
+| HackerEarth | public-practice verdict endpoint | current editor only (result-only policy) | unknown | — |
+
+CSES support is limited to `cses.fi/problemset/`; contests are excluded. HackerEarth support is
+limited to `https://www.hackerearth.com/practice/*` and canonical public programming-problem
+pages at `https://www.hackerearth.com/community/problem/algorithm/*`. Assessments, private or
+recruitment tests, contests, challenges, hiring, hackathons, projects, SQL, data science,
+file-upload, and non-programming routes are not observed or tracked.
 
 Adding a platform means implementing the `PlatformAdapter` interface in `src/adapters/` and
 registering it in `src/adapters/index.ts` — the rest of the pipeline is platform-agnostic. If
@@ -393,6 +428,16 @@ field names and give up quietly rather than guessing when nothing matches. If a 
 picking submissions up, that adapter's `read*` function is the one place to look, and its test
 file shows the shape it expects.
 
+CSES's native form and result-page flow, and HackerEarth's public-practice final-result flow,
+are covered by sanitized fixtures and automated adapter tests. A release still needs an
+authenticated manual smoke test in Chrome with the unpacked `dist/` extension: personally submit
+one CSES Problem Set source file and confirm one accepted record, its code path, and a revision
+due date; then personally run and submit one HackerEarth public-practice programming solution
+and confirm one journal event per final result and one accepted record. Also open a HackerEarth
+assessment, challenge, or contest and confirm it creates no adapter toast, journal event, or
+tracked record. Do not collect or share a HAR, request body, cookie, token, query string, or real
+solution source while diagnosing those checks.
+
 **Parikshaa** needs no verdict detection: a separate content script on parikshaa.org reads the
 Supabase session from `localStorage` and captures the publishable key from the site's own
 outgoing requests, then hands both to the service worker. Like the LeetCode observer, it only
@@ -408,7 +453,18 @@ watches — it never alters a request.
 - AtCoder, CodeChef and HackerRank expose no difficulty or tags in the paths we read, so those
   problems land as unrated and untagged — they still schedule and sync, but they contribute
   nothing to topic mastery.
-- Attempt counts are per browser session, so they reset when you close the tab.
+- CSES accepts only final, fixture-confirmed Problem Set result markup and needs a fresh selected
+  file capture to create a solved record. HackerEarth accepts only the allowlisted final
+  public-practice result response and needs the current editor source; both fail quietly when
+  those inputs are unavailable.
+- HackerEarth tracking intentionally excludes assessments, private tests, contests, challenges,
+  hackathons, hiring, projects, SQL, data-science, file-upload, and non-programming routes.
+- CSES keeps its selected source capture for 15 minutes in local extension
+  storage. Its worker also persists rejected-attempt accumulation and opaque
+  final-result fingerprints, so closing or reloading a tab does not reset a
+  still-pending CSES attempt sequence or allow the same result page to append
+  another journal event. The source capture still expires after 15 minutes;
+  accepted results without a fresh capture do not create a solved record.
 - Parikshaa sync needs a parikshaa.org tab to have been open at some point in the last hour;
   otherwise problems queue until the session refreshes.
 - Storage is `chrome.storage.local`, which is capped around 10 MB — thousands of solutions, but

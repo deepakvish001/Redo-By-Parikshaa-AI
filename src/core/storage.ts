@@ -5,6 +5,9 @@ import type { UpsolveItem } from './upsolve.ts';
 import {
   PLATFORMS,
   type AttemptEvent,
+  type CsesFinalResult,
+  type CsesFinalResultClaim,
+  type PendingCsesSubmission,
   type Platform,
   type Settings,
   type SolvedProblem,
@@ -18,7 +21,19 @@ const KEYS = {
   parikshaaCredentials: 'parikshaaCredentials',
   parikshaaApi: 'parikshaaApiKey',
   upsolve: 'upsolve',
+  pendingCsesSubmissions: 'pendingCsesSubmissions',
+  csesFinalResultState: 'csesFinalResultState',
 } as const;
+
+export const PENDING_CSES_SUBMISSION_TTL_MS = 15 * 60_000;
+
+let pendingCsesOperations: Promise<void> = Promise.resolve();
+
+interface CsesFinalResultState {
+  failedAttempts: Record<string, number>;
+  /** SHA-256 fingerprints keep raw CSES result paths out of durable storage. */
+  seenResultFingerprints: Record<string, true>;
+}
 
 /** Aggregate counters that do not belong to any single problem. */
 export interface Meta {
@@ -75,6 +90,181 @@ const DEFAULT_META: Meta = {
 async function readKey<T>(key: string, fallback: T): Promise<T> {
   const result = await chrome.storage.local.get(key);
   return (result[key] as T | undefined) ?? fallback;
+}
+
+/** A selected CSES file is only valid for the brief trip to its result page. */
+export function isPendingCsesSubmissionFresh(
+  pending: Pick<PendingCsesSubmission, 'submittedAt'>,
+  now: number,
+): boolean {
+  return Number.isFinite(pending.submittedAt)
+    && pending.submittedAt <= now
+    && now - pending.submittedAt <= PENDING_CSES_SUBMISSION_TTL_MS;
+}
+
+/** Validates source-bearing CSES payloads before they can reach local storage. */
+export function isValidPendingCsesSubmission(
+  pending: unknown,
+): pending is PendingCsesSubmission {
+  if (!pending || typeof pending !== 'object') return false;
+  const value = pending as Partial<PendingCsesSubmission>;
+  return [value.taskId, value.filename, value.language, value.code].every(
+    (field) => typeof field === 'string' && field.trim().length > 0,
+  ) && Number.isFinite(value.submittedAt);
+}
+
+/** Validates the privacy-preserving, final-result worker message boundary. */
+export function isValidCsesFinalResult(result: unknown): result is CsesFinalResult {
+  if (!result || typeof result !== 'object') return false;
+  const value = result as Partial<CsesFinalResult>;
+  return typeof value.taskId === 'string'
+    && value.taskId.trim().length > 0
+    && typeof value.resultPath === 'string'
+    && /^\/problemset\/result\/[^/?#]+\/?$/.test(value.resultPath)
+    && typeof value.verdict === 'string'
+    && value.verdict.trim().length > 0
+    && typeof value.accepted === 'boolean';
+}
+
+/**
+ * `chrome.storage.local` does not provide a compare-and-set. Pending CSES
+ * records share one map, so all reads and writes are sequenced in this worker
+ * context to prevent simultaneous task captures from replacing one another.
+ */
+function withPendingCsesLock<T>(operation: () => Promise<T>): Promise<T> {
+  const next = pendingCsesOperations.then(operation, operation);
+  pendingCsesOperations = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
+}
+
+function prunePendingCsesSubmissions(
+  pending: Record<string, PendingCsesSubmission>,
+  now: number,
+): Record<string, PendingCsesSubmission> {
+  return Object.fromEntries(
+    Object.entries(pending).filter(([, submission]) => isPendingCsesSubmissionFresh(submission, now)),
+  );
+}
+
+async function readPendingCsesSubmissions(now: number): Promise<Record<string, PendingCsesSubmission>> {
+  const pending = await readKey<Record<string, PendingCsesSubmission>>(KEYS.pendingCsesSubmissions, {});
+  const fresh = prunePendingCsesSubmissions(pending, now);
+  if (Object.keys(fresh).length !== Object.keys(pending).length) {
+    await chrome.storage.local.set({ [KEYS.pendingCsesSubmissions]: fresh });
+  }
+  return fresh;
+}
+
+function normaliseCsesFinalResultState(value: unknown): CsesFinalResultState {
+  if (!value || typeof value !== 'object') {
+    return { failedAttempts: {}, seenResultFingerprints: {} };
+  }
+  const state = value as Partial<CsesFinalResultState>;
+  const failedAttempts = Object.fromEntries(
+    Object.entries(state.failedAttempts ?? {}).filter(
+      ([taskId, count]) => taskId.trim().length > 0 && Number.isSafeInteger(count) && count > 0,
+    ),
+  ) as Record<string, number>;
+  const seenResultFingerprints = Object.fromEntries(
+    Object.entries(state.seenResultFingerprints ?? {}).filter(
+      ([fingerprint, seen]) => /^[a-f0-9]{64}$/.test(fingerprint) && seen === true,
+    ),
+  ) as Record<string, true>;
+  return { failedAttempts, seenResultFingerprints };
+}
+
+async function csesResultFingerprint(result: CsesFinalResult): Promise<string> {
+  const data = new TextEncoder().encode(`${result.taskId}:${result.resultPath}`);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/** Saves one selected CSES file per task and prunes every expired capture. */
+export async function savePendingCsesSubmission(
+  submission: PendingCsesSubmission,
+  now = Date.now(),
+): Promise<void> {
+  if (!isValidPendingCsesSubmission(submission)) {
+    throw new Error('CSES pending submission is malformed.');
+  }
+  await withPendingCsesLock(async () => {
+    const pending = await readPendingCsesSubmissions(now);
+    pending[submission.taskId] = submission;
+    await chrome.storage.local.set({ [KEYS.pendingCsesSubmissions]: pending });
+  });
+}
+
+/** Reads the task's selected source, removing all captures that have expired. */
+export async function getFreshPendingCsesSubmission(
+  taskId: string,
+  now = Date.now(),
+): Promise<PendingCsesSubmission | undefined> {
+  return withPendingCsesLock(async () => (await readPendingCsesSubmissions(now))[taskId]);
+}
+
+/** Consumes one CSES capture after an accepted result, while pruning the rest. */
+export async function clearPendingCsesSubmission(taskId: string, now = Date.now()): Promise<void> {
+  await withPendingCsesLock(async () => {
+    const pending = await readPendingCsesSubmissions(now);
+    delete pending[taskId];
+    await chrome.storage.local.set({ [KEYS.pendingCsesSubmissions]: pending });
+  });
+}
+
+/** Atomically reads and removes a fresh CSES source capture for one task. */
+export async function consumePendingCsesSubmission(
+  taskId: string,
+  now = Date.now(),
+): Promise<PendingCsesSubmission | undefined> {
+  return withPendingCsesLock(async () => {
+    const pending = await readPendingCsesSubmissions(now);
+    const submission = pending[taskId];
+    if (!submission) return undefined;
+    delete pending[taskId];
+    await chrome.storage.local.set({ [KEYS.pendingCsesSubmissions]: pending });
+    return submission;
+  });
+}
+
+/**
+ * Claims one final CSES result in the worker before a page adapter emits any
+ * journal event. The claim, failed-attempt accumulator, and accepted-source
+ * consumption share one queue so navigation/reload cannot duplicate a result
+ * or lose earlier failures.
+ */
+export async function claimCsesFinalResult(
+  result: CsesFinalResult,
+  now = Date.now(),
+): Promise<CsesFinalResultClaim> {
+  if (!isValidCsesFinalResult(result)) throw new Error('CSES final result is malformed.');
+  const fingerprint = await csesResultFingerprint(result);
+  return withPendingCsesLock(async () => {
+    const state = normaliseCsesFinalResultState(
+      await readKey<unknown>(KEYS.csesFinalResultState, undefined),
+    );
+    if (state.seenResultFingerprints[fingerprint]) return { recorded: false };
+
+    state.seenResultFingerprints[fingerprint] = true;
+    if (!result.accepted) {
+      state.failedAttempts[result.taskId] = (state.failedAttempts[result.taskId] ?? 0) + 1;
+      await chrome.storage.local.set({ [KEYS.csesFinalResultState]: state });
+      return { recorded: true };
+    }
+
+    const pending = await readPendingCsesSubmissions(now);
+    const source = pending[result.taskId];
+    if (source) delete pending[result.taskId];
+    const attempts = (state.failedAttempts[result.taskId] ?? 0) + 1;
+    delete state.failedAttempts[result.taskId];
+    await chrome.storage.local.set({
+      [KEYS.csesFinalResultState]: state,
+      [KEYS.pendingCsesSubmissions]: pending,
+    });
+    return { recorded: true, attempts, ...(source ? { pending: source } : {}) };
+  });
 }
 
 export async function getSettings(): Promise<Settings> {

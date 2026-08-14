@@ -1,0 +1,26 @@
+{
+  "status": "fixture-final",
+  "context": {
+    "is_practice": 1,
+    "event": 0,
+    "problem_score": 100
+  },
+  "aggregated_data": {
+    "result": "AC",
+    "result_status": "fixture-accepted",
+    "result_detail": "sanitized",
+    "submission_score": 100,
+    "total_time_used": 1,
+    "max_memory_used": 1,
+    "lang": "fixture-language"
+  },
+  "message": [
+    {
+      "status": "AC",
+      "status_detail": "sanitized",
+      "score": 100,
+      "time_used": 1,
+      "memory_used": 1
+    }
+  ]
+}

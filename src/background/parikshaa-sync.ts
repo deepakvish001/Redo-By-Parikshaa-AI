@@ -8,8 +8,8 @@ import type { ParikshaaSyncState, Settings, SolvedProblem } from '../core/types.
 
 /**
  * Only LeetCode slugs line up with Parikshaa's `coding_problems.slug`.
- * Codeforces problems are keyed as `1352A`, which will never match, so they are
- * marked skipped rather than sent on a pointless round trip.
+ * Every other platform is marked skipped rather than sent on a pointless round
+ * trip.
  */
 const SUPPORTED_PLATFORMS = new Set(['leetcode']);
 
@@ -33,7 +33,7 @@ export async function syncToParikshaa(
   if (!SUPPORTED_PLATFORMS.has(problem.platform)) {
     return {
       status: 'skipped',
-      reason: 'Parikshaa problems are matched by LeetCode slug, so Codeforces is not synced.',
+      reason: 'Parikshaa problems are matched by LeetCode slug, so this platform is not synced.',
     };
   }
 

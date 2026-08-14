@@ -1,0 +1,27 @@
+{
+  "status": "fixture-final",
+  "context": {
+    "is_practice": 1,
+    "event": 0,
+    "problem_score": 100
+  },
+  "aggregated_data": {
+    "result": "WA",
+    "result_status": "fixture-rejected",
+    "result_detail": "sanitized",
+    "submission_score": 0,
+    "total_time_used": 1,
+    "max_memory_used": 1,
+    "lang": "fixture-language"
+  },
+  "message": [
+    {
+      "status": "WA",
+      "status_detail": "sanitized",
+      "score": 0,
+      "time_used": 1,
+      "memory_used": 1,
+      "diff_output_url": "<redacted>"
+    }
+  ]
+}

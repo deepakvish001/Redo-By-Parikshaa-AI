@@ -6,7 +6,9 @@ export type Platform =
   | 'atcoder'
   | 'codechef'
   | 'hackerrank'
-  | 'geeksforgeeks';
+  | 'geeksforgeeks'
+  | 'cses'
+  | 'hackerearth';
 
 /** Display names, and the order platforms appear in settings and stats. */
 export const PLATFORMS: Platform[] = [
@@ -16,6 +18,8 @@ export const PLATFORMS: Platform[] = [
   'codechef',
   'hackerrank',
   'geeksforgeeks',
+  'cses',
+  'hackerearth',
 ];
 
 export const PLATFORM_LABELS: Record<Platform, string> = {
@@ -25,6 +29,8 @@ export const PLATFORM_LABELS: Record<Platform, string> = {
   codechef: 'CodeChef',
   hackerrank: 'HackerRank',
   geeksforgeeks: 'GeeksforGeeks',
+  cses: 'CSES',
+  hackerearth: 'HackerEarth',
 };
 
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'unknown';
@@ -63,6 +69,36 @@ export interface AttemptEvent {
   submissionId?: string;
   /** ms between opening the problem and this attempt, when known. */
   elapsedMs?: number;
+}
+
+/**
+ * Source selected in CSES's own native form, held only until its final result
+ * page appears. This is deliberately separate from solved-problem storage.
+ */
+export interface PendingCsesSubmission {
+  taskId: string;
+  submittedAt: number;
+  filename: string;
+  language: string;
+  code: string;
+}
+
+/** A final CSES result, stripped to the data needed for worker-side claiming. */
+export interface CsesFinalResult {
+  taskId: string;
+  /** Path only: never a query string, source file, or account identifier. */
+  resultPath: string;
+  verdict: string;
+  accepted: boolean;
+}
+
+/** The worker's one-shot decision for a final CSES result page. */
+export interface CsesFinalResultClaim {
+  recorded: boolean;
+  /** Present only for a newly claimed accepted result. */
+  attempts?: number;
+  /** Consumed with a newly claimed accepted result, if it is still fresh. */
+  pending?: PendingCsesSubmission;
 }
 
 /**

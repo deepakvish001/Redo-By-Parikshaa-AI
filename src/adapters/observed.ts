@@ -8,8 +8,19 @@
  *
  * Patterns are matched against the full request URL. Keep them narrow: the
  * observer relays request bodies, and a submission request body contains the
- * user's source code.
+ * user's source code. HackerEarth is deliberately limited to its result poll;
+ * its source-bearing `/submit/AJAX/` request must never be observed.
  */
+export const HACKEREARTH_PUBLIC_PRACTICE_RESULT_URL =
+  /^https:\/\/www\.hackerearth\.com\/response\/submission-json\/([^/?#]+)\/AJAX\/?(?:[?#]|$)/i;
+
+const HACKEREARTH_PROGRAMMING_PRACTICE_PATH =
+  /^\/practice\/(?:algorithms|data-structures|basic-programming|maths)(?:\/|$)/;
+const HACKEREARTH_PRACTICE_PROBLEM_PATH =
+  /^\/practice\/(?:algorithms|data-structures|basic-programming|maths)\/(?:[^/]+\/)*practice-problems\/(?:algorithm|data-structure)\/([^/?#]+)\/?$/;
+const HACKEREARTH_COMMUNITY_ALGORITHM_PATH =
+  /^\/community\/problem\/algorithm\/([^/?#]+)\/?$/;
+
 export const OBSERVED_URLS: RegExp[] = [
   // LeetCode polls this until the judge finishes. The id is numeric for a
   // submit and `runcode_…` for a run, and the path picked up a `/v2/` segment
@@ -22,10 +33,57 @@ export const OBSERVED_URLS: RegExp[] = [
   // GeeksforGeeks practice runs through a separate API host.
   /practiceapi\.geeksforgeeks\.org\/api\/.*(submission|submit)/i,
   /geeksforgeeks\.org\/api\/.*(submission|submit)/i,
+  // Fixture-confirmed public-practice final-result poll. Do not add the
+  // source-bearing `/submit/AJAX/` endpoint to this list.
+  HACKEREARTH_PUBLIC_PRACTICE_RESULT_URL,
 ];
 
 export function isObserved(url: string): boolean {
   return OBSERVED_URLS.some((pattern) => pattern.test(url));
+}
+
+/** Only these HackerEarth pages may receive public-practice result exchanges. */
+export function isHackerEarthPublicPracticePage(href: string): boolean {
+  try {
+    const url = new URL(href);
+    return (
+      url.hostname === 'www.hackerearth.com' &&
+      (HACKEREARTH_PROGRAMMING_PRACTICE_PATH.test(url.pathname) ||
+        HACKEREARTH_COMMUNITY_ALGORITHM_PATH.test(url.pathname))
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A stable slug exists only on these exact public programming-problem routes.
+ * Category pages are useful for adapter navigation, but must never authorise
+ * an observer exchange or editor-source read.
+ */
+export function hackerEarthTrackableProblemSlug(href: string): string | null {
+  try {
+    const url = new URL(href);
+    if (url.hostname !== 'www.hackerearth.com') return null;
+    return HACKEREARTH_PRACTICE_PROBLEM_PATH.exec(url.pathname)?.[1]
+      ?? HACKEREARTH_COMMUNITY_ALGORITHM_PATH.exec(url.pathname)?.[1]
+      ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function isHackerEarthTrackableProblemPage(href: string): boolean {
+  return hackerEarthTrackableProblemSlug(href) !== null;
+}
+
+/**
+ * HackerEarth's result endpoint is shared by public and excluded practice
+ * pages, so endpoint matching alone cannot authorise source capture there.
+ */
+export function isObservedOnPage(url: string, pageHref: string): boolean {
+  if (!isObserved(url)) return false;
+  return !HACKEREARTH_PUBLIC_PRACTICE_RESULT_URL.test(url) || isHackerEarthTrackableProblemPage(pageHref);
 }
 
 export const OBSERVER_CHANNEL = 'redo-observer';
