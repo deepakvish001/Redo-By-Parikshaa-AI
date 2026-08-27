@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { readAttempt, readVerdict } from '../src/adapters/leetcode.ts';
-import { failedOnTest, looksLikeLanguage, readJudgeCells } from '../src/adapters/codeforces.ts';
+import {
+  failedOnTest,
+  looksLikeLanguage,
+  readJudgeCells,
+  readLanguage,
+} from '../src/adapters/codeforces.ts';
 import { isObserved } from '../src/adapters/observed.ts';
 import {
   MAX_HISTORY,
@@ -330,4 +335,86 @@ test('the failing test number becomes a passed count', () => {
   assert.equal(failedOnTest('Compilation error'), undefined);
   // Failing the very first test means nothing passed, not "-1".
   assert.equal(failedOnTest('Wrong answer on test 1'), 0);
+});
+
+/* ------------------------------------------------------- codeforces rows */
+
+/**
+ * A Codeforces status row, small enough to reason about.
+ *
+ * `cells` are given in the order the site renders them; each carries the text
+ * of the cell and, optionally, the class and whether it holds a problem link.
+ */
+function cfRow(cells) {
+  const nodes = cells.map((cell) => ({
+    textContent: cell.text,
+    className: cell.className ?? '',
+    problemLink: cell.problem ?? false,
+    previousElementSibling: null,
+    querySelector(selector) {
+      if (selector === 'a[href*="/problem/"]') return this.problemLink ? {} : null;
+      return null;
+    },
+  }));
+  nodes.forEach((node, index) => {
+    node.previousElementSibling = index > 0 ? nodes[index - 1] : null;
+  });
+
+  return {
+    querySelector(selector) {
+      if (selector === '.status-verdict-cell') {
+        return nodes.find((node) => node.className === 'status-verdict-cell') ?? null;
+      }
+      return null;
+    },
+    querySelectorAll() {
+      return nodes;
+    },
+  };
+}
+
+const SECRET_SANTA = [
+  { text: '342234879' },
+  { text: 'Aug/27/2026 19:04' },
+  { text: 'deepakvish001' },
+  { text: '1530E - Secret Santa', problem: true },
+  { text: 'GNU C++20 (64)' },
+  { text: 'Accepted', className: 'status-verdict-cell' },
+  { text: '124 ms' },
+  { text: '3400 KB' },
+];
+
+test('the language comes from its own column, not from whichever cell looks like one', () => {
+  // Codeforces really does offer a language called `Secret_171`, so "Secret
+  // Santa" won the guess — and the title cell is scanned first.
+  assert.equal(looksLikeLanguage('1530E - Secret Santa'), true);
+  assert.equal(readLanguage(cfRow(SECRET_SANTA)), 'GNU C++20 (64)');
+});
+
+test('an ordinary row still reads its language', () => {
+  assert.equal(
+    readLanguage(
+      cfRow([
+        { text: '1' },
+        { text: 'when' },
+        { text: 'who' },
+        { text: '2248A - You Delete, I Delete', problem: true },
+        { text: 'Python 3.8.10' },
+        { text: 'Wrong answer on test 3', className: 'status-verdict-cell' },
+      ]),
+    ),
+    'Python 3.8.10',
+  );
+});
+
+test('with no verdict cell to anchor on, the problem cell is still never the answer', () => {
+  const row = cfRow([
+    { text: '1530E - Secret Santa', problem: true },
+    { text: 'Java 21 64bit' },
+  ]);
+  assert.equal(readLanguage(row), 'Java 21 64bit');
+});
+
+test('a row with nothing language-shaped reports no language rather than a title', () => {
+  assert.equal(readLanguage(cfRow([{ text: '1530E - Secret Santa', problem: true }])), '');
 });

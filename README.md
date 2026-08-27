@@ -405,6 +405,12 @@ watches — it never alters a request.
 - Codeforces and AtCoder submissions are only picked up on pages that show the submissions
   table (the status page you land on after submitting, `/contest/<id>/my` or
   `/contests/<id>/submissions/me`, or a submission page).
+- Codeforces' official mirrors (`m1`, `m2`, `m3.codeforces.com`) are tracked as well as the main
+  domain. Community mirrors on other domains are not, and cannot be — the extension asks for
+  permission on named hosts only.
+- A Codeforces problem solved *during* a live round has no tags or rating on the contest page,
+  so the extension reads the problemset copy for those. Problems that never reach the
+  problemset — gyms, some Div. 4 mirrors — stay untagged.
 - AtCoder, CodeChef and HackerRank expose no difficulty or tags in the paths we read, so those
   problems land as unrated and untagged — they still schedule and sync, but they contribute
   nothing to topic mastery.

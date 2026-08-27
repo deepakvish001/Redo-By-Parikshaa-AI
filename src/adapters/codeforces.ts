@@ -47,6 +47,51 @@ export function failedOnTest(verdict: string): number | undefined {
   return Number.isFinite(failed) && failed > 0 ? failed - 1 : undefined;
 }
 
+/**
+ * The minimum a table row has to look like for the language read below. The
+ * real DOM satisfies it; a plain object in a test can too.
+ */
+export interface LanguageCell {
+  textContent: string | null;
+  previousElementSibling: LanguageCell | null;
+  querySelector(selectors: string): unknown;
+}
+
+export interface LanguageRow {
+  querySelector(selectors: string): LanguageCell | null;
+  querySelectorAll(selectors: string): Iterable<LanguageCell>;
+}
+
+/**
+ * The language, from its own column.
+ *
+ * Codeforces' status table runs `# · when · who · problem · language · verdict
+ * · time · memory`, so the language is the cell immediately before the verdict
+ * cell — which has a class, and is therefore something to anchor on rather than
+ * guess from.
+ *
+ * Guessing is what the old code did, and it kept being wrong in a way that is
+ * obvious in hindsight: the problem cell comes *first*, so any title containing
+ * a word that is also a language name won the race. Codeforces really does
+ * offer a language called `Secret_171`, so "1530E - Secret Santa" was filed as
+ * having been solved in "1530E - Secret Santa".
+ */
+export function readLanguage(row: LanguageRow): string {
+  const beside = row.querySelector('.status-verdict-cell')?.previousElementSibling;
+  const named = beside?.textContent?.trim();
+  if (named && named.length < 40) return named;
+
+  // Older or partial markup with no verdict cell to anchor on. The token scan
+  // still runs, but never over the cell holding the problem link — that is the
+  // one cell guaranteed to contain a title.
+  for (const cell of row.querySelectorAll('td')) {
+    if (cell.querySelector('a[href*="/problem/"]')) continue;
+    const text = cell.textContent?.trim() ?? '';
+    if (looksLikeLanguage(text)) return text;
+  }
+  return '';
+}
+
 /** True when a table cell reads like a language, not like a problem title. */
 export function looksLikeLanguage(text: string): boolean {
   if (!text || text.length >= 40) return false;
@@ -150,7 +195,7 @@ export class CodeforcesAdapter implements PlatformAdapter {
 
       const key = `${parsed.contestId}${parsed.index.toUpperCase()}`;
       this.processed.add(submissionId);
-      const language = this.languageFromRow(row);
+      const language = readLanguage(row);
       const judged = readJudgeCells(row);
       // `submissionverdict` is Codeforces' machine-readable verdict; the cell's
       // text is localised and "Accepted" is "Полное решение" in Russian.
@@ -191,14 +236,6 @@ export class CodeforcesAdapter implements PlatformAdapter {
         memory: judged.memory,
       });
     }
-  }
-
-  private languageFromRow(row: HTMLTableRowElement): string {
-    for (const cell of row.querySelectorAll('td')) {
-      const text = cell.textContent?.trim() ?? '';
-      if (looksLikeLanguage(text)) return text;
-    }
-    return '';
   }
 
   private async resolve(
@@ -265,17 +302,42 @@ export class CodeforcesAdapter implements PlatformAdapter {
 
     const fallback: ProblemMeta = { title: `${contestId}${index}`, tags: [], difficulty: 'unknown' };
 
+    // The contest page is tried first because it is the one the user is on and
+    // is therefore already warm. It hides tags and the rating while the round is
+    // running, though, so a solve during a contest lands here with nothing —
+    // which is exactly when the problemset copy has them.
+    const sources = [
+      `${window.location.origin}/contest/${contestId}/problem/${index}`,
+      `${window.location.origin}/problemset/problem/${contestId}/${index}`,
+    ];
+
+    let best: ProblemMeta | undefined;
+    for (const source of sources) {
+      const read = await this.readProblemPage(source);
+      if (!read) continue;
+      best ??= read;
+      // A title alone is worth keeping; tags are what makes it worth stopping.
+      if (read.tags.length > 0) {
+        best = read;
+        break;
+      }
+    }
+
+    if (!best) return fallback;
+    this.metaCache.set(key, best);
+    return best;
+  }
+
+  private async readProblemPage(url: string): Promise<ProblemMeta | null> {
     try {
-      const response = await fetch(
-        `https://codeforces.com/contest/${contestId}/problem/${index}`,
-        { credentials: 'include' },
-      );
-      if (!response.ok) return fallback;
+      const response = await fetch(url, { credentials: 'include' });
+      if (!response.ok) return null;
       const page = parseHtml(await response.text());
 
       const rawTitle = page.querySelector('.problem-statement .title')?.textContent?.trim() ?? '';
       // Titles arrive as "A. Sum of Round Numbers"; keep only the name.
-      const title = rawTitle.replace(/^[A-Za-z0-9]+\.\s*/, '') || fallback.title;
+      const title = rawTitle.replace(/^[A-Za-z0-9]+\.\s*/, '');
+      if (!title) return null;
 
       const tags: string[] = [];
       let rating: number | undefined;
@@ -287,11 +349,9 @@ export class CodeforcesAdapter implements PlatformAdapter {
         else tags.push(text);
       }
 
-      const meta: ProblemMeta = { title, tags, difficulty: ratingToDifficulty(rating) };
-      this.metaCache.set(key, meta);
-      return meta;
+      return { title, tags, difficulty: ratingToDifficulty(rating) };
     } catch {
-      return fallback;
+      return null;
     }
   }
 }
