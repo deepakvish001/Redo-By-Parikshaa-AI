@@ -172,6 +172,31 @@ function main(): void {
       record('error', message);
       showToast({ title: 'Redo', body: message, tone: 'error' });
     },
+    onNotice: (message) => {
+      record('event', message);
+      showToast({ title: 'Redo', body: message, tone: 'info', timeout: 12_000 });
+    },
+    claim: async (ids, watched) => {
+      try {
+        const claim = await send({
+          type: 'submissions:claim',
+          platform: adapter.platform,
+          ids,
+          watched,
+        });
+        record(
+          'event',
+          `claimed ${claim.actionable.length} of ${ids.length} submissions${
+            claim.adopted ? ' (first sight of this judge — history adopted)' : ''
+          }`,
+        );
+        return claim;
+      } catch {
+        // The service worker being asleep must not turn into a page of history
+        // being committed, so a failed claim means nothing is acted on.
+        return { actionable: [], adopted: false };
+      }
+    },
   });
 
   let lastSlug: string | null = null;

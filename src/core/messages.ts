@@ -8,6 +8,7 @@ import type {
 } from '../background/rating.ts';
 import type { ParikshaaCredentials, SessionDiagnostic } from './parikshaa.ts';
 import type { UpsolveItem, UpsolveSummary } from './upsolve.ts';
+import type { Claim } from './watermark.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
@@ -73,7 +74,8 @@ export type Request =
   | { type: 'backup:export' }
   | { type: 'backup:import'; text: string }
   | { type: 'backup:push' }
-  | { type: 'backup:pull' };
+  | { type: 'backup:pull' }
+  | { type: 'submissions:claim'; platform: string; ids: string[]; watched: string[] };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -111,6 +113,7 @@ export interface ResponseMap {
   'backup:import': RestoreResult;
   'backup:push': { path: string; commitUrl?: string };
   'backup:pull': RestoreResult;
+  'submissions:claim': Claim;
 }
 
 export interface UpsolveResponse {

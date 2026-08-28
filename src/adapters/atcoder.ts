@@ -76,7 +76,10 @@ export class AtCoderAdapter implements PlatformAdapter {
   readonly platform = 'atcoder' as const;
 
   private readonly processed = new Set<string>();
+  /** Ids this page saw still being judged — new by definition. */
+  private readonly watched = new Set<string>();
   private readonly attempts = new Map<string, number>();
+  private announced = false;
 
   matches(url: URL): boolean {
     return url.hostname === 'atcoder.jp' || url.hostname.endsWith('.atcoder.jp');
@@ -107,14 +110,49 @@ export class AtCoderAdapter implements PlatformAdapter {
     return Boolean(handle && author && handle === author);
   }
 
+  /**
+   * `/submissions/me` lists every submission this account has ever made, so a
+   * row being unfamiliar says nothing about it being recent. The service worker
+   * settles that; see `AdapterContext.claim`.
+   */
   private scan(context: AdapterContext): void {
+    const batch: AtCoderRow[] = [];
+
     for (const row of document.querySelectorAll('table tbody tr')) {
       const parsed = parseSubmissionRow(row);
-      if (!parsed || isPending(parsed.verdict)) continue;
+      if (!parsed) continue;
+
+      if (isPending(parsed.verdict)) {
+        // Watching a verdict arrive is proof the submission is happening now.
+        this.watched.add(parsed.submissionId);
+        continue;
+      }
       if (this.processed.has(parsed.submissionId)) continue;
       if (!this.isMine(row)) continue;
 
       this.processed.add(parsed.submissionId);
+      batch.push(parsed);
+    }
+
+    if (batch.length > 0) void this.handle(context, batch);
+  }
+
+  private async handle(context: AdapterContext, batch: AtCoderRow[]): Promise<void> {
+    const claim = await context.claim(
+      batch.map((row) => row.submissionId),
+      [...this.watched],
+    );
+
+    if (claim.adopted && !this.announced) {
+      this.announced = true;
+      context.onNotice(
+        'Redo is now watching AtCoder. Submissions already on this page were left alone — the next one you make gets committed.',
+      );
+    }
+
+    const wanted = new Set(claim.actionable);
+    for (const parsed of batch) {
+      if (!wanted.has(parsed.submissionId)) continue;
 
       if (!parsed.accepted) {
         this.attempts.set(parsed.taskId, (this.attempts.get(parsed.taskId) ?? 0) + 1);
@@ -122,7 +160,7 @@ export class AtCoderAdapter implements PlatformAdapter {
         continue;
       }
 
-      void this.resolve(parsed, context);
+      await this.resolve(parsed, context);
     }
   }
 

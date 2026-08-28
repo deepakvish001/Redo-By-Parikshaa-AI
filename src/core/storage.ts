@@ -2,6 +2,7 @@ import { DEFAULT_FOCUS } from './focus.ts';
 import { appendEvent } from './journal.ts';
 import type { ParikshaaCredentials } from './parikshaa.ts';
 import type { UpsolveItem } from './upsolve.ts';
+import { claimSubmissions, type Claim } from './watermark.ts';
 import {
   PLATFORMS,
   type AttemptEvent,
@@ -18,6 +19,7 @@ const KEYS = {
   parikshaaCredentials: 'parikshaaCredentials',
   parikshaaApi: 'parikshaaApiKey',
   upsolve: 'upsolve',
+  watermarks: 'watermarks',
 } as const;
 
 /** Aggregate counters that do not belong to any single problem. */
@@ -255,6 +257,30 @@ export async function getUpsolve(): Promise<UpsolveItem[]> {
 export async function saveUpsolve(items: UpsolveItem[]): Promise<UpsolveItem[]> {
   await chrome.storage.local.set({ [KEYS.upsolve]: items });
   return items;
+}
+
+/* ------------------------------------------------- submission watermarks */
+
+/**
+ * Claims a batch of submission ids, atomically.
+ *
+ * Read-decide-write lives here rather than in the content script because two
+ * tabs open on the same status page would otherwise both decide the same
+ * submissions were new, and commit them twice.
+ */
+export async function claimSubmissionIds(
+  platform: string,
+  ids: string[],
+  watched: string[],
+): Promise<Claim> {
+  const marks = await readKey<Record<string, string>>(KEYS.watermarks, {});
+  const claim = claimSubmissions(marks[platform], ids, new Set(watched));
+  if (claim.next && claim.next !== marks[platform]) {
+    await chrome.storage.local.set({
+      [KEYS.watermarks]: { ...marks, [platform]: claim.next },
+    });
+  }
+  return claim;
 }
 
 /* --------------------------------------------------------- backup/restore */

@@ -128,12 +128,30 @@ function parseProblemHref(href: string): { contestId: string; index: string } | 
   return null;
 }
 
+/** One finished row, read off the status table and waiting on a verdict of ours. */
+interface CodeforcesSubmission {
+  submissionId: string;
+  /** `2250A` — the problem key, not the submission's. */
+  key: string;
+  contestId: string;
+  index: string;
+  verdict: string;
+  accepted: boolean;
+  language: string;
+  runtime?: string;
+  memory?: string;
+  sourceHref: string;
+}
+
 export class CodeforcesAdapter implements PlatformAdapter {
   readonly platform = 'codeforces' as const;
 
   private readonly processed = new Set<string>();
+  /** Ids this page saw still being judged — new by definition. */
+  private readonly watched = new Set<string>();
   private readonly attempts = new Map<string, number>();
   private readonly metaCache = new Map<string, ProblemMeta>();
+  private announced = false;
 
   matches(url: URL): boolean {
     return url.hostname.endsWith('codeforces.com');
@@ -166,11 +184,20 @@ export class CodeforcesAdapter implements PlatformAdapter {
     return pathname.endsWith('/my') || search.includes('my=on') || pathname.includes('/submission/');
   }
 
+  /**
+   * Reads the table, then asks which of what it found is actually new.
+   *
+   * Two phases, because the answer to "is this new" lives in the service worker
+   * and this runs from a MutationObserver. The synchronous pass marks every row
+   * it collects as processed straight away, so the observer firing again mid-
+   * flight cannot queue the same submission twice.
+   */
   private scan(context: AdapterContext): void {
     const rows = document.querySelectorAll<HTMLTableRowElement>(
       'table.status-frame-datatable tr[data-submission-id]',
     );
     const handle = this.myHandle();
+    const batch: CodeforcesSubmission[] = [];
 
     for (const row of rows) {
       const submissionId = row.getAttribute('data-submission-id');
@@ -182,8 +209,17 @@ export class CodeforcesAdapter implements PlatformAdapter {
 
       // `waiting` is Codeforces' own flag for "the judge has not finished", and
       // unlike the verdict text it is the same on the Russian locale.
-      if (verdictCell?.getAttribute('waiting') === 'true') continue;
-      if (/in queue|running|testing|в очереди|выполняется/i.test(verdict)) continue;
+      const judging =
+        verdictCell?.getAttribute('waiting') === 'true' ||
+        /in queue|running|testing|в очереди|выполняется/i.test(verdict);
+      if (judging) {
+        // Seeing a verdict arrive is the one unambiguous signal that a
+        // submission is being made right now, so it is remembered: this is what
+        // lets the very first solve after installing be picked up, even though
+        // the rest of the page is history that must not be.
+        this.watched.add(submissionId);
+        continue;
+      }
 
       const author = row.querySelector<HTMLAnchorElement>('a[href^="/profile/"]')?.textContent?.trim();
       const mine = handle ? author === handle : this.isMySubmissionsPage();
@@ -193,63 +229,76 @@ export class CodeforcesAdapter implements PlatformAdapter {
       const parsed = problemLink ? parseProblemHref(problemLink.getAttribute('href') ?? '') : null;
       if (!parsed) continue;
 
-      const key = `${parsed.contestId}${parsed.index.toUpperCase()}`;
       this.processed.add(submissionId);
-      const language = readLanguage(row);
       const judged = readJudgeCells(row);
       // `submissionverdict` is Codeforces' machine-readable verdict; the cell's
       // text is localised and "Accepted" is "Полное решение" in Russian.
       const machine = verdictCell?.getAttribute('submissionverdict') ?? '';
-      const accepted = machine ? machine === 'OK' : /^accepted/i.test(verdict);
+
+      batch.push({
+        submissionId,
+        key: `${parsed.contestId}${parsed.index.toUpperCase()}`,
+        contestId: parsed.contestId,
+        index: parsed.index.toUpperCase(),
+        verdict,
+        accepted: machine ? machine === 'OK' : /^accepted/i.test(verdict),
+        language: readLanguage(row),
+        runtime: judged.runtime,
+        memory: judged.memory,
+        sourceHref:
+          row.querySelector<HTMLAnchorElement>('a[href*="/submission/"]')?.getAttribute('href') ??
+          `/contest/${parsed.contestId}/submission/${submissionId}`,
+      });
+    }
+
+    if (batch.length > 0) void this.handle(context, batch);
+  }
+
+  private async handle(
+    context: AdapterContext,
+    batch: CodeforcesSubmission[],
+  ): Promise<void> {
+    const claim = await context.claim(
+      batch.map((entry) => entry.submissionId),
+      [...this.watched],
+    );
+
+    if (claim.adopted && !this.announced) {
+      this.announced = true;
+      context.onNotice(
+        'Redo is now watching Codeforces. Submissions already on this page were left alone — the next one you make gets committed.',
+      );
+    }
+
+    const wanted = new Set(claim.actionable);
+    for (const entry of batch) {
+      if (!wanted.has(entry.submissionId)) continue;
 
       // Codeforces has no run/submit split — every row in the status table is a
       // real submission, and the verdict cell names the test it died on.
-      context.onEvent(key, {
+      context.onEvent(entry.key, {
         at: Date.now(),
         kind: 'submit',
-        verdict,
-        accepted,
-        language: language || undefined,
-        runtime: judged.runtime,
-        memory: judged.memory,
-        testsPassed: failedOnTest(verdict),
-        submissionId,
+        verdict: entry.verdict,
+        accepted: entry.accepted,
+        language: entry.language || undefined,
+        runtime: entry.runtime,
+        memory: entry.memory,
+        testsPassed: failedOnTest(entry.verdict),
+        submissionId: entry.submissionId,
       });
 
-      if (!accepted) {
-        this.attempts.set(key, (this.attempts.get(key) ?? 0) + 1);
-        context.onAttempt(`codeforces:${key}`);
+      if (!entry.accepted) {
+        this.attempts.set(entry.key, (this.attempts.get(entry.key) ?? 0) + 1);
+        context.onAttempt(`codeforces:${entry.key}`);
         continue;
       }
 
-      const sourceHref =
-        row.querySelector<HTMLAnchorElement>('a[href*="/submission/"]')?.getAttribute('href') ??
-        `/contest/${parsed.contestId}/submission/${submissionId}`;
-
-      void this.resolve(context, {
-        key,
-        contestId: parsed.contestId,
-        index: parsed.index.toUpperCase(),
-        sourceHref,
-        language,
-        runtime: judged.runtime,
-        memory: judged.memory,
-      });
+      await this.resolve(context, entry);
     }
   }
 
-  private async resolve(
-    context: AdapterContext,
-    submission: {
-      key: string;
-      contestId: string;
-      index: string;
-      sourceHref: string;
-      language: string;
-      runtime?: string;
-      memory?: string;
-    },
-  ): Promise<void> {
+  private async resolve(context: AdapterContext, submission: CodeforcesSubmission): Promise<void> {
     try {
       const code = await this.fetchSource(submission.sourceHref);
       if (!code) {

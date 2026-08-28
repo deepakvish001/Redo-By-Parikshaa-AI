@@ -19,6 +19,7 @@ import {
   getParikshaaCredentials,
   getProblem,
   getProblemList,
+  claimSubmissionIds,
   getSettings,
   getUpsolve,
   putProblem,
@@ -557,6 +558,9 @@ async function handle(request: Request): Promise<unknown> {
 
     case 'backup:pull':
       return pullBackup();
+
+    case 'submissions:claim':
+      return claimSubmissionIds(request.platform, request.ids, request.watched);
 
     case 'rating:profiles': {
       const { handles } = await getSettings();

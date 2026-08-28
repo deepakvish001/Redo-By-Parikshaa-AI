@@ -357,6 +357,20 @@ The allowlist is deliberately narrow (`src/adapters/observed.ts`): the observer 
 bodies, and a submission request body contains your source code, so nothing broader than the
 submission endpoints is ever read.
 
+### Telling a new submission from your back catalogue
+
+Codeforces' `/problemset/status?my=on` and AtCoder's `/submissions/me` are your *whole* history
+— hundreds of accepted rows, indistinguishable from the one you made a minute ago. So the
+service worker keeps a high-water mark per judge: the id of the newest submission it has already
+accounted for. Both judges hand ids out in increasing order, which makes "newer than the mark"
+exactly "happened since we last looked". The first time it ever sees a judge it adopts the
+history rather than committing it, and says so.
+
+The exception that keeps the first solve after install from being swallowed: a row the page
+watched still being judged is new by definition, whatever the mark says. Deciding this in the
+service worker rather than the page also means two tabs open on the same status page cannot both
+conclude the same submission is new.
+
 | Platform | Detection | Source of the code | Difficulty | Tags |
 | --- | --- | --- | --- | --- |
 | LeetCode | verdict poll | GraphQL, else the editor | from GraphQL | from GraphQL |
@@ -405,6 +419,11 @@ watches — it never alters a request.
 - Codeforces and AtCoder submissions are only picked up on pages that show the submissions
   table (the status page you land on after submitting, `/contest/<id>/my` or
   `/contests/<id>/submissions/me`, or a submission page).
+- **Only submissions made after you installed it are tracked.** Those judges' status pages list
+  everything you have ever submitted, and there is no way to tell yesterday's solve from one
+  from 2022 without acting on all of them — so the first time Redo sees a judge it notes where
+  your history ends and starts from there. It says so when it happens. There is no backfill:
+  existing solutions stay where they are.
 - Codeforces' official mirrors (`m1`, `m2`, `m3.codeforces.com`) are tracked as well as the main
   domain. Community mirrors on other domains are not, and cannot be — the extension asks for
   permission on named hosts only.
