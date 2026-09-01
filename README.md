@@ -2,7 +2,7 @@
 
 **The developer’s word for “do it again”.** A Chrome extension for people who grind DSA and then forget it.
 
-When a submission is accepted on **LeetCode, Codeforces, AtCoder, CodeChef, HackerRank** or
+When a submission is accepted on **LeetCode, Codeforces, AtCoder, CodeChef, HackerRank, CSES** or
 **GeeksforGeeks**, the extension commits the solution to a GitHub repository you own, ticks the
 problem off on [Parikshaa](https://parikshaa.org) if it has a match there, and puts it on a
 spaced-repetition schedule. Days later the toolbar badge tells you what is due; you re-solve
@@ -14,8 +14,8 @@ Solving is the easy part. Remembering three months later is the part nothing els
 
 ## What it does
 
-- **Tracks six judges** — LeetCode, Codeforces, AtCoder, CodeChef, HackerRank and
-  GeeksforGeeks — behind one adapter interface, each toggleable in options.
+- **Tracks seven judges** — LeetCode, Codeforces, AtCoder, CodeChef, HackerRank, GeeksforGeeks
+  and CSES — behind one adapter interface, each toggleable in options.
 - **Auto-commits accepted solutions** to a repo of your choice, organised as
   `leetcode/medium/0011-container-with-most-water/solution.py`, with a per-problem `README.md`
   holding the link, tags, difficulty, judge stats and your own notes.
@@ -516,6 +516,7 @@ conclude the same submission is new.
 | CodeChef | `api/ide` poll | submit request, else editor | — | — |
 | HackerRank | submissions poll | response, else submit request | — | — |
 | GeeksforGeeks | practice API poll | submit request, else editor | from the page header | — |
+| CSES | result page | the result page itself | — | — |
 
 Adding a platform means implementing the `PlatformAdapter` interface in `src/adapters/` and
 registering it in `src/adapters/index.ts` — the rest of the pipeline is platform-agnostic. If
@@ -537,7 +538,7 @@ work" into a specific endpoint. The log carries paths only — no bodies, no cod
 ### How much to trust each adapter
 
 The LeetCode and Codeforces paths follow long-stable, widely-documented endpoints. The
-AtCoder, CodeChef, HackerRank and GeeksforGeeks adapters were written against those sites'
+AtCoder, CodeChef, HackerRank, GeeksforGeeks and CSES adapters were written against those sites'
 published request shapes and are covered by fixture tests, but they have **not** been run
 against a live logged-in session on those sites — the payload interpreters probe a few likely
 field names and give up quietly rather than guessing when nothing matches. If a platform stops

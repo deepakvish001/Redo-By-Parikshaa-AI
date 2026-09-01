@@ -91,3 +91,22 @@ test('problem keys namespace the slug by platform', () => {
   assert.equal(problemKey('leetcode', 'two-sum'), 'leetcode:two-sum');
   assert.notEqual(problemKey('leetcode', '1A'), problemKey('codeforces', '1A'));
 });
+
+test('a language whose name starts with another language is not that language', () => {
+  // CSES calls Python "CPython3". Trimming a version suffix one character at a
+  // time walks that down through "cpytho", "cpyth"… to "c", and files every
+  // Python solve as solution.c.
+  assert.equal(extensionForLanguage('CPython3'), 'py');
+  assert.equal(extensionForLanguage('CPython2'), 'py');
+});
+
+test('C is still C, with or without a standard on the end', () => {
+  assert.equal(extensionForLanguage('C'), 'c');
+  assert.equal(extensionForLanguage('GNU C11'), 'c');
+  assert.equal(extensionForLanguage('C99'), 'c');
+});
+
+test('a one-letter language name never matches a word that merely contains it', () => {
+  assert.equal(extensionForLanguage('Whitespace'), 'txt');
+  assert.equal(extensionForLanguage('Brainfuck'), 'txt');
+});

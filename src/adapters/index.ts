@@ -1,5 +1,6 @@
 import { AtCoderAdapter } from './atcoder.ts';
 import { CodeChefAdapter } from './codechef.ts';
+import { CsesAdapter } from './cses.ts';
 import { CodeforcesAdapter } from './codeforces.ts';
 import { GeeksforGeeksAdapter } from './geeksforgeeks.ts';
 import { HackerRankAdapter } from './hackerrank.ts';
@@ -13,6 +14,7 @@ export const adapters: PlatformAdapter[] = [
   new CodeChefAdapter(),
   new HackerRankAdapter(),
   new GeeksforGeeksAdapter(),
+  new CsesAdapter(),
 ];
 
 export function adapterFor(url: URL): PlatformAdapter | undefined {

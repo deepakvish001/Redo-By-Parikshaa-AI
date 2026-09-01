@@ -59,14 +59,30 @@ export function extensionForLanguage(language: string): string {
   const exact = EXTENSIONS[normalized];
   if (exact) return exact;
 
-  // Substring matching would be wrong here — "whitespace" contains "c". Instead
-  // each word is matched on its own, trimming a version suffix one character at
-  // a time so "g++17" reaches "g++" and "node.js" reaches "node".
-  for (const token of normalized.split(/[^a-z0-9+#.]+/)) {
-    for (let candidate = token; candidate.length > 0; candidate = candidate.slice(0, -1)) {
-      const hit = EXTENSIONS[candidate];
-      if (hit) return hit;
+  const tokens = normalized.split(/[^a-z0-9+#.]+/).filter(Boolean);
+
+  // The *longest* known name contained in a word wins. Trimming a word one
+  // character at a time instead — which is what this used to do — walks
+  // "cpython3" down through "cpytho", "cpyth"… to "c", and files every CSES
+  // Python solve as `solution.c`.
+  let best = '';
+  for (const token of tokens) {
+    for (const [name, extension] of Object.entries(EXTENSIONS)) {
+      // Single-letter names are only ever a whole word. "whitespace" contains
+      // a "c" and is not C; "d" is a real language and "delphi" is not it.
+      if (name.length === 1) continue;
+      if (token.includes(name) && name.length > best.length) best = name;
     }
+  }
+  if (best) return EXTENSIONS[best] ?? 'txt';
+
+  // A single-letter name is only ever the whole word, or the word plus a
+  // version: "C11" and "C" are C, "whitespace" is not, and "cpython3" was
+  // already settled above.
+  for (const token of tokens) {
+    const letter = /^([a-z])[\d.+#]*$/.exec(token)?.[1];
+    const single = letter ? EXTENSIONS[letter] : undefined;
+    if (single) return single;
   }
 
   return 'txt';

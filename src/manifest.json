@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Redo \u2014 DSA revision that sticks",
+  "name": "Redo — DSA revision that sticks",
   "version": "1.0.0",
   "description": "Commit your accepted DSA solutions to GitHub, then actually remember them with spaced repetition and weak-topic analytics.",
   "minimum_chrome_version": "114",
@@ -22,6 +22,7 @@
     "https://www.codechef.com/*",
     "https://www.hackerrank.com/*",
     "https://www.geeksforgeeks.org/*",
+    "https://cses.fi/*",
     "https://practiceapi.geeksforgeeks.org/*",
     "https://api.github.com/*",
     "https://parikshaa.org/*",
@@ -32,7 +33,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Redo \u2014 open the revision panel",
+    "default_title": "Redo — open the revision panel",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",
@@ -72,7 +73,8 @@
         "https://atcoder.jp/*",
         "https://www.codechef.com/*",
         "https://www.hackerrank.com/*",
-        "https://www.geeksforgeeks.org/problems/*"
+        "https://www.geeksforgeeks.org/problems/*",
+        "https://cses.fi/*"
       ],
       "js": [
         "content.js"

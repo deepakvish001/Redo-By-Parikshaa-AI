@@ -6,7 +6,8 @@ export type Platform =
   | 'atcoder'
   | 'codechef'
   | 'hackerrank'
-  | 'geeksforgeeks';
+  | 'geeksforgeeks'
+  | 'cses';
 
 /** Display names, and the order platforms appear in settings and stats. */
 export const PLATFORMS: Platform[] = [
@@ -16,6 +17,7 @@ export const PLATFORMS: Platform[] = [
   'codechef',
   'hackerrank',
   'geeksforgeeks',
+  'cses',
 ];
 
 export const PLATFORM_LABELS: Record<Platform, string> = {
@@ -25,6 +27,7 @@ export const PLATFORM_LABELS: Record<Platform, string> = {
   codechef: 'CodeChef',
   hackerrank: 'HackerRank',
   geeksforgeeks: 'GeeksforGeeks',
+  cses: 'CSES',
 };
 
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'unknown';
