@@ -2,7 +2,7 @@ import { computeStats } from '../core/analytics.ts';
 import { INDEX_MARKERS } from '../core/brand.ts';
 import { commitFiles, getFileContent, isConfigured } from '../core/github.ts';
 import { buildIndexReadme, buildProblemReadme } from '../core/markdown.ts';
-import { notesPath, solutionPath } from '../core/paths.ts';
+import { notesPath, solutionFiles, solutionPath } from '../core/paths.ts';
 import { buildProfileReadme, buildProfileSvg } from '../core/profile.ts';
 import { getProblemList } from '../core/storage.ts';
 import { buildWrappedSvg, summariseWeek } from '../core/wrapped.ts';
@@ -85,7 +85,8 @@ export async function syncProblem(
       const commit = await commitFiles(
         config,
         [
-          { path, content: problem.code },
+          // Every language this problem has been solved in, not only the last.
+          ...solutionFiles(problem).map((file) => ({ path: file.path, content: file.content })),
           { path: notesPath(problem), content: buildProblemReadme(problem) },
           { path: indexPath, content: buildIndexReadme(withCurrent, now) },
           { path: 'PROFILE.md', content: buildProfileReadme(withCurrent, stats, now) },

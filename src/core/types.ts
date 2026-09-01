@@ -129,6 +129,16 @@ export interface SolvedProblem {
   tags: string[];
   language: string;
   code: string;
+  /**
+   * Every accepted solution, keyed by file extension.
+   *
+   * Keyed by extension rather than by language name on purpose: `GNU C++17` and
+   * `GNU C++20` are the same file, and the newer one should replace the older,
+   * while C++ and Python are two files that must sit side by side. `code` and
+   * `language` above stay as the most recent, so nothing that reads one
+   * solution has to learn about this.
+   */
+  solutions?: Record<string, { language: string; code: string; solvedAt: number }>;
   /** ms since epoch of the most recent accepted submission. */
   solvedAt: number;
   /** How many times the user has submitted before getting it accepted. */
@@ -336,6 +346,16 @@ export interface AcceptedSubmission {
   tags: string[];
   language: string;
   code: string;
+  /**
+   * Every accepted solution, keyed by file extension.
+   *
+   * Keyed by extension rather than by language name on purpose: `GNU C++17` and
+   * `GNU C++20` are the same file, and the newer one should replace the older,
+   * while C++ and Python are two files that must sit side by side. `code` and
+   * `language` above stay as the most recent, so nothing that reads one
+   * solution has to learn about this.
+   */
+  solutions?: Record<string, { language: string; code: string; solvedAt: number }>;
   runtimeNote?: string;
   memoryNote?: string;
   /** Submissions made for this problem in the current session, accepted one included. */

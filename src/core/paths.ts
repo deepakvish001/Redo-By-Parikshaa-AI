@@ -99,7 +99,44 @@ export function problemDirectory(problem: SolvedProblem): string {
 }
 
 export function solutionPath(problem: SolvedProblem): string {
-  return `${problemDirectory(problem)}/solution.${extensionForLanguage(problem.language)}`;
+  return solutionFile(problem, extensionForLanguage(problem.language));
+}
+
+export function solutionFile(problem: SolvedProblem, extension: string): string {
+  return `${problemDirectory(problem)}/solution.${extension}`;
+}
+
+/**
+ * Every solution file this problem should have, newest language first.
+ *
+ * Solving something in C++ and then again in Python used to overwrite the C++
+ * file: one problem, one `solution.<ext>`, last language wins. Two of the
+ * reference extensions get this right and Redo did not.
+ */
+export function solutionFiles(
+  problem: SolvedProblem,
+): Array<{ path: string; content: string; language: string }> {
+  const solutions = problem.solutions ?? {};
+  const extensions = Object.keys(solutions);
+
+  // A record written before this existed has only the flat `code` field.
+  if (extensions.length === 0) {
+    return [
+      {
+        path: solutionPath(problem),
+        content: problem.code,
+        language: problem.language,
+      },
+    ];
+  }
+
+  return extensions
+    .sort((a, b) => (solutions[b]?.solvedAt ?? 0) - (solutions[a]?.solvedAt ?? 0))
+    .map((extension) => ({
+      path: solutionFile(problem, extension),
+      content: solutions[extension]!.code,
+      language: solutions[extension]!.language,
+    }));
 }
 
 export function notesPath(problem: SolvedProblem): string {

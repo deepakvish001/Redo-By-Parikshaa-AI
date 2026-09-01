@@ -78,6 +78,11 @@ Solving is the easy part. Remembering three months later is the part nothing els
   open. Down every listing, each problem link gets its rating in Codeforces' own rank colour and a
   tick if you have solved it. Every part of it is a switch in Settings, and the master switch puts
   the page back exactly as the judge built it.
+- **Keeps every language you solved it in.** Solve something in C++ and again in Python and both
+  files stay in the problem's folder, both are named in its README, and both survive a re-sync.
+  The repository index also groups everything by topic, collapsed, beside the flat list — "what
+  have I done about graphs" is usually the question somebody browsing a solutions repo is actually
+  asking.
 - **Tells you where you actually placed.** "Rank 3,412 of 28,000" says nothing. On a standings
   page Redo adds your rank *in your country* and *at your college*, and can hide everyone else so
   the table is just the people you compete with. Both come from the page itself — each row already

@@ -4,7 +4,7 @@ import { verifyAccess } from '../core/github.ts';
 import { MAX_LABELS, normalise } from '../core/labels.ts';
 import { mergeUpsolve, reconcile, summariseUpsolve } from '../core/upsolve.ts';
 import type { DiagnosticEntry, Request, Response, ResponseMap } from '../core/messages.ts';
-import { problemKey } from '../core/paths.ts';
+import { extensionForLanguage, problemKey } from '../core/paths.ts';
 import { isExpired, type SessionDiagnostic } from '../core/parikshaa.ts';
 import { appendActivity, struggleScore } from '../core/journal.ts';
 import { WEEK_MS, summariseWeek, wrappedCaption } from '../core/wrapped.ts';
@@ -206,6 +206,16 @@ async function recordSubmission(
     tags: submission.tags.length > 0 ? submission.tags : (existing?.tags ?? []),
     language: submission.language,
     code: submission.code,
+    // Keyed by extension, so re-solving in C++20 replaces the C++17 file while
+    // a Python solve sits beside it rather than on top of it.
+    solutions: {
+      ...existing?.solutions,
+      [extensionForLanguage(submission.language)]: {
+        language: submission.language,
+        code: submission.code,
+        solvedAt: now,
+      },
+    },
     solvedAt: now,
     attempts: submission.attempts ?? existing?.attempts ?? 1,
     runtimeNote: submission.runtimeNote,
