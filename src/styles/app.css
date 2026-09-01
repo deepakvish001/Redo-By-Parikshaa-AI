@@ -1717,3 +1717,45 @@ body.gate {
 .filebtn input[type='file'] {
   display: none;
 }
+
+/* ------------------------------------------------------------ first run */
+
+/* Only shown while unconfigured, so it earns the accent border. */
+.setup {
+  border-color: var(--accent);
+  background: linear-gradient(var(--accent-wash), var(--accent-wash)), var(--surface);
+}
+
+.setup__list {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.setup__list li {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.setup__list li b { color: var(--text); font-weight: 600; }
+
+/* A step already done stays listed — the list is the map, not a checklist
+   that vanishes as you go. */
+.setup__list li.is-done {
+  color: var(--text-faint);
+  text-decoration-color: var(--border);
+}
+
+.setup__list li.is-done::marker { content: '✓ '; }
+
+.setup code {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11.5px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}

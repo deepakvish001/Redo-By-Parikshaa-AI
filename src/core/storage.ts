@@ -44,6 +44,15 @@ export const DEFAULT_SETTINGS: Settings = {
   parikshaa: {
     enabled: false,
   },
+  // Quiet additions default on; nothing here changes the page's own layout.
+  page: {
+    enabled: true,
+    rail: true,
+    rating: true,
+    tags: true,
+    timer: true,
+    listings: true,
+  },
   diagnostics: {
     enabled: false,
   },
@@ -86,6 +95,7 @@ export async function getSettings(): Promise<Settings> {
   return {
     github: { ...DEFAULT_SETTINGS.github, ...stored.github },
     parikshaa: { ...DEFAULT_SETTINGS.parikshaa, ...stored.parikshaa },
+    page: { ...DEFAULT_SETTINGS.page, ...stored.page },
     diagnostics: { ...DEFAULT_SETTINGS.diagnostics, ...stored.diagnostics },
     contests: {
       ...DEFAULT_SETTINGS.contests,
@@ -105,6 +115,7 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
   const next: Settings = {
     github: { ...current.github, ...patch.github },
     parikshaa: { ...current.parikshaa, ...patch.parikshaa },
+    page: { ...current.page, ...patch.page },
     diagnostics: { ...current.diagnostics, ...patch.diagnostics },
     contests: { ...current.contests, ...patch.contests },
     wrapped: { ...current.wrapped, ...patch.wrapped },

@@ -65,6 +65,13 @@ Solving is the easy part. Remembering three months later is the part nothing els
   the ladder, how often you forgot it on review, how many attempts it took to get accepted,
   how many hints you needed, and how long it took relative to the difficulty — so "dynamic
   programming: 34" is a claim backed by your own history.
+- **Puts itself on the Codeforces page.** A card in the sidebar of every problem: the rating
+  (shown even with the site's own tags switched off), a **Reveal tags** button for when you give
+  up, a clock running since you opened it, your attempts on this problem, your note, and — when it
+  is due — the revision prompt with the hint ladder, right there instead of in a panel you have to
+  open. Down every listing, each problem link gets its rating in Codeforces' own rank colour and a
+  tick if you have solved it. Every part of it is a switch in Settings, and the master switch puts
+  the page back exactly as the judge built it.
 - **Says why your submissions get rejected.** The attempt journal holds the verdict of every
   failed submit, so the Stats tab can say the thing a solved-count never can: *"40% of your
   rejected submissions are 'too slow', and dynamic programming is where it happens most."*
@@ -356,6 +363,27 @@ It never blocks, delays or rewrites a request.
 The allowlist is deliberately narrow (`src/adapters/observed.ts`): the observer relays request
 bodies, and a submission request body contains your source code, so nothing broader than the
 submission endpoints is ever read.
+
+## On the page
+
+Redo's second surface. The side panel is where you plan and review; the page is where you actually
+solve, and until now the extension was invisible there.
+
+**One injection layer, not one script per feature.** Features declare where they belong — which
+URLs, which anchor — and a single runner (`src/content/inject/`) owns the rest: finding the anchor,
+waiting for it to appear, handing the feature an isolated shadow root with Redo's palette already
+inside, tearing it down on navigation or when a switch goes off, and putting it back when the host
+page re-renders it away. One feature throwing costs one missing card, never the page.
+
+**One cached mirror of Codeforces, not one fetch per feature.** The rating chip on a problem page,
+the ticks down a listing, and everything the roadmap has planned after them are the same two tables
+asked different questions: the problemset, and your own submission history. `src/background/
+cf-mirror.ts` owns both, behind the API's one-request-every-two-seconds limit, in IndexedDB — the
+problemset alone is several megabytes, well past what `chrome.storage.local` will hold. A whole
+browsing session costs two API calls.
+
+Your own solved records are unioned into what the mirror knows, so a problem you solved before the
+mirror existed still shows a tick.
 
 ### Telling a new submission from your back catalogue
 

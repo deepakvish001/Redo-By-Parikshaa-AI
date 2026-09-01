@@ -1,3 +1,8 @@
+import { codeforces } from './cf-api.ts';
+
+/** Handles per `user.info` call. The documented ceiling is ten thousand. */
+const CHUNK = 5000;
+
 import {
   buildUpsolveList,
   type ContestProblem,
@@ -22,37 +27,6 @@ import {
  * guess. LeetCode publishes a rating but not the field, which is why only one
  * of the two can be predicted — see `leetcodeRating` for what is possible.
  */
-
-const CF_API = 'https://codeforces.com/api';
-
-/** Codeforces asks for no more than one request every two seconds. */
-const CF_GAP_MS = 2100;
-/** Handles per `user.info` call. The documented ceiling is ten thousand. */
-const CHUNK = 5000;
-let lastCall = 0;
-
-async function codeforces<T>(method: string, params: Record<string, string>): Promise<T> {
-  const wait = Math.max(0, lastCall + CF_GAP_MS - Date.now());
-  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-  lastCall = Date.now();
-
-  // POST because a contest's worth of handles does not fit in a URL.
-  const response = await fetch(`${CF_API}/${method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams(params).toString(),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Codeforces returned ${response.status} for ${method}.`);
-  }
-
-  const json = (await response.json()) as { status: string; result?: T; comment?: string };
-  if (json.status !== 'OK' || json.result === undefined) {
-    throw new Error(json.comment ?? `Codeforces refused the ${method} request.`);
-  }
-  return json.result;
-}
 
 export interface CodeforcesProfile {
   handle: string;

@@ -39,6 +39,14 @@ import type {
 import { getCachedContests, refreshContests, sendContestReminders } from './contests.ts';
 import { focusState, startPause, watchNavigation } from './focus.ts';
 import { applyBackup, currentBackup, pullBackup, pushBackup } from './backup.ts';
+import {
+  ensureProblemset,
+  ensureUserStatus,
+  lookup,
+  mirrorState,
+  noteSolved,
+  type CfProblemView,
+} from './cf-mirror.ts';
 import { codeforcesProfile, fetchUpsolve, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
@@ -213,6 +221,15 @@ async function recordSubmission(
 
   await putProblem(problem);
   await refreshBadge();
+
+  // The mirror caches an hour at a time, but the extension just watched this
+  // solve happen — leaving the page showing it as unsolved would be Redo
+  // disagreeing with something the user saw it record.
+  if (submission.platform === 'codeforces' && settings.handles.codeforces) {
+    await noteSolved(settings.handles.codeforces, submission.slug.toUpperCase()).catch(
+      () => undefined,
+    );
+  }
 
   const [github, parikshaa] = await Promise.all([
     syncProblem(problem, settings),
@@ -561,6 +578,57 @@ async function handle(request: Request): Promise<unknown> {
 
     case 'submissions:claim':
       return claimSubmissionIds(request.platform, request.ids, request.watched);
+
+    case 'rail:get': {
+      const id = problemKey(request.platform as SolvedProblem['platform'], request.slug);
+      const [problem, settings, journal, opened] = await Promise.all([
+        getProblem(id),
+        getSettings(),
+        getJournal(id),
+        readOpened(),
+      ]);
+
+      // The mirror is only consulted for Codeforces, and only when it can
+      // answer — a cold cache must not hold the whole card back.
+      let cf: CfProblemView | undefined;
+      if (request.platform === 'codeforces') {
+        cf = (
+          await lookup(
+            [request.slug],
+            settings.handles.codeforces,
+            problem ? new Set([request.slug.toUpperCase()]) : undefined,
+          ).catch(() => undefined)
+        )?.[request.slug];
+      }
+
+      return {
+        problem,
+        // A solved problem carries its own journal on the record.
+        journal: problem?.events ?? journal,
+        due: problem ? isDue(problem.revision, Date.now()) : false,
+        openedAt: opened[id],
+        cf,
+        page: settings.page,
+        now: Date.now(),
+      };
+    }
+
+    case 'cf:lookup': {
+      const [{ handles }, problems] = await Promise.all([getSettings(), getProblemList()]);
+      const mine = new Set(
+        problems
+          .filter((problem) => problem.platform === 'codeforces')
+          .map((problem) => problem.slug.toUpperCase()),
+      );
+      return lookup(request.keys, handles.codeforces, mine);
+    }
+
+    case 'cf:refresh': {
+      const { handles } = await getSettings();
+      await ensureProblemset(true);
+      if (handles.codeforces) await ensureUserStatus(handles.codeforces, true);
+      return mirrorState(handles.codeforces);
+    }
 
     case 'rating:profiles': {
       const { handles } = await getSettings();

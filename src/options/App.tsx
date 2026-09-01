@@ -417,6 +417,36 @@ export function App() {
         </p>
       </header>
 
+      {/*
+        Shown until the two things that make Redo do anything are set. Landing
+        in a nine-section settings page with no idea which parts matter is how
+        people conclude an extension does not work.
+      */}
+      {(!settings.github.enabled || !settings.github.repo) && (
+        <section className="section-card setup">
+          <h2 className="section-card__title">
+            <SparkIcon size={14} />
+            Two things to set up
+          </h2>
+          <ol className="setup__list">
+            <li className={settings.github.repo && settings.github.token ? 'is-done' : ''}>
+              <b>A GitHub repository.</b> Where your accepted solutions get committed. You need a
+              fine-grained token with <code>Contents: read and write</code> on that one repository —
+              the next section walks through it.
+            </li>
+            <li className={settings.handles.codeforces || settings.handles.leetcode ? 'is-done' : ''}>
+              <b>Your Codeforces handle.</b> It turns on the rating and solved marks on Codeforces
+              pages, the contest rating card, and the upsolve queue. Public profile name, not a
+              login.
+            </li>
+          </ol>
+          <p className="section-card__hint" style={{ marginBottom: 0 }}>
+            Everything else already has a sensible default. Nothing is sent anywhere except the
+            destinations you switch on.
+          </p>
+        </section>
+      )}
+
       <section className="section-card">
         <h2 className="section-card__title">
           <GithubIcon size={14} />
@@ -880,6 +910,53 @@ export function App() {
             label={PLATFORM_LABELS[platform]}
           />
         ))}
+      </section>
+
+      <section className="section-card">
+        <h2 className="section-card__title">
+          <SparkIcon size={14} />
+          On the judge's page
+        </h2>
+        <p className="section-card__hint">
+          What Redo adds to Codeforces itself: a card in the sidebar with the problem's rating,
+          your history on it and the revision prompt, plus rating and solved marks down listing
+          pages. Nothing here changes the site's own layout — turn the first switch off and the
+          pages are exactly as the judge built them.
+        </p>
+
+        <Toggle
+          checked={settings.page.enabled}
+          onChange={(enabled) => setSettings({ ...settings, page: { ...settings.page, enabled } })}
+          label="Enhance judge pages"
+          hint="The master switch for everything below."
+        />
+
+        <div style={{ opacity: settings.page.enabled ? 1 : 0.45 }}>
+          {(
+            [
+              ['rail', 'Sidebar card on problem pages', 'Rating, your attempts, notes and the revision prompt.'],
+              ['rating', 'Problem rating', "Shown even when you have Codeforces' own tags turned off."],
+              ['tags', 'Reveal tags button', 'Tags stay hidden until you ask for them.'],
+              ['timer', 'Solve clock', 'How long this attempt has taken so far.'],
+              ['listings', 'Marks on listing pages', 'Rating and a tick beside every problem link.'],
+            ] as Array<[keyof Settings['page'], string, string]>
+          ).map(([key, label, hint]) => (
+            <Toggle
+              key={key}
+              checked={settings.page[key]}
+              onChange={(value) =>
+                setSettings({ ...settings, page: { ...settings.page, [key]: value } })
+              }
+              label={label}
+              hint={hint}
+            />
+          ))}
+        </div>
+
+        <div className="field__hint">
+          Ratings and tags come from Codeforces' public problemset, cached locally for a week. Your
+          solved marks come from your own submission history, refreshed hourly.
+        </div>
       </section>
 
       <section className="section-card">

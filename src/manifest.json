@@ -9,7 +9,8 @@
     "alarms",
     "notifications",
     "sidePanel",
-    "tabs"
+    "tabs",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "https://leetcode.com/*",

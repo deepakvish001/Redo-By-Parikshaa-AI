@@ -9,6 +9,7 @@ import type {
 import type { ParikshaaCredentials, SessionDiagnostic } from './parikshaa.ts';
 import type { UpsolveItem, UpsolveSummary } from './upsolve.ts';
 import type { Claim } from './watermark.ts';
+import type { CfProblemView } from '../background/cf-mirror.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
@@ -75,7 +76,10 @@ export type Request =
   | { type: 'backup:import'; text: string }
   | { type: 'backup:push' }
   | { type: 'backup:pull' }
-  | { type: 'submissions:claim'; platform: string; ids: string[]; watched: string[] };
+  | { type: 'submissions:claim'; platform: string; ids: string[]; watched: string[] }
+  | { type: 'rail:get'; platform: string; slug: string }
+  | { type: 'cf:lookup'; keys: string[] }
+  | { type: 'cf:refresh' };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -114,6 +118,38 @@ export interface ResponseMap {
   'backup:push': { path: string; commitUrl?: string };
   'backup:pull': RestoreResult;
   'submissions:claim': Claim;
+  'rail:get': RailData;
+  'cf:lookup': Record<string, CfProblemView>;
+  'cf:refresh': MirrorState;
+}
+
+/**
+ * Everything the on-page rail draws, in one round trip.
+ *
+ * One message rather than five because the rail renders on every problem page
+ * load, and five awakenings of the service worker per page is five chances for
+ * the card to appear in pieces.
+ */
+export interface RailData {
+  /** The tracked record, when this problem has been solved before. */
+  problem?: SolvedProblem;
+  /** Attempts on a problem not yet solved; solved ones carry their own. */
+  journal: AttemptEvent[];
+  due: boolean;
+  /** When this page was first opened, so the rail can run a live clock. */
+  openedAt?: number;
+  /** Rating, tags and solved state from the Codeforces mirror. */
+  cf?: CfProblemView;
+  page: Settings['page'];
+  now: number;
+}
+
+/** How full each half of the Codeforces mirror is, for Settings to report. */
+export interface MirrorState {
+  problems: number;
+  problemsAt: number;
+  solved: number;
+  statusAt: number;
 }
 
 export interface UpsolveResponse {

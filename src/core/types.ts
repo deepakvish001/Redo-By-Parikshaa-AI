@@ -229,6 +229,25 @@ export interface Settings {
     /** Mark matching problems solved on parikshaa.org. */
     enabled: boolean;
   };
+  /**
+   * What the extension adds to the judges' own pages. Everything here is a
+   * switch because people installed Redo to sync solutions, and must not open
+   * Codeforces one morning to find it rebuilt.
+   */
+  page: {
+    /** Master switch. Off means no injection at all beyond the review nudge. */
+    enabled: boolean;
+    /** The sidebar card on a problem page. */
+    rail: boolean;
+    /** Rating chip and tags on the rail. Tags stay hidden until asked for. */
+    rating: boolean;
+    /** Reveal the problem's tags without leaving the page. */
+    tags: boolean;
+    /** A running clock for how long this attempt has taken. */
+    timer: boolean;
+    /** Solved ticks, due badges and rating chips down listing pages. */
+    listings: boolean;
+  };
   diagnostics: {
     /**
      * Records what the observer sees on each judge, so a detection failure can
