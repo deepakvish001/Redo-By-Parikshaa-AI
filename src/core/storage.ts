@@ -58,6 +58,9 @@ export const DEFAULT_SETTINGS: Settings = {
     timer: true,
     listings: true,
     profile: true,
+    hovercards: true,
+    friends: true,
+    standings: true,
   },
   diagnostics: {
     enabled: false,
@@ -69,7 +72,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   wrapped: { notify: true },
   focus: DEFAULT_FOCUS,
-  handles: { codeforces: '', leetcode: '', goal: 0 },
+  handles: { codeforces: '', leetcode: '', goal: 0, friends: [], organization: '' },
   revision: {
     intervals: [1, 3, 7, 21, 45, 90],
     skipEasy: false,

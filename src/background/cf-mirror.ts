@@ -274,6 +274,146 @@ export async function lookup(
   return view;
 }
 
+/* ----------------------------------------------------------------- people */
+
+export interface CfHandleCard {
+  handle: string;
+  rating?: number;
+  maxRating?: number;
+  rank?: string;
+  maxRank?: string;
+  contribution?: number;
+  organization?: string;
+  country?: string;
+  city?: string;
+  lastOnlineSeconds?: number;
+  registrationTimeSeconds?: number;
+  avatar?: string;
+}
+
+interface CfUserInfo extends CfHandleCard {
+  titlePhoto?: string;
+}
+
+/** Cards are short-lived in memory only — a rating does not change mid-session. */
+const cards = new Map<string, { at: number; card: CfHandleCard }>();
+const CARD_TTL = 15 * 60_000;
+
+/**
+ * Public profile details for a batch of handles.
+ *
+ * Batched because a standings page has a hundred handles on it and the API
+ * takes them all in one call. Nothing here needs a session — it is the same
+ * data the profile page prints.
+ */
+export async function handleCards(handles: string[]): Promise<Record<string, CfHandleCard>> {
+  const wanted = [...new Set(handles.map((handle) => handle.trim()).filter(Boolean))];
+  const now = Date.now();
+
+  const out: Record<string, CfHandleCard> = {};
+  const missing: string[] = [];
+
+  for (const handle of wanted) {
+    const cached = cards.get(handle.toLowerCase());
+    if (cached && now - cached.at < CARD_TTL) out[handle] = cached.card;
+    else missing.push(handle);
+  }
+
+  if (missing.length === 0) return out;
+
+  try {
+    const users = await codeforces<CfUserInfo[]>('user.info', { handles: missing.join(';') });
+    for (const user of users) {
+      const card: CfHandleCard = {
+        handle: user.handle,
+        rating: user.rating,
+        maxRating: user.maxRating,
+        rank: user.rank,
+        maxRank: user.maxRank,
+        contribution: user.contribution,
+        organization: user.organization,
+        country: user.country,
+        city: user.city,
+        lastOnlineSeconds: user.lastOnlineSeconds,
+        registrationTimeSeconds: user.registrationTimeSeconds,
+        avatar: user.titlePhoto,
+      };
+      cards.set(user.handle.toLowerCase(), { at: now, card });
+      out[user.handle] = card;
+    }
+  } catch {
+    // A handle that does not exist fails the whole call, so a miss returns what
+    // was cached rather than nothing.
+  }
+
+  return out;
+}
+
+interface CfFriendSubmission {
+  id: number;
+  creationTimeSeconds: number;
+  problem: { contestId?: number; index: string };
+  author: { members: Array<{ handle: string }> };
+  programmingLanguage: string;
+  verdict?: string;
+}
+
+export interface FriendSolve {
+  handle: string;
+  submissionId: number;
+  at: number;
+  language: string;
+  accepted: boolean;
+  url: string;
+}
+
+/**
+ * Which of these handles has solved this problem, and with what.
+ *
+ * One `user.status` call per handle, so the list is deliberately short and only
+ * read on demand. Codeforces has no "who solved X" endpoint; this is the only
+ * way to answer it without scraping the status page for every friend.
+ */
+export async function friendSolves(
+  handles: string[],
+  problem: string,
+  limit = 6,
+): Promise<FriendSolve[]> {
+  const out: FriendSolve[] = [];
+
+  for (const handle of handles.slice(0, limit)) {
+    try {
+      // `count` keeps this to one page rather than the whole history.
+      const submissions = await codeforces<CfFriendSubmission[]>('user.status', {
+        handle,
+        from: '1',
+        count: '2000',
+      });
+
+      const hit = submissions.find(
+        (submission) =>
+          submission.verdict === 'OK' &&
+          submission.problem.contestId !== undefined &&
+          problemKeyOf(submission.problem.contestId, submission.problem.index) === problem,
+      );
+
+      if (!hit) continue;
+      out.push({
+        handle,
+        submissionId: hit.id,
+        at: hit.creationTimeSeconds * 1000,
+        language: hit.programmingLanguage,
+        accepted: true,
+        url: `https://codeforces.com/contest/${hit.problem.contestId}/submission/${hit.id}`,
+      });
+    } catch {
+      // One unreadable handle should not cost the others.
+    }
+  }
+
+  return out.sort((a, b) => b.at - a.at);
+}
+
 /** When each cache was last filled, for the Settings panel to report. */
 export async function mirrorState(handle?: string): Promise<{
   problems: number;

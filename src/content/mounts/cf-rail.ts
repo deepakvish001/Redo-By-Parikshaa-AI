@@ -301,6 +301,60 @@ async function render(context: MountContext): Promise<void> {
     actions.append(push);
   }
 
+  if (data.page.friends) {
+    const friends = h('div', { class: 'row', style: 'flex-direction:column;align-items:stretch;gap:5px' });
+
+    const load = button('Friends\u2019 code', async () => {
+      load.disabled = true;
+      load.textContent = 'Looking\u2026';
+      try {
+        const { solves, watched } = await send({ type: 'cf:friends', problem: slug });
+        friends.replaceChildren();
+
+        if (watched === 0) {
+          friends.append(h('div', { class: 'faint', text: 'Add handles in Settings \u2192 People.' }));
+        } else if (solves.length === 0) {
+          friends.append(
+            h('div', {
+              class: 'faint',
+              text: `None of your ${watched} handle${watched === 1 ? '' : 's'} has solved this.`,
+            }),
+          );
+        } else {
+          for (const solve of solves) {
+            const link = h('a', { href: solve.url, style: 'flex:1;text-decoration:none' });
+            link.textContent = solve.handle;
+            friends.append(
+              h('div', { class: 'row', style: 'gap:7px' },
+                link,
+                h('span', { class: 'faint', text: solve.language }),
+                h('span', {
+                  class: 'faint mono',
+                  text: new Date(solve.at).toLocaleDateString(undefined, {
+                    day: 'numeric',
+                    month: 'short',
+                  }),
+                }),
+              ),
+            );
+          }
+        }
+        load.remove();
+      } catch (error) {
+        load.disabled = false;
+        load.textContent = 'Friends\u2019 code';
+        showToast({
+          title: 'Could not read your friends\u2019 submissions',
+          body: error instanceof Error ? error.message : String(error),
+          tone: 'error',
+        });
+      }
+    }, { class: 'ghost', title: 'One Codeforces call per handle, so it is on demand' });
+
+    friends.append(load);
+    body.append(h('div', { class: 'sep' }), friends);
+  }
+
   actions.append(
     button('Open Redo', () => {
       // The panel cannot be opened from a content script, so this is the

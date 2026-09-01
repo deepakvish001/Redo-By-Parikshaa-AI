@@ -5,6 +5,8 @@ import { clock } from '../src/content/inject/dom.ts';
 import { parseProblem, ratingColour } from '../src/content/mounts/cf-rail.ts';
 import { keyFromHref } from '../src/content/mounts/cf-listing.ts';
 import { isOwnProfile, profileHandle } from '../src/content/mounts/cf-profile.ts';
+import { handleFromHref, lastSeen, rankColour } from '../src/content/mounts/cf-hovercard.ts';
+import { isStandings, ownRow, placeAmong } from '../src/content/mounts/cf-standings.ts';
 import { claimSubmissions } from '../src/core/watermark.ts';
 
 /* ------------------------------------------------------- problem matching */
@@ -98,4 +100,81 @@ test('only a profile page counts as one', () => {
   assert.equal(profileHandle('/contest/1/problem/A'), null);
   // A sub-page of a profile is not the profile.
   assert.equal(profileHandle('/profile/tourist/blog'), null);
+});
+
+/* ----------------------------------------------------------- hover cards */
+
+test('a handle comes out of a profile link, whatever shape it is', () => {
+  assert.equal(handleFromHref('/profile/tourist'), 'tourist');
+  assert.equal(handleFromHref('https://codeforces.com/profile/Benq'), 'Benq');
+  assert.equal(handleFromHref('/profile/tourist?locale=ru'), 'tourist');
+  assert.equal(handleFromHref('/contest/1/problem/A'), null);
+});
+
+test('rank colours follow Codeforces own ladder', () => {
+  const bands = ['newbie', 'pupil', 'specialist', 'expert', 'candidate master', 'master'];
+  assert.equal(new Set(bands.map(rankColour)).size, bands.length);
+  // Both grandmaster titles are red, as on the site.
+  assert.equal(rankColour('grandmaster'), rankColour('legendary grandmaster'));
+  assert.equal(rankColour(undefined), rankColour('newbie'));
+});
+
+test('last seen reads as a person would say it', () => {
+  const now = Date.parse('2026-03-01T12:00:00Z');
+  const ago = (minutes) => (now - minutes * 60_000) / 1000;
+
+  assert.equal(lastSeen(ago(0), now), 'online now');
+  assert.equal(lastSeen(ago(20), now), '20 min ago');
+  assert.equal(lastSeen(ago(180), now), '3 hours ago');
+  assert.equal(lastSeen(ago(60 * 24 * 3), now), '3 days ago');
+  assert.equal(lastSeen(undefined, now), undefined);
+});
+
+/* ------------------------------------------------------------- standings */
+
+test('only a standings page gets the place card', () => {
+  assert.equal(isStandings('/contest/1352/standings'), true);
+  assert.equal(isStandings('/gym/102253/standings/page/2'), true);
+  assert.equal(isStandings('/contest/1352/problem/A'), false);
+});
+
+test('your place among a filtered group is its own ranking', () => {
+  const rows = [
+    { rank: 1, handle: 'a', country: 'India', organization: 'X', element: null },
+    { rank: 2, handle: 'b', country: 'Japan', organization: 'Y', element: null },
+    { rank: 3, handle: 'me', country: 'India', organization: 'X', element: null },
+    { rank: 4, handle: 'd', country: 'India', organization: 'Z', element: null },
+  ];
+
+  // Third overall, but second in India and second at X.
+  assert.deepEqual(placeAmong(rows, 'me', (row) => row.country === 'India'), {
+    place: 2,
+    total: 3,
+  });
+  assert.deepEqual(placeAmong(rows, 'me', (row) => row.organization === 'X'), {
+    place: 2,
+    total: 2,
+  });
+});
+
+test('somebody not in the group has no place in it', () => {
+  const rows = [{ rank: 1, handle: 'a', country: 'India', element: null }];
+  assert.equal(placeAmong(rows, 'me', () => true), undefined);
+});
+
+test('your own row is found case-insensitively', () => {
+  const rows = [{ rank: 5, handle: 'Deepakvish001', element: null }];
+  assert.equal(ownRow(rows, 'deepakvish001').rank, 5);
+});
+
+test('candidate master is violet, not orange', () => {
+  // "candidate master" contains "master", so a naive order paints it orange —
+  // and on Codeforces those are two different colours entirely.
+  assert.equal(rankColour('candidate master'), rankColour('candidate master'));
+  assert.notEqual(rankColour('candidate master'), rankColour('master'));
+  // International master is orange, like master.
+  assert.equal(rankColour('international master'), rankColour('master'));
+  // International grandmaster is red, like grandmaster.
+  assert.equal(rankColour('international grandmaster'), rankColour('grandmaster'));
+  assert.notEqual(rankColour('grandmaster'), rankColour('master'));
 });

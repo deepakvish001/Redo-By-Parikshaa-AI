@@ -249,6 +249,12 @@ export interface Settings {
     listings: boolean;
     /** Streak and today's picks on your own Codeforces profile. */
     profile: boolean;
+    /** A preview card when you hover a Codeforces handle. */
+    hovercards: boolean;
+    /** Which of your saved handles has solved the problem you are on. */
+    friends: boolean;
+    /** A College tab and your country rank on a standings page. */
+    standings: boolean;
   };
   diagnostics: {
     /**
@@ -281,6 +287,10 @@ export interface Settings {
      * what almost everybody is actually working towards.
      */
     goal: number;
+    /** Codeforces handles to look for on a problem page. Kept locally. */
+    friends: string[];
+    /** Your institution, as Codeforces spells it, for the College standings. */
+    organization: string;
   };
   revision: {
     /** Interval ladder in days. Stage n schedules `intervals[n]` days out. */

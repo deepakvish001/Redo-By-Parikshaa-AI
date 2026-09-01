@@ -42,6 +42,8 @@ import { applyBackup, currentBackup, pullBackup, pushBackup } from './backup.ts'
 import {
   ensureProblemset,
   ensureUserStatus,
+  friendSolves,
+  handleCards,
   lookup,
   mirrorState,
   noteSolved,
@@ -642,6 +644,15 @@ async function handle(request: Request): Promise<unknown> {
 
     case 'insights:get':
       return buildInsights();
+
+    case 'cf:handles':
+      return handleCards(request.handles);
+
+    case 'cf:friends': {
+      const { handles } = await getSettings();
+      const watched = handles.friends.filter(Boolean);
+      return { solves: await friendSolves(watched, request.problem), watched: watched.length };
+    }
 
     case 'train:get':
       return buildTrain();

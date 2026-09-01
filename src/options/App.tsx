@@ -233,6 +233,7 @@ export function App() {
   const [pauseText, setPauseText] = useState('');
   const [allowlistText, setAllowlistText] = useState('');
   const [ratingGoalText, setRatingGoalText] = useState('');
+  const [friendsText, setFriendsText] = useState('');
 
   const loadLog = async () => {
     try {
@@ -251,6 +252,7 @@ export function App() {
       setLeadText(String(loaded.contests.leadMinutes));
       setGoalText(String(loaded.focus.dailyGoal));
       setRatingGoalText(loaded.handles.goal > 0 ? String(loaded.handles.goal) : '');
+      setFriendsText(loaded.handles.friends.join(', '));
       setPauseText(String(loaded.focus.pauseHours));
       setAllowlistText(loaded.focus.allowlist.join('\n'));
       if (loaded.diagnostics.enabled) await loadLog();
@@ -300,6 +302,11 @@ export function App() {
             ...settings.handles,
             // Empty means "the next rank up", which is stored as zero.
             goal: Number.isFinite(ratingGoal) && ratingGoal > 0 ? ratingGoal : 0,
+            friends: friendsText
+              .split(/[,\s]+/)
+              .map((entry) => entry.trim())
+              .filter(Boolean)
+              .slice(0, 12),
           },
           contests: {
             ...settings.contests,
@@ -315,6 +322,7 @@ export function App() {
       setPauseText(String(saved.focus.pauseHours));
       setAllowlistText(saved.focus.allowlist.join('\n'));
       setRatingGoalText(saved.handles.goal > 0 ? String(saved.handles.goal) : '');
+      setFriendsText(saved.handles.friends.join(', '));
       setSaveStatus({ tone: 'ok', message: 'Saved.' });
     } catch (error) {
       setSaveStatus({
@@ -836,6 +844,43 @@ export function App() {
           </div>
         </div>
 
+        <div className="field field-row">
+          <div>
+            <label className="field__label" htmlFor="org">
+              Your institution
+            </label>
+            <input
+              id="org"
+              type="text"
+              value={settings.handles.organization}
+              placeholder="as it appears on your Codeforces profile"
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  handles: { ...settings.handles, organization: event.target.value },
+                })
+              }
+            />
+          </div>
+          <div>
+            <label className="field__label" htmlFor="friends">
+              Handles to watch
+            </label>
+            <input
+              id="friends"
+              type="text"
+              value={friendsText}
+              placeholder="tourist, Benq, jiangly"
+              onChange={(event) => setFriendsText(event.target.value)}
+            />
+          </div>
+        </div>
+        <div className="field__hint">
+          On a problem page, Redo can show which of these handles has solved it and in what
+          language. One Codeforces call per handle, so it only looks when you ask — keep the list
+          short. Stored in this browser and sent nowhere but Codeforces.
+        </div>
+
         <div className="field__hint">
           Both handles are public profile names, not logins. They are stored in this browser and
           sent only to the judge they belong to.
@@ -940,6 +985,9 @@ export function App() {
               ['timer', 'Solve clock', 'How long this attempt has taken so far.'],
               ['listings', 'Marks on listing pages', 'Rating and a tick beside every problem link.'],
               ['profile', 'Card on your profile', "Streaks and today's picks, on your own Codeforces profile."],
+              ['hovercards', 'Preview on hover', 'Rank and rating when you hover any handle.'],
+              ['friends', "Friends' submissions", 'Which of your saved handles solved the problem you are on.'],
+              ['standings', 'Your place in the standings', 'College and country rank, from the page itself.'],
             ] as Array<[keyof Settings['page'], string, string]>
           ).map(([key, label, hint]) => (
             <Toggle

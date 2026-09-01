@@ -5,8 +5,10 @@ import { formatDueIn } from '../core/srs.ts';
 import type { AttemptEvent, Settings, SolvedProblem } from '../core/types.ts';
 import { MountRunner } from './inject/registry.ts';
 import { codeforcesListing } from './mounts/cf-listing.ts';
+import { codeforcesHoverCard } from './mounts/cf-hovercard.ts';
 import { codeforcesProfile } from './mounts/cf-profile.ts';
 import { codeforcesRail } from './mounts/cf-rail.ts';
+import { codeforcesStandings } from './mounts/cf-standings.ts';
 import { showReviewPanel } from './review-panel.ts';
 import { showToast } from './toast.ts';
 
@@ -128,7 +130,13 @@ function main(): void {
 
   // Redo's own widgets on the judge's page. The runner owns their whole
   // lifetime; nothing else in this file knows they exist.
-  const mounts = new MountRunner([codeforcesRail, codeforcesListing, codeforcesProfile]);
+  const mounts = new MountRunner([
+    codeforcesRail,
+    codeforcesListing,
+    codeforcesProfile,
+    codeforcesStandings,
+    codeforcesHoverCard,
+  ]);
   mounts.start();
 
   let current: Settings | undefined;

@@ -78,6 +78,17 @@ Solving is the easy part. Remembering three months later is the part nothing els
   open. Down every listing, each problem link gets its rating in Codeforces' own rank colour and a
   tick if you have solved it. Every part of it is a switch in Settings, and the master switch puts
   the page back exactly as the judge built it.
+- **Tells you where you actually placed.** "Rank 3,412 of 28,000" says nothing. On a standings
+  page Redo adds your rank *in your country* and *at your college*, and can hide everyone else so
+  the table is just the people you compete with. Both come from the page itself — each row already
+  carries a flag and an organisation — so it costs no request.
+- **Shows who is behind a handle, on hover.** Rank, rating, peak, contribution and when they were
+  last around, without the tab. Read-only on purpose: the reference extension also offers "add
+  friend" from the card, which needs your Codeforces session, and a button that quietly acts as you
+  is not worth the convenience.
+- **Shows your friends' solutions.** Save a few handles and any problem page will tell you which of
+  them solved it, in what language and when, with a link to the code. One Codeforces call per
+  handle, so it only looks when you ask.
 - **Sets you a round.** The useful unit of practice is not a problem, it is a *round* — five
   problems, a clock, no editorial. Codeforces runs one a week and you cannot choose what it trains.
   Pick the ratings yourself and the same problemset becomes a speed drill, or an hour on the one
@@ -398,9 +409,10 @@ waiting for it to appear, handing the feature an isolated shadow root with Redo'
 inside, tearing it down on navigation or when a switch goes off, and putting it back when the host
 page re-renders it away. One feature throwing costs one missing card, never the page.
 
-Three mounts so far: the **problem rail**, the **listing marks**, and a card on **your own
-Codeforces profile** with your streaks, today's picks and the rating heatmap. Only your own —
-somebody else's profile showing your streak would be misleading.
+Five mounts so far: the **problem rail**, the **listing marks**, a card on **your own Codeforces
+profile** with your streaks and the rating heatmap, your **place in the standings**, and a
+**preview card** on any handle you hover. The profile card is only ever your own — somebody else's
+page showing your streak would be misleading.
 
 **One cached mirror of Codeforces, not one fetch per feature.** The rating chip on a problem page,
 the ticks down a listing, and everything the roadmap has planned after them are the same two tables

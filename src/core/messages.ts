@@ -9,7 +9,7 @@ import type {
 import type { ParikshaaCredentials, SessionDiagnostic } from './parikshaa.ts';
 import type { UpsolveItem, UpsolveSummary } from './upsolve.ts';
 import type { Claim } from './watermark.ts';
-import type { CfProblemView } from '../background/cf-mirror.ts';
+import type { CfHandleCard, CfProblemView, FriendSolve } from '../background/cf-mirror.ts';
 import type { DailyPick, DailySet, Streak } from './daily.ts';
 import type { InsightsData } from '../background/insights.ts';
 import type { TrainData } from '../background/train.ts';
@@ -91,7 +91,9 @@ export type Request =
   | { type: 'train:get' }
   | { type: 'train:start'; ratings: number[]; minutes: number }
   | { type: 'train:reroll'; index: number }
-  | { type: 'train:finish' };
+  | { type: 'train:finish' }
+  | { type: 'cf:handles'; handles: string[] }
+  | { type: 'cf:friends'; problem: string };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -142,6 +144,8 @@ export interface ResponseMap {
   'train:start': TrainData;
   'train:reroll': TrainData;
   'train:finish': TrainData;
+  'cf:handles': Record<string, CfHandleCard>;
+  'cf:friends': { solves: FriendSolve[]; watched: number };
 }
 
 /**
