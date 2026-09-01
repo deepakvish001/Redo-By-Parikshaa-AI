@@ -49,6 +49,27 @@ Redo makes network requests to exactly these places:
 5. **Codeforces' and LeetCode's public rating APIs** — only if you enter a handle. Each receives
    only the handle you gave it, and only the one that belongs to it.
 
+## Translation
+
+This is **the only part of Redo that sends anything to a third party**, and it is off until you
+switch it on and paste in a key of your own. With it on, pressing **Translate** on a Codeforces
+problem sends that statement's prose to **Google's Gemini API** using your key.
+
+What is sent is deliberately less than the statement. Formulas, code spans, sample inputs and
+outputs are replaced by numbered markers before anything leaves the machine, so Google receives
+"Alice and Bob play a game with ⟦0⟧ stones" and never the formula itself. Nothing is sent until
+you press the button, a translation is kept locally for a day so re-reading costs nothing, and a
+translation that came back with a marker moved, dropped or duplicated is discarded rather than
+shown — a formula silently missing from a sentence changes what the problem is asking.
+
+Your Gemini key is stored in this browser like the GitHub token and is used only from the
+extension's background worker, so it never enters a judge's page. It is sent as a request header
+rather than in the URL, because keys in URLs end up in logs and referrers. Redo has no key of its
+own and no server to hold one.
+
+Google's handling of what it receives is governed by
+[Google's terms](https://ai.google.dev/gemini-api/terms), not by this policy.
+
 ## The workspace
 
 If you turn the workspace on, both of its buttons send your code to **Codeforces** and nowhere else:

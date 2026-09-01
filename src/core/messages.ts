@@ -14,6 +14,7 @@ import type { DailyPick, DailySet, Streak } from './daily.ts';
 import type { InsightsData } from '../background/insights.ts';
 import type { TrainData } from '../background/train.ts';
 import type { HistoryData } from '../background/history.ts';
+import type { TranslateResult } from '../background/translate.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
@@ -99,7 +100,8 @@ export type Request =
   | { type: 'cf:friends'; problem: string }
   | { type: 'workspace:open' }
   | { type: 'workspace:drafts' }
-  | { type: 'workspace:forget-drafts' };
+  | { type: 'workspace:forget-drafts' }
+  | { type: 'translate:strings'; problem: string; strings: string[] };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -157,6 +159,7 @@ export interface ResponseMap {
   'workspace:open': { ok: boolean; error?: string };
   'workspace:drafts': { count: number };
   'workspace:forget-drafts': { count: number };
+  'translate:strings': TranslateResult;
 }
 
 /**

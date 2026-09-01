@@ -17,6 +17,7 @@ import {
 } from '../panel/icons.tsx';
 import type { SessionDiagnostic } from '../core/parikshaa.ts';
 import { DEFAULT_SETTINGS } from '../core/storage.ts';
+import { LANGUAGES } from '../core/translate.ts';
 import { PLATFORMS, PLATFORM_LABELS, type Platform, type Settings } from '../core/types.ts';
 import { downloadBlob } from '../panel/share.ts';
 
@@ -1065,6 +1066,73 @@ export function App() {
           Ratings and tags come from Codeforces' public problemset, cached locally for a week. Your
           solved marks come from your own submission history, refreshed hourly.
         </div>
+      </section>
+
+      <section className="section-card">
+        <h2 className="section-card__title">
+          <SparkIcon size={14} />
+          Translate statements
+        </h2>
+        <p className="section-card__hint">
+          <strong>This is the only part of Redo that sends anything to a third party.</strong> With
+          it on, pressing <em>Translate</em> on a Codeforces problem sends that statement's text to
+          Google's Gemini API using a key you supply, and puts the answer back in place. Formulas,
+          code and sample blocks are never sent and never touched; a translation that came back
+          with a formula moved or missing is discarded rather than shown. Press the button again
+          for the original. Nothing is sent until you press it, and a translation is kept for a day
+          so re-reading a problem costs nothing.
+        </p>
+
+        <Toggle
+          checked={settings.translate.enabled}
+          onChange={(enabled) =>
+            setSettings({ ...settings, translate: { ...settings.translate, enabled } })
+          }
+          label="Enable translation"
+          hint="The button only appears once a key is saved as well."
+        />
+
+        <label className="field">
+          <span className="field__label">Google Gemini API key</span>
+          <input
+            type="password"
+            value={settings.translate.apiKey}
+            placeholder="AIza…"
+            onChange={(event) =>
+              setSettings({
+                ...settings,
+                translate: { ...settings.translate, apiKey: event.target.value },
+              })
+            }
+          />
+          <span className="field__hint">
+            Yours, from{' '}
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">
+              aistudio.google.com/apikey
+            </a>
+            . Stored in this browser and sent only to Google, only when you press Translate. Redo
+            has no key of its own and no server to hold one.
+          </span>
+        </label>
+
+        <label className="field">
+          <span className="field__label">Translate into</span>
+          <select
+            value={settings.translate.language}
+            onChange={(event) =>
+              setSettings({
+                ...settings,
+                translate: { ...settings.translate, language: event.target.value },
+              })
+            }
+          >
+            {LANGUAGES.map((entry) => (
+              <option key={entry.code} value={entry.code}>
+                {entry.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </section>
 
       <section className="section-card">

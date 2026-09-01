@@ -54,6 +54,7 @@ import { addToBacklog, buildHome, removeFromBacklog, skipToday } from './home.ts
 import { buildInsights } from './insights.ts';
 import { buildTrain, finishContest, rerollSlot, startContest } from './train.ts';
 import { buildHistory, loadRound } from './history.ts';
+import { translateStrings } from './translate.ts';
 import { codeforcesProfile, fetchUpsolve, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
@@ -722,6 +723,11 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
 
     case 'history:get':
       return buildHistory();
+
+    // Runs here rather than in the page so the user's Gemini key never enters
+    // a judge's tab.
+    case 'translate:strings':
+      return translateStrings(request.problem, request.strings);
 
     // One contest at a time, because the breakdown costs a request each and
     // the rate limit is one every two seconds.

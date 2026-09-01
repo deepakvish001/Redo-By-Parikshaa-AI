@@ -294,6 +294,20 @@ export interface Settings {
      */
     skin: boolean;
   };
+  /**
+   * Statement translation.
+   *
+   * The one feature that sends anything to a third party, so: off by default,
+   * your own key, and PRIVACY.md names Google as the recipient. With no key it
+   * does nothing at all rather than falling back to something.
+   */
+  translate: {
+    enabled: boolean;
+    /** The user's own Google Gemini key. Never leaves this machine except to Google. */
+    apiKey: string;
+    /** Target language code, e.g. `hi`. */
+    language: string;
+  };
   diagnostics: {
     /**
      * Records what the observer sees on each judge, so a detection failure can

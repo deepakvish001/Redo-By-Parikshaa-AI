@@ -27,7 +27,8 @@
     "https://api.github.com/*",
     "https://parikshaa.org/*",
     "https://www.parikshaa.org/*",
-    "https://*.supabase.co/*"
+    "https://*.supabase.co/*",
+    "https://generativelanguage.googleapis.com/*"
   ],
   "background": {
     "service_worker": "background.js"

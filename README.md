@@ -83,6 +83,11 @@ Solving is the easy part. Remembering three months later is the part nothing els
   The repository index also groups everything by topic, collapsed, beside the flat list — "what
   have I done about graphs" is usually the question somebody browsing a solutions repo is actually
   asking.
+- **Reads the statement in your language.** Off by default and the only part of Redo that talks
+  to a third party: with your own Gemini key, *Translate* on a Codeforces problem swaps the prose
+  and puts it back when you press again. Formulas, code and sample blocks never leave the machine
+  — they are replaced by markers first — and a translation that came back with a formula moved or
+  missing is discarded rather than shown.
 - **A dark Codeforces, if you want one.** One switch, off by default, and the only thing here
   that restyles the judge's own page rather than adding to it. It recolours and never relayouts —
   Codeforces is a table-heavy layout people have used for fifteen years — and it leaves rank
