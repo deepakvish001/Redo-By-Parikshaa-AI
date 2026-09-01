@@ -161,7 +161,11 @@ export async function openWorkspace(): Promise<void> {
   const key = draftKey(target.contestId, target.index);
   const [split, storedTheme, drafts] = await Promise.all([
     readStored(SPLIT_KEY, DEFAULT_SPLIT, (v) => typeof v === 'number' && v >= MIN_SPLIT && v <= MAX_SPLIT),
-    readStored<Theme>(THEME_KEY, 'dark', (v) => v === 'dark' || v === 'light'),
+    // Light unless you have said otherwise. The statement arrives styled for a
+    // white page, because that is the page Codeforces wrote it for, so light is
+    // the theme that needs no correcting — and the toggle remembers your answer
+    // from the first time you press it.
+    readStored<Theme>(THEME_KEY, 'light', (v) => v === 'dark' || v === 'light'),
     readDrafts(),
   ]);
 

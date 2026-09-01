@@ -273,6 +273,15 @@ export interface Settings {
      * that is only downloaded once you ask for it.
      */
     workspace: boolean;
+    /**
+     * Open the workspace by itself on every problem page.
+     *
+     * Off by default even when the workspace is on, because it turns a page you
+     * might have opened only to read into a page you have to close. It is the
+     * right setting for somebody who solves in the workspace every time, and
+     * the wrong one for everybody else.
+     */
+    workspaceAuto: boolean;
   };
   diagnostics: {
     /**

@@ -103,7 +103,9 @@ Solving is the easy part. Remembering three months later is the part nothing els
   in the browser: source, compiler and input go to Codeforces, and Codeforces does the work — the
   same requests the site makes when you press its own buttons, from your own session. What you type
   is saved as you type it, per problem, along with your cases and your compiler. Off by default, and
-  a separate download: the editor is only fetched the first time you open one.
+  a separate download: the editor is only fetched the first time you open one. Turn on **Open the
+  workspace automatically** and every problem page opens straight into it — Close or Escape puts the
+  page back, and it stays back until you open a different problem.
 - **Sets you a round.** The useful unit of practice is not a problem, it is a *round* — five
   problems, a clock, no editorial. Codeforces runs one a week and you cannot choose what it trains.
   Pick the ratings yourself and the same problemset becomes a speed drill, or an hour on the one
@@ -256,6 +258,8 @@ Nothing below needs a GitHub token; sync is the only part that does.
 3. Open any Codeforces problem, for example
    [1352A](https://codeforces.com/contest/1352/problem/A). The sidebar gets Redo's card with the
    rating, a **Reveal tags** button, the solve clock and **Open workspace**.
+   If you solve in the workspace every time, turn on **Open the workspace automatically** in the
+   same place and step 4 happens by itself.
 4. Press **Open workspace**: statement on the left, editor on the right, samples underneath.
    Write something and press **Run** — it goes to Codeforces' custom invocation and the output
    comes back into **Test Result**. **Submit** sends it through Codeforces' own submit form and

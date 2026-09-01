@@ -1,5 +1,6 @@
 import { adapterFor } from '../adapters/index.ts';
 import { OBSERVER_CHANNEL, type ObservedGlimpse } from '../adapters/observed.ts';
+import { shouldAutoOpenWorkspace } from '../core/cf-url.ts';
 import { send, type DiagnosticEntry } from '../core/messages.ts';
 import { formatDueIn } from '../core/srs.ts';
 import type { AttemptEvent, Settings, SolvedProblem } from '../core/types.ts';
@@ -141,10 +142,42 @@ function main(): void {
 
   let current: Settings | undefined;
 
+  /**
+   * Opens the workspace by itself, at most once per page.
+   *
+   * Keyed on the address rather than on a flag, because the alternative is a
+   * loop: the user presses Close, some mutation re-runs this, and the overlay
+   * they just dismissed comes straight back. Once per URL means Close stays
+   * closed until you navigate somewhere else.
+   */
+  let autoOpenedFor: string | null = null;
+
+  const maybeAutoOpenWorkspace = async (): Promise<void> => {
+    const settings = current;
+    if (!settings || !shouldAutoOpenWorkspace(settings.page, window.location.pathname)) return;
+
+    const href = window.location.href;
+    if (autoOpenedFor === href) return;
+
+    // The statement is what the workspace is built around, and on a slow page
+    // it can arrive after this script does. Waiting a moment beats burning the
+    // one attempt on a page that was not finished loading.
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      if (document.querySelector('.problem-statement')) break;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      if (window.location.href !== href) return;
+    }
+    if (!document.querySelector('.problem-statement')) return;
+
+    autoOpenedFor = href;
+    await send({ type: 'workspace:open' }).catch(() => undefined);
+  };
+
   const applySettings = (settings: Settings) => {
     const first = current === undefined;
     current = settings;
     mounts.setSettings(settings);
+    void maybeAutoOpenWorkspace();
     if (!first || !settings.diagnostics.enabled) return;
 
     // The MAIN-world observer cannot read extension storage, so the setting is
@@ -250,6 +283,7 @@ function main(): void {
     if (!slug || slug === lastSlug) return;
     lastSlug = slug;
     void checkRevisionDue(slug, adapter.platform, railShowsDue);
+    void maybeAutoOpenWorkspace();
   };
 
   checkCurrentPage();

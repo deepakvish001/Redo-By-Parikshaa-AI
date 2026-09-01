@@ -19,6 +19,22 @@ export interface CfProblemRef {
   gym: boolean;
 }
 
+/**
+ * Whether the workspace should open by itself on this page.
+ *
+ * All three switches have to agree, and it has to be a problem page — the
+ * workspace has nothing to show on a listing or a profile, and injecting a
+ * two-hundred-kilobyte editor there would be pure waste.
+ */
+export function shouldAutoOpenWorkspace(
+  page: { enabled: boolean; workspace: boolean; workspaceAuto: boolean },
+  pathname: string,
+): boolean {
+  return (
+    page.enabled && page.workspace && page.workspaceAuto && parseProblem(pathname) !== null
+  );
+}
+
 export function parseProblem(pathname: string): CfProblemRef | null {
   const match = PROBLEM_PATH.exec(pathname);
   if (!match) return null;

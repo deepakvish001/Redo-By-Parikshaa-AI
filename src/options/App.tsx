@@ -1031,8 +1031,17 @@ export function App() {
                 'Workspace button on problem pages',
                 'Statement beside a code editor, opened on demand. The editor is only downloaded the first time you open it.',
               ],
+              [
+                'workspaceAuto',
+                'Open the workspace automatically',
+                'Every problem page opens straight into the workspace. Close or Escape puts the page back, and it stays back until you open another problem.',
+              ],
             ] as Array<[keyof Settings['page'], string, string]>
-          ).map(([key, label, hint]) => (
+          )
+            // The automatic switch is meaningless without the workspace itself,
+            // and a dead toggle is worse than a missing one.
+            .filter(([key]) => key !== 'workspaceAuto' || settings.page.workspace)
+            .map(([key, label, hint]) => (
             <Toggle
               key={key}
               checked={settings.page[key]}

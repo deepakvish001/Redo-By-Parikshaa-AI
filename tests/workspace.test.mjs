@@ -14,7 +14,7 @@ import { readSubmissions } from '../src/workspace/codeforces.ts';
 import { readRunOutcome, runFields } from '../src/workspace/customtest.ts';
 import { MAX_DRAFTS, draftKey, putDraft, readDraft } from '../src/workspace/drafts.ts';
 import { grammarFor } from '../src/workspace/editor.ts';
-import { parseProblem } from '../src/core/cf-url.ts';
+import { parseProblem, shouldAutoOpenWorkspace } from '../src/core/cf-url.ts';
 
 const parse = (html) => new JSDOM(html).window.document;
 
@@ -300,6 +300,31 @@ test('a gym problem is marked as one, because it submits elsewhere', () => {
 test('a page that is not a problem is not a problem', () => {
   assert.equal(parseProblem('/contest/1352/standings'), null);
   assert.equal(parseProblem('/profile/tourist'), null);
+});
+
+/* -------------------------------------------------------------- auto-open */
+
+const ON = { enabled: true, workspace: true, workspaceAuto: true };
+
+test('all three switches on, and a problem page, opens by itself', () => {
+  assert.equal(shouldAutoOpenWorkspace(ON, '/contest/2000/problem/C'), true);
+  assert.equal(shouldAutoOpenWorkspace(ON, '/problemset/problem/2000/C'), true);
+});
+
+test('a page that is not a problem never opens the workspace', () => {
+  // Injecting a two-hundred-kilobyte editor into a listing would be pure waste,
+  // and it would have nothing to show.
+  assert.equal(shouldAutoOpenWorkspace(ON, '/problemset'), false);
+  assert.equal(shouldAutoOpenWorkspace(ON, '/contest/2000/standings'), false);
+  assert.equal(shouldAutoOpenWorkspace(ON, '/profile/tourist'), false);
+});
+
+test('every switch above it can veto', () => {
+  const page = '/contest/2000/problem/C';
+  assert.equal(shouldAutoOpenWorkspace({ ...ON, workspaceAuto: false }, page), false);
+  assert.equal(shouldAutoOpenWorkspace({ ...ON, workspace: false }, page), false);
+  // The master switch means the page is left exactly as the judge built it.
+  assert.equal(shouldAutoOpenWorkspace({ ...ON, enabled: false }, page), false);
 });
 
 /* ----------------------------------------------------------------- drafts */

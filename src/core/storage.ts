@@ -62,8 +62,9 @@ export const DEFAULT_SETTINGS: Settings = {
     friends: true,
     standings: true,
     // The one exception to "quiet additions default on": the workspace takes
-    // the page over, so it waits to be asked.
+    // the page over, so it waits to be asked. Twice, for opening by itself.
     workspace: false,
+    workspaceAuto: false,
   },
   diagnostics: {
     enabled: false,
