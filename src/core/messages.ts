@@ -13,6 +13,7 @@ import type { CfHandleCard, CfProblemView, FriendSolve } from '../background/cf-
 import type { DailyPick, DailySet, Streak } from './daily.ts';
 import type { InsightsData } from '../background/insights.ts';
 import type { TrainData } from '../background/train.ts';
+import type { HistoryData } from '../background/history.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
@@ -92,6 +93,8 @@ export type Request =
   | { type: 'train:start'; ratings: number[]; minutes: number }
   | { type: 'train:reroll'; index: number }
   | { type: 'train:finish' }
+  | { type: 'history:get' }
+  | { type: 'history:round'; contestId: number }
   | { type: 'cf:handles'; handles: string[] }
   | { type: 'cf:friends'; problem: string }
   | { type: 'workspace:open' }
@@ -147,6 +150,8 @@ export interface ResponseMap {
   'train:start': TrainData;
   'train:reroll': TrainData;
   'train:finish': TrainData;
+  'history:get': HistoryData;
+  'history:round': HistoryData;
   'cf:handles': Record<string, CfHandleCard>;
   'cf:friends': { solves: FriendSolve[]; watched: number };
   'workspace:open': { ok: boolean; error?: string };

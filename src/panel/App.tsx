@@ -46,6 +46,7 @@ import { collectNotes, excerpt, noteMatches, type Note } from '../core/notes.ts'
 import { WINDOWS, heatmapGrid, type Bin, type HeatDay, type TagCount, type Window } from '../core/insights.ts';
 import type { InsightsData } from '../background/insights.ts';
 import type { TrainData } from '../background/train.ts';
+import type { HistoryData } from '../background/history.ts';
 import type { Suggestion } from '../core/recommend.ts';
 import { ratingColour } from '../content/mounts/cf-rail.ts';
 import type { Prediction } from '../background/rating.ts';
@@ -1754,6 +1755,126 @@ function TrainTab() {
   );
 }
 
+/**
+ * Your rated rounds, and what each one cost or paid.
+ *
+ * The rating graph Codeforces draws answers "how am I doing"; this answers the
+ * question after a bad round, which is "was that a bad day or a pattern" — and
+ * that needs the rounds beside each other with what you actually got out of
+ * them, not a line.
+ */
+function ContestHistory() {
+  const [data, setData] = useState<HistoryData | null>(null);
+  const [open, setOpen] = useState<number | null>(null);
+  const [loading, setLoading] = useState<number | null>(null);
+
+  useEffect(() => {
+    void send({ type: 'history:get' })
+      .then(setData)
+      .catch(() => setData(null));
+  }, []);
+
+  const expand = async (contestId: number, hasProblems: boolean) => {
+    if (open === contestId) {
+      setOpen(null);
+      return;
+    }
+    setOpen(contestId);
+    if (hasProblems) return;
+
+    // One request, and only for the round you actually opened.
+    setLoading(contestId);
+    try {
+      setData(await send({ type: 'history:round', contestId }));
+    } catch {
+      /* the list is still worth showing */
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  if (!data) return null;
+  if (data.reason) return <div className="banner">{data.reason}</div>;
+
+  const { summary } = data;
+
+  return (
+    <>
+      <div className="section-title">Rounds ({summary.rounds})</div>
+
+      <div className="roundsum">
+        <div className="roundsum__cell">
+          <span className={summary.net >= 0 ? 'is-up' : 'is-down'}>
+            {summary.net >= 0 ? '+' : ''}
+            {summary.net}
+          </span>
+          <small>net rating</small>
+        </div>
+        <div className="roundsum__cell">
+          <span>
+            {summary.positive}/{summary.rounds}
+          </span>
+          <small>rounds up</small>
+        </div>
+        <div className="roundsum__cell">
+          <span>#{summary.bestRank}</span>
+          <small>best rank</small>
+        </div>
+      </div>
+
+      {data.run && <div className="section-hint">{data.run}</div>}
+
+      {data.rounds.map((round) => (
+        <div key={round.contestId} className="past">
+          <button type="button" className="past__head" onClick={() => void expand(round.contestId, Boolean(round.problems))}>
+            <span className={`past__delta mono ${round.delta >= 0 ? 'is-up' : 'is-down'}`}>
+              {round.delta >= 0 ? '+' : ''}
+              {round.delta}
+            </span>
+            <span className="past__name">{round.name}</span>
+            <span className="past__rank mono">#{round.rank}</span>
+          </button>
+
+          {open === round.contestId && (
+            <div className="past__body">
+              <div className="faint">
+                {new Date(round.at).toLocaleDateString(undefined, {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+                {' · '}
+                {round.oldRating} → {round.newRating}
+              </div>
+
+              {loading === round.contestId ? (
+                <div className="faint">Reading the standings…</div>
+              ) : round.problems ? (
+                <div className="past__grid">
+                  {round.problems.map((problem) => (
+                    <a
+                      key={problem.index}
+                      className={`past__p ${problem.solved ? 'is-ok' : problem.attempts > 0 ? 'is-bad' : ''}`}
+                      href={`https://codeforces.com/contest/${round.contestId}/problem/${problem.index}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={`${problem.name}${problem.attempts > 0 ? ` · ${problem.attempts} rejected` : ''}`}
+                    >
+                      {problem.index}
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <div className="faint">Standings unavailable for this round.</div>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
 function SuggestionRow({ entry }: { entry: Suggestion }) {
   return (
     <button type="button" className="suggest" onClick={() => openUrl(entry.url)}>
@@ -2492,6 +2613,7 @@ export function App() {
           <>
             <TrainTab />
             <RatingCard />
+            <ContestHistory />
             <UpsolveCard />
             {!contests ? (
               <div className="empty">Loading contests…</div>

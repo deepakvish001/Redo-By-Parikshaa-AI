@@ -53,6 +53,7 @@ import { dayKey as utcDay } from '../core/daily.ts';
 import { addToBacklog, buildHome, removeFromBacklog, skipToday } from './home.ts';
 import { buildInsights } from './insights.ts';
 import { buildTrain, finishContest, rerollSlot, startContest } from './train.ts';
+import { buildHistory, loadRound } from './history.ts';
 import { codeforcesProfile, fetchUpsolve, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
@@ -718,6 +719,14 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
 
     case 'train:finish':
       return finishContest();
+
+    case 'history:get':
+      return buildHistory();
+
+    // One contest at a time, because the breakdown costs a request each and
+    // the rate limit is one every two seconds.
+    case 'history:round':
+      return loadRound(request.contestId);
 
     case 'cf:refresh': {
       const { handles } = await getSettings();
