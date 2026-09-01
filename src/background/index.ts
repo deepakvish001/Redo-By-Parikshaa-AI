@@ -56,6 +56,7 @@ import { buildTrain, finishContest, rerollSlot, startContest } from './train.ts'
 import { buildHistory, loadRound } from './history.ts';
 import { translateStrings } from './translate.ts';
 import { postSolution, readThreads } from './community.ts';
+import { pushToEditor, testBridge } from './bridge.ts';
 import { codeforcesProfile, fetchUpsolve, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
@@ -255,6 +256,9 @@ async function recordSubmission(
   const [github, parikshaa] = await Promise.all([
     syncProblem(problem, settings),
     syncToParikshaa(problem, settings),
+    // Fire and forget. An editor that is not open is the normal case, not a
+    // fault, so a failed push must not become a toast on every solve.
+    pushToEditor(problem).catch(() => undefined),
   ]);
   const at = Date.now();
   const synced = {
@@ -737,6 +741,9 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
     // page cannot ask the worker to publish something arbitrary as you.
     case 'community:post':
       return postSolution(request.id);
+
+    case 'bridge:test':
+      return testBridge(request.port);
 
     // One contest at a time, because the breakdown costs a request each and
     // the rate limit is one every two seconds.

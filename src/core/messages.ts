@@ -16,6 +16,7 @@ import type { TrainData } from '../background/train.ts';
 import type { HistoryData } from '../background/history.ts';
 import type { TranslateResult } from '../background/translate.ts';
 import type { CommunityData } from '../background/community.ts';
+import type { BridgeResult } from '../background/bridge.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
@@ -104,7 +105,8 @@ export type Request =
   | { type: 'workspace:forget-drafts' }
   | { type: 'translate:strings'; problem: string; strings: string[] }
   | { type: 'community:get'; problem: string }
-  | { type: 'community:post'; id: string };
+  | { type: 'community:post'; id: string }
+  | { type: 'bridge:test'; port: number };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -165,6 +167,7 @@ export interface ResponseMap {
   'translate:strings': TranslateResult;
   'community:get': CommunityData;
   'community:post': CommunityData & { posted?: boolean };
+  'bridge:test': BridgeResult;
 }
 
 /**

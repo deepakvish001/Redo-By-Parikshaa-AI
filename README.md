@@ -83,6 +83,10 @@ Solving is the easy part. Remembering three months later is the part nothing els
   The repository index also groups everything by topic, collapsed, beside the flat list — "what
   have I done about graphs" is usually the question somebody browsing a solutions repo is actually
   asking.
+- **Hands each solve to your editor.** Off by default. With it on, every accepted solve is posted
+  as JSON to a port on your own machine, so the file can land in the project you are actually
+  working in. It is a *protocol, not an integration* — Redo does not ship the listener, and
+  anything can be one. See [The editor bridge](#the-editor-bridge) for the twenty-line version.
 - **Solution threads, without a server.** GitHub already runs one: a problem's thread is an
   *issue* in a repository you name, replies are comments, and the whole feature is a naming
   convention plus two API calls. Off by default, and the trade is stated on the button rather
@@ -564,6 +568,67 @@ file shows the shape it expects.
 Supabase session from `localStorage` and captures the publishable key from the site's own
 outgoing requests, then hands both to the service worker. Like the LeetCode observer, it only
 watches — it never alters a request.
+
+## The editor bridge
+
+Off by default. Switching it on in Settings asks Chrome for access to `127.0.0.1` — an *optional*
+permission, so an install that never uses this never carries it — and switching it off gives the
+permission back.
+
+After that, every accepted solve is `POST`ed as JSON to `http://127.0.0.1:<port>/redo`, without
+cookies, with a two-and-a-half second timeout. Nothing is retried and nothing is reported when it
+fails: an editor that is closed is the normal case, not a fault. Settings has a **Send a test
+payload** button for when you do want to know.
+
+The payload:
+
+```json
+{
+  "redo": 1,
+  "id": "codeforces:1352A",
+  "platform": "codeforces",
+  "title": "Sum of Round Numbers",
+  "url": "https://codeforces.com/problemset/problem/1352/A",
+  "difficulty": "easy",
+  "tags": ["math"],
+  "language": "GNU G++20 13.2",
+  "extension": "cpp",
+  "path": "codeforces/easy/1352A-sum-of-round-numbers/solution.cpp",
+  "code": "int main(){}",
+  "note": "split the digits",
+  "attempts": 2,
+  "solvedAt": 1700000000000
+}
+```
+
+`redo` is the payload version, there from the first release so a listener can tell a shape it
+understands from one it does not. `extension` and `path` are there so a listener does not have to
+map a judge's language label to a file name — that mapping is the part that goes wrong.
+
+A listener is twenty lines. This one writes each solve into the current directory:
+
+```js
+// node listen.mjs
+import { createServer } from 'node:http';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+
+createServer((request, response) => {
+  let body = '';
+  request.on('data', (chunk) => (body += chunk));
+  request.on('end', async () => {
+    response.writeHead(200).end('ok');
+    const solve = JSON.parse(body);
+    await mkdir(dirname(solve.path), { recursive: true });
+    await writeFile(solve.path, solve.code);
+    console.log('wrote', solve.path);
+  });
+}).listen(7777);
+```
+
+Redo deliberately does not ship the other end. An extension cannot open your editor, and an
+editor plugin cannot see your Codeforces session; the half that is actually possible from here is
+the half that is built.
 
 ## Known limits
 

@@ -295,6 +295,17 @@ export interface Settings {
     skin: boolean;
   };
   /**
+   * Hand each accepted solve to an editor listening on this machine.
+   *
+   * A protocol rather than an integration: Redo posts JSON to a local port and
+   * anything can listen. The localhost permission is *optional* in the
+   * manifest, so an install that never turns this on never carries it.
+   */
+  bridge: {
+    enabled: boolean;
+    port: number;
+  };
+  /**
    * Solution threads, as issues on a repository you name.
    *
    * No backend: GitHub already runs one. Posting is public, under your own

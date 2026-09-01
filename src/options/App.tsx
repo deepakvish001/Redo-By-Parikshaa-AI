@@ -17,6 +17,7 @@ import {
 } from '../panel/icons.tsx';
 import type { SessionDiagnostic } from '../core/parikshaa.ts';
 import { DEFAULT_SETTINGS } from '../core/storage.ts';
+import { DEFAULT_PORT, bridgeOrigin } from '../core/bridge.ts';
 import { LANGUAGES } from '../core/translate.ts';
 import { PLATFORMS, PLATFORM_LABELS, type Platform, type Settings } from '../core/types.ts';
 import { downloadBlob } from '../panel/share.ts';
@@ -139,6 +140,116 @@ function WorkspaceDrafts() {
         Forget them
       </button>
     </div>
+  );
+}
+
+/**
+ * The editor bridge, and the permission it needs.
+ *
+ * Its own component because switching it on is not a settings change — it is a
+ * permission request, and Chrome only grants one from a user gesture. Doing it
+ * from the checkbox rather than from a Save button is what makes the prompt
+ * appear at the moment the user asked for the thing.
+ */
+function EditorBridge({
+  settings,
+  onChange,
+}: {
+  settings: Settings;
+  onChange: (bridge: Settings['bridge']) => void;
+}) {
+  const [status, setStatus] = useState<Status>(null);
+  const [testing, setTesting] = useState(false);
+
+  const enable = async (enabled: boolean) => {
+    if (!enabled) {
+      onChange({ ...settings.bridge, enabled: false });
+      setStatus(null);
+      // The permission is given back too: an extension holding access to
+      // localhost for a feature that is off is exactly the kind of thing
+      // nobody notices and everybody should mind.
+      void chrome.permissions.remove({ origins: [bridgeOrigin(settings.bridge.port)] });
+      return;
+    }
+
+    try {
+      const granted = await chrome.permissions.request({
+        origins: [bridgeOrigin(settings.bridge.port)],
+      });
+      if (!granted) {
+        setStatus({ tone: 'error', message: 'Chrome did not grant access to 127.0.0.1.' });
+        return;
+      }
+      onChange({ ...settings.bridge, enabled: true });
+      setStatus(null);
+    } catch (error) {
+      setStatus({ tone: 'error', message: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
+  return (
+    <section className="section-card">
+      <h2 className="section-card__title">
+        <LayersIcon size={14} />
+        Editor bridge
+      </h2>
+      <p className="section-card__hint">
+        Every accepted solve is posted as JSON to a port on this machine, so the file can land in
+        the project you are actually working in. This is a <strong>protocol, not an
+        integration</strong>: Redo does not ship the listener, and anything can be one — a VS Code
+        extension, a Neovim plugin, a shell script. The shape is documented in the README, and it
+        goes to <code>127.0.0.1</code> and nowhere else, without cookies.
+      </p>
+
+      <Toggle
+        checked={settings.bridge.enabled}
+        onChange={(enabled) => void enable(enabled)}
+        label="Push solves to a local editor"
+        hint="Switching this on asks Chrome for access to 127.0.0.1; switching it off gives it back."
+      />
+
+      <div className="field field-row">
+        <div>
+          <label className="field__label" htmlFor="bridge-port">
+            Port
+          </label>
+          <input
+            id="bridge-port"
+            type="number"
+            min={1025}
+            max={65535}
+            value={settings.bridge.port}
+            onChange={(event) =>
+              onChange({ ...settings.bridge, port: Number(event.target.value) || DEFAULT_PORT })
+            }
+          />
+        </div>
+        <div style={{ alignSelf: 'end' }}>
+          <button
+            type="button"
+            disabled={testing}
+            onClick={async () => {
+              setTesting(true);
+              setStatus(null);
+              try {
+                const result = await send({ type: 'bridge:test', port: settings.bridge.port });
+                setStatus(
+                  result.ok
+                    ? { tone: 'ok', message: 'The listener answered. A test payload was sent.' }
+                    : { tone: 'error', message: result.error ?? 'No answer.' },
+                );
+              } finally {
+                setTesting(false);
+              }
+            }}
+          >
+            {testing ? 'Trying…' : 'Send a test payload'}
+          </button>
+        </div>
+      </div>
+
+      {status && <div className={`status status--${status.tone}`}>{status.message}</div>}
+    </section>
   );
 }
 
@@ -1067,6 +1178,11 @@ export function App() {
           solved marks come from your own submission history, refreshed hourly.
         </div>
       </section>
+
+      <EditorBridge
+        settings={settings}
+        onChange={(bridge) => setSettings({ ...settings, bridge })}
+      />
 
       <section className="section-card">
         <h2 className="section-card__title">

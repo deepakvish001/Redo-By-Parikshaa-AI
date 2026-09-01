@@ -67,6 +67,10 @@ export const DEFAULT_SETTINGS: Settings = {
     workspaceAuto: false,
     skin: false,
   },
+  bridge: {
+    enabled: false,
+    port: 7777,
+  },
   community: {
     enabled: false,
     owner: '',
@@ -120,6 +124,7 @@ export async function getSettings(): Promise<Settings> {
     github: { ...DEFAULT_SETTINGS.github, ...stored.github },
     parikshaa: { ...DEFAULT_SETTINGS.parikshaa, ...stored.parikshaa },
     page: { ...DEFAULT_SETTINGS.page, ...stored.page },
+    bridge: { ...DEFAULT_SETTINGS.bridge, ...stored.bridge },
     community: { ...DEFAULT_SETTINGS.community, ...stored.community },
     translate: { ...DEFAULT_SETTINGS.translate, ...stored.translate },
     diagnostics: { ...DEFAULT_SETTINGS.diagnostics, ...stored.diagnostics },
@@ -142,6 +147,7 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
     github: { ...current.github, ...patch.github },
     parikshaa: { ...current.parikshaa, ...patch.parikshaa },
     page: { ...current.page, ...patch.page },
+    bridge: { ...current.bridge, ...patch.bridge },
     community: { ...current.community, ...patch.community },
     translate: { ...current.translate, ...patch.translate },
     diagnostics: { ...current.diagnostics, ...patch.diagnostics },

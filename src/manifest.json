@@ -110,5 +110,8 @@
   "short_name": "Redo",
   "side_panel": {
     "default_path": "panel/index.html"
-  }
+  },
+  "optional_host_permissions": [
+    "http://127.0.0.1/*"
+  ]
 }
