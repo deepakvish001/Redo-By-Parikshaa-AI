@@ -44,6 +44,8 @@ import { bandFloor, type RatingGoal } from '../core/rating.ts';
 import { problemUrl } from '../core/daily.ts';
 import { heatmapGrid, type Bin, type HeatDay, type TagCount } from '../core/insights.ts';
 import type { InsightsData } from '../background/insights.ts';
+import type { TrainData } from '../background/train.ts';
+import type { Suggestion } from '../core/recommend.ts';
 import { ratingColour } from '../content/mounts/cf-rail.ts';
 import type { Prediction } from '../background/rating.ts';
 import { dueProblems, formatDueIn, upcomingProblems } from '../core/srs.ts';
@@ -64,7 +66,7 @@ import {
 } from './icons.tsx';
 import { copyPng, downloadPng } from './share.ts';
 
-type Tab = 'home' | 'due' | 'all' | 'contests' | 'stats';
+type Tab = 'home' | 'due' | 'all' | 'train' | 'stats';
 
 const PLATFORM_SHORT: Record<string, string> = {
   codeforces: 'CF',
@@ -1479,6 +1481,258 @@ function CodeforcesInsights() {
   );
 }
 
+/* ------------------------------------------------------------------ train */
+
+function TrainCountdown({ until }: { until: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const handle = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(handle);
+  }, []);
+
+  const left = Math.max(0, until - now);
+  const total = Math.floor(left / 1000);
+  const text = `${String(Math.floor(total / 3600)).padStart(2, '0')}:${String(
+    Math.floor(total / 60) % 60,
+  ).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+
+  return <span className={`countdown ${left < 300_000 ? 'is-low' : ''}`}>{text}</span>;
+}
+
+/**
+ * A contest you set yourself.
+ *
+ * The useful unit of practice is not a problem, it is a round: five problems, a
+ * clock, no editorial. Codeforces runs one of those a week and you cannot
+ * choose what it trains — picking the ratings turns the same problemset into a
+ * speed drill or an hour on the one band you keep failing at.
+ */
+function TrainTab() {
+  const [data, setData] = useState<TrainData | null>(null);
+  const [ladder, setLadder] = useState<number[] | null>(null);
+  const [minutes, setMinutes] = useState(90);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async (action?: () => Promise<TrainData>) => {
+    setBusy(true);
+    try {
+      const next = await (action ? action() : send({ type: 'train:get' }));
+      setData(next);
+      setLadder((current) => current ?? next.ladder);
+    } catch {
+      /* the mirror may still be filling */
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (!data) return <div className="empty">Loading…</div>;
+  if (data.reason) return <div className="banner">{data.reason}</div>;
+
+  const rungs = ladder ?? data.ladder;
+  const contest = data.contest;
+
+  return (
+    <>
+      {contest ? (
+        <section className="round">
+          <div className="round__head">
+            <span className="round__title">
+              {data.running ? 'Round in progress' : 'Round over'}
+            </span>
+            {data.running ? (
+              <TrainCountdown until={contest.startedAt + contest.durationMs} />
+            ) : (
+              <span className="countdown is-done">time up</span>
+            )}
+          </div>
+
+          {contest.problems.map((problem, index) => (
+            <div className={`slot slot--${data.states[index]}`} key={problem.key}>
+              <span className="slot__rating mono" style={{ color: ratingColour(problem.rating) }}>
+                {problem.rating}
+              </span>
+              <button type="button" className="slot__name" onClick={() => openUrl(problem.url)}>
+                {problem.name}
+              </button>
+              <span className="slot__state">
+                {data.states[index] === 'solved'
+                  ? 'Solved'
+                  : data.states[index] === 'attempted'
+                    ? 'Tried'
+                    : 'Todo'}
+              </span>
+              {data.running && data.states[index] === 'todo' && (
+                <button
+                  type="button"
+                  className="iconbtn"
+                  title="Swap for another at this rating"
+                  disabled={busy}
+                  onClick={() => void load(() => send({ type: 'train:reroll', index }))}
+                >
+                  <RefreshIcon size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+
+          {data.unfilled.length > 0 && (
+            <div className="faint">
+              Nothing unsolved left at {data.unfilled.join(', ')} — those slots were left out
+              rather than filled from another band.
+            </div>
+          )}
+
+          <div className="round__foot">
+            <span className="faint">
+              {data.score.solved} of {data.score.total} · {data.score.elapsedMinutes} min
+            </span>
+            <button
+              type="button"
+              className="ghost"
+              disabled={busy}
+              onClick={() => void load(() => send({ type: 'train:finish' }))}
+            >
+              {data.running ? 'End the round' : 'File it'}
+            </button>
+          </div>
+        </section>
+      ) : (
+        <section className="round">
+          <div className="round__head">
+            <span className="round__title">Set yourself a round</span>
+          </div>
+          <div className="rungs">
+            {rungs.map((rating, index) => (
+              <div className="rung" key={index}>
+                <input
+                  type="number"
+                  step={100}
+                  min={800}
+                  max={3500}
+                  value={rating}
+                  onChange={(event) =>
+                    setLadder(
+                      rungs.map((entry, i) => (i === index ? Number(event.target.value) : entry)),
+                    )
+                  }
+                />
+                <button
+                  type="button"
+                  className="iconbtn"
+                  title="Remove this problem"
+                  onClick={() => setLadder(rungs.filter((_, i) => i !== index))}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            {rungs.length < 8 && (
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setLadder([...rungs, rungs[rungs.length - 1] ?? data.band])}
+              >
+                + problem
+              </button>
+            )}
+          </div>
+          <label className="rung__time">
+            <span>Minutes</span>
+            <input
+              type="number"
+              min={5}
+              max={360}
+              value={minutes}
+              onChange={(event) => setMinutes(Number(event.target.value))}
+            />
+          </label>
+          <div className="card__actions">
+            <button
+              type="button"
+              className="primary"
+              disabled={busy || rungs.length === 0}
+              onClick={() =>
+                void load(() => send({ type: 'train:start', ratings: rungs, minutes }))
+              }
+            >
+              Start
+            </button>
+            <button type="button" className="ghost" onClick={() => setLadder(data.ladder)}>
+              Reset to your level
+            </button>
+          </div>
+        </section>
+      )}
+
+      {data.readiness && (
+        <>
+          <div className="section-title">Ready for {data.readiness.target}?</div>
+          <div className="insight">{data.readiness.verdict}</div>
+        </>
+      )}
+
+      {data.growth.length > 0 && (
+        <>
+          <div className="section-title">Worth solving next</div>
+          {data.growth.map((entry) => (
+            <SuggestionRow key={entry.key} entry={entry} />
+          ))}
+        </>
+      )}
+
+      {data.stretch.length > 0 && (
+        <>
+          <div className="section-title">A reach, at {data.band + 200}</div>
+          {data.stretch.map((entry) => (
+            <SuggestionRow key={entry.key} entry={entry} />
+          ))}
+        </>
+      )}
+
+      {data.history.length > 0 && (
+        <>
+          <div className="section-title">Past rounds</div>
+          {data.history.map((past) => (
+            <div className="upsolve__row" key={past.contest.id} style={{ cursor: 'default' }}>
+              <span className="upsolve__state mono">
+                {past.score.solved}/{past.score.total}
+              </span>
+              <span className="upsolve__name">
+                {new Date(past.contest.startedAt).toLocaleDateString(undefined, {
+                  day: 'numeric',
+                  month: 'short',
+                })}
+                {' · '}
+                {past.contest.problems.map((problem) => problem.rating).join(', ')}
+              </span>
+              <span className="upsolve__contest">{past.score.elapsedMinutes} min</span>
+            </div>
+          ))}
+        </>
+      )}
+    </>
+  );
+}
+
+function SuggestionRow({ entry }: { entry: Suggestion }) {
+  return (
+    <button type="button" className="suggest" onClick={() => openUrl(entry.url)}>
+      <span className="suggest__rating mono" style={{ color: ratingColour(entry.rating) }}>
+        {entry.rating}
+      </span>
+      <span className="suggest__body">
+        <span className="suggest__name">{entry.name}</span>
+        <span className="suggest__why">{entry.because}</span>
+      </span>
+    </button>
+  );
+}
+
 /**
  * Home: what to do in the next hour.
  *
@@ -1701,7 +1955,7 @@ export function App() {
   // Contests are fetched only when their tab is first opened, so the popup
   // does not wait on four judges just to show the due list.
   useEffect(() => {
-    if (tab !== 'contests' || contests) return;
+    if (tab !== 'train' || contests) return;
     void send({ type: 'contests:get' })
       .then(setContests)
       // An unreachable service worker still needs to end the loading state.
@@ -1883,7 +2137,7 @@ export function App() {
             ['home', 'Home'],
             ['due', `Due${due.length > 0 ? ` (${due.length})` : ''}`],
             ['all', `Solved (${data.stats.total})`],
-            ['contests', 'Contests'],
+            ['train', 'Train'],
             ['stats', 'Stats'],
           ] as Array<[Tab, string]>
         ).map(([value, label]) => (
@@ -2094,8 +2348,9 @@ export function App() {
           </>
         )}
 
-        {tab === 'contests' && (
+        {tab === 'train' && (
           <>
+            <TrainTab />
             <RatingCard />
             <UpsolveCard />
             {!contests ? (

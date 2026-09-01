@@ -50,6 +50,7 @@ import {
 import { dayKey as utcDay } from '../core/daily.ts';
 import { addToBacklog, buildHome, removeFromBacklog, skipToday } from './home.ts';
 import { buildInsights } from './insights.ts';
+import { buildTrain, finishContest, rerollSlot, startContest } from './train.ts';
 import { codeforcesProfile, fetchUpsolve, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
@@ -641,6 +642,18 @@ async function handle(request: Request): Promise<unknown> {
 
     case 'insights:get':
       return buildInsights();
+
+    case 'train:get':
+      return buildTrain();
+
+    case 'train:start':
+      return startContest(request.ratings, request.minutes);
+
+    case 'train:reroll':
+      return rerollSlot(request.index);
+
+    case 'train:finish':
+      return finishContest();
 
     case 'cf:refresh': {
       const { handles } = await getSettings();

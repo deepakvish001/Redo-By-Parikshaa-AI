@@ -2067,3 +2067,179 @@ body.gate {
 .bar__seg { height: 100%; display: block; }
 .bar__seg--ok { background: var(--ok); }
 .bar__seg--bad { background: var(--danger); }
+
+/* ---------------------------------------------------------------- rounds */
+
+.round {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px 13px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.round__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.round__title {
+  font-size: 12.5px;
+  font-weight: 700;
+  flex: 1;
+}
+
+/* Tabular so the seconds do not shove the layout once a second. */
+.countdown {
+  font-family: ui-monospace, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.countdown.is-low { color: var(--danger); }
+.countdown.is-done { color: var(--text-faint); font-size: 12px; font-weight: 600; }
+
+.slot {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--surface-raised);
+  border-left: 3px solid var(--border-strong);
+}
+
+.slot--solved { border-left-color: var(--ok); }
+.slot--attempted { border-left-color: var(--danger); }
+
+.slot__rating {
+  font-size: 12px;
+  font-weight: 800;
+  min-width: 34px;
+}
+
+.slot__name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot__name:hover { color: var(--accent-soft); }
+
+.slot__state {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-faint);
+  flex: none;
+}
+
+.slot--solved .slot__state { color: var(--ok); }
+.slot--attempted .slot__state { color: var(--danger); }
+
+.round__foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.round__foot .faint { flex: 1; font-size: 11px; }
+
+.rungs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.rung { display: flex; align-items: center; gap: 2px; }
+
+.rung input {
+  width: 62px;
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 4px 6px;
+}
+
+.rung__time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.rung__time input {
+  width: 70px;
+  font: inherit;
+  font-size: 12px;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 4px 6px;
+}
+
+/* ----------------------------------------------------------- suggestions */
+
+.suggest {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 9px;
+  margin-bottom: 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.suggest:hover { border-color: var(--accent); }
+
+.suggest__rating {
+  font-size: 13px;
+  font-weight: 800;
+  min-width: 36px;
+  flex: none;
+}
+
+.suggest__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.suggest__name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The reason is the point of the row — it is what a leaderboard cannot say. */
+.suggest__why {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  line-height: 1.45;
+}

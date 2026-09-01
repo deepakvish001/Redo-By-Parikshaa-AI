@@ -4,6 +4,7 @@ import type { ParikshaaCredentials } from './parikshaa.ts';
 import type { UpsolveItem } from './upsolve.ts';
 import { claimSubmissions, type Claim } from './watermark.ts';
 import type { DailyLog, DailyRecord } from './daily.ts';
+import type { TrainingContest } from './training.ts';
 import {
   PLATFORMS,
   type AttemptEvent,
@@ -23,6 +24,7 @@ const KEYS = {
   watermarks: 'watermarks',
   daily: 'daily',
   backlog: 'backlog',
+  training: 'training',
 } as const;
 
 /** Aggregate counters that do not belong to any single problem. */
@@ -307,6 +309,24 @@ export async function saveBacklog(keys: string[]): Promise<string[]> {
   const trimmed = [...new Set(keys)].slice(0, 50);
   await chrome.storage.local.set({ [KEYS.backlog]: trimmed });
   return trimmed;
+}
+
+/* ------------------------------------------------------ training contests */
+
+export interface TrainingStore {
+  active?: TrainingContest;
+  /** Finished rounds, newest first. Capped — this is a record, not an archive. */
+  history: TrainingContest[];
+}
+
+export async function getTraining(): Promise<TrainingStore> {
+  return readKey<TrainingStore>(KEYS.training, { history: [] });
+}
+
+export async function saveTraining(store: TrainingStore): Promise<TrainingStore> {
+  const next: TrainingStore = { ...store, history: store.history.slice(0, 30) };
+  await chrome.storage.local.set({ [KEYS.training]: next });
+  return next;
 }
 
 /* ------------------------------------------------- submission watermarks */

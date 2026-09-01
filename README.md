@@ -78,6 +78,17 @@ Solving is the easy part. Remembering three months later is the part nothing els
   open. Down every listing, each problem link gets its rating in Codeforces' own rank colour and a
   tick if you have solved it. Every part of it is a switch in Settings, and the master switch puts
   the page back exactly as the judge built it.
+- **Sets you a round.** The useful unit of practice is not a problem, it is a *round* — five
+  problems, a clock, no editorial. Codeforces runs one a week and you cannot choose what it trains.
+  Pick the ratings yourself and the same problemset becomes a speed drill, or an hour on the one
+  band you keep failing at. Reroll a problem you do not like, watch each one turn Solved as you go,
+  and the round survives the panel being closed.
+- **Recommends by what actually beats you.** Every other recommender works from difficulty and
+  popularity — the two numbers Codeforces already prints. Redo has a third that none of them do:
+  how often *you* abandon a tag. So a suggestion comes with its reason — *"graphs — you leave 50%
+  of these unfinished"* — and the list is one problem per topic rather than ten about your worst
+  one. Alongside it, whether the next band up is worth attempting yet, measured by how much of what
+  you start below it you actually finish.
 - **Charts your whole Codeforces history.** A heatmap where the colour is the *hardest* problem
   you solved that day rather than how many — Codeforces' own counts problems, so ten 800s outshine
   one 2400, which is backwards as a picture of progress. Beside it: solved-by-rating as bars in the

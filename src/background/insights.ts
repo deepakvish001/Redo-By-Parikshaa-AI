@@ -11,8 +11,7 @@ import {
   type HeatDay,
   type TagCount,
 } from '../core/insights.ts';
-import { getProblemList, getSettings } from '../core/storage.ts';
-import { ensureProblemset, ensureUserStatus } from './cf-mirror.ts';
+import { cfState } from './cf-state.ts';
 
 /**
  * The Insights tab, assembled from the mirror.
@@ -52,49 +51,25 @@ const EMPTY: Omit<InsightsData, 'reason'> = {
 };
 
 export async function buildInsights(): Promise<InsightsData> {
-  const settings = await getSettings();
-  const handle = settings.handles.codeforces.trim();
+  const state = await cfState();
+  if (!state.ok) return { ...EMPTY, reason: state.reason };
 
-  if (!handle) {
-    return {
-      ...EMPTY,
-      reason: 'Add your Codeforces handle in Settings to see your history charted.',
-    };
-  }
-
-  const [problemset, status, problems] = await Promise.all([
-    ensureProblemset().catch(() => undefined),
-    ensureUserStatus(handle).catch(() => undefined),
-    getProblemList(),
-  ]);
-
-  if (!problemset || !status) {
-    return { ...EMPTY, reason: 'Codeforces could not be reached, so there is nothing to chart yet.' };
-  }
-
-  // Redo's own records again, so anything solved before the mirror existed is
-  // on the charts rather than missing from them.
-  const solved = new Set(status.solved);
-  for (const problem of problems) {
-    if (problem.platform === 'codeforces') solved.add(problem.slug.toUpperCase());
-  }
-  const attempted = status.attempted.filter((key) => !solved.has(key));
-
-  const tags = tagCounts(solved, attempted, problemset.problems);
-  const bands = bandOutcomes(solved, attempted, problemset.problems);
-  const days = heatmap(status.solvedAt ?? [], problemset.problems);
+  const { solved, attempted, problemset, solvedAt } = state;
+  const tags = tagCounts(solved, attempted, problemset);
+  const bands = bandOutcomes(solved, attempted, problemset);
+  const days = heatmap(solvedAt, problemset);
 
   return {
-    histogram: ratingHistogram(solved, problemset.problems),
+    histogram: ratingHistogram(solved, problemset),
     tags,
     weakTags: worstTags(tags),
     bands,
     weakBands: worstBands(bands),
     heat: Object.fromEntries(days),
-    years: heatmapYears(status.solvedAt ?? []),
+    years: heatmapYears(solvedAt),
     // Hardest first: the ones worth going back for are the ones that beat you.
-    unsolved: attempted
-      .map((key) => ({ key, ...(problemset.problems[key] ?? { name: key, tags: [] }) }))
+    unsolved: [...attempted]
+      .map((key) => ({ key, ...(problemset[key] ?? { name: key, tags: [] }) }))
       .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
       .slice(0, 60),
     solvedCount: solved.size,
