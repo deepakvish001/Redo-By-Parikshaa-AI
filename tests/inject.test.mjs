@@ -4,6 +4,7 @@ import test from 'node:test';
 import { clock } from '../src/content/inject/dom.ts';
 import { parseProblem, ratingColour } from '../src/content/mounts/cf-rail.ts';
 import { keyFromHref } from '../src/content/mounts/cf-listing.ts';
+import { isOwnProfile, profileHandle } from '../src/content/mounts/cf-profile.ts';
 import { claimSubmissions } from '../src/core/watermark.ts';
 
 /* ------------------------------------------------------- problem matching */
@@ -78,4 +79,23 @@ test('opening a problem page does not re-claim old submissions', () => {
   // watermark is what keeps that from being three chances to backfill.
   const claim = claimSubmissions('342234879', ['341000001', '342234879']);
   assert.deepEqual(claim.actionable, []);
+});
+
+/* ---------------------------------------------------------- own profile */
+
+test('the profile card is only for your own profile', () => {
+  // Somebody else's page showing your streak would be misleading.
+  assert.equal(isOwnProfile('/profile/tourist', 'tourist'), true);
+  assert.equal(isOwnProfile('/profile/Tourist', 'tourist'), true, 'handles are case-insensitive');
+  assert.equal(isOwnProfile('/profile/someone-else', 'tourist'), false);
+  assert.equal(isOwnProfile('/profile/tourist', null), false, 'signed out shows nothing');
+});
+
+test('only a profile page counts as one', () => {
+  assert.equal(profileHandle('/profile/tourist'), 'tourist');
+  assert.equal(profileHandle('/profile/tourist/'), 'tourist');
+  assert.equal(profileHandle('/profile'), null);
+  assert.equal(profileHandle('/contest/1/problem/A'), null);
+  // A sub-page of a profile is not the profile.
+  assert.equal(profileHandle('/profile/tourist/blog'), null);
 });

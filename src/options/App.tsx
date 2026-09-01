@@ -939,6 +939,7 @@ export function App() {
               ['tags', 'Reveal tags button', 'Tags stay hidden until you ask for them.'],
               ['timer', 'Solve clock', 'How long this attempt has taken so far.'],
               ['listings', 'Marks on listing pages', 'Rating and a tick beside every problem link.'],
+              ['profile', 'Card on your profile', "Streaks and today's picks, on your own Codeforces profile."],
             ] as Array<[keyof Settings['page'], string, string]>
           ).map(([key, label, hint]) => (
             <Toggle

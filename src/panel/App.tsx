@@ -37,9 +37,11 @@ import {
   type ContestsResponse,
   type DashboardData,
   type RatingProfiles,
+  type HomeData,
   type UpsolveResponse,
 } from '../core/messages.ts';
 import { bandFloor, type RatingGoal } from '../core/rating.ts';
+import { ratingColour } from '../content/mounts/cf-rail.ts';
 import type { Prediction } from '../background/rating.ts';
 import { dueProblems, formatDueIn, upcomingProblems } from '../core/srs.ts';
 import { PLATFORM_LABELS, type Difficulty, type Recall, type SolvedProblem, type TopicStat } from '../core/types.ts';
@@ -59,7 +61,7 @@ import {
 } from './icons.tsx';
 import { copyPng, downloadPng } from './share.ts';
 
-type Tab = 'due' | 'all' | 'contests' | 'stats';
+type Tab = 'home' | 'due' | 'all' | 'contests' | 'stats';
 
 const PLATFORM_SHORT: Record<string, string> = {
   codeforces: 'CF',
@@ -1196,6 +1198,183 @@ function TopicBars({ topics, title }: { topics: TopicStat[]; title: string }) {
   );
 }
 
+/**
+ * Home: what to do in the next hour.
+ *
+ * Deliberately the first tab. Every other one answers a question you have to
+ * think to ask — what have I solved, how am I doing, what is coming up. This
+ * one answers the question you already had when you opened the panel.
+ */
+function HomeTab({ onOpenDue }: { onOpenDue: () => void }) {
+  const [data, setData] = useState<HomeData | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async (action?: () => Promise<HomeData>) => {
+    setBusy(true);
+    try {
+      setData(await (action ? action() : send({ type: 'daily:get' })));
+    } catch {
+      // The mirror or the service worker being cold is not worth an error
+      // screen on the tab that is meant to get you started.
+      setData((current) => current);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (!data) return <div className="empty">Loading…</div>;
+
+  const { streak, daily, dailyState } = data;
+  const pick = daily?.main;
+
+  return (
+    <>
+      <section className="home__streak">
+        <div className="home__flame">
+          <FlameIcon size={17} />
+          <span className="home__count">{streak.current}</span>
+          <span className="home__unit">day{streak.current === 1 ? '' : 's'}</span>
+        </div>
+        <div className="home__facts">
+          <span>{data.solvedToday} solved today</span>
+          {streak.longest > streak.current && <span>best {streak.longest}</span>}
+          {data.solveStreak > 0 && <span>{data.solveStreak}-day solving streak</span>}
+        </div>
+      </section>
+
+      {data.calendar.length > 0 && (
+        <div className="cal" role="img" aria-label="The last five weeks">
+          {data.calendar.map((cell) => (
+            <span key={cell.day} className={`cal__day cal__day--${cell.state}`} title={cell.day} />
+          ))}
+        </div>
+      )}
+
+      <div className="section-title">Today&rsquo;s problem</div>
+
+      {data.reason && <div className="banner">{data.reason}</div>}
+
+      {pick && (
+        <div className={`daily ${dailyState === 'done' ? 'is-done' : ''}`}>
+          <div className="daily__top">
+            <span className="daily__key mono">{pick.key}</span>
+            <span className="daily__rating" style={{ color: ratingColour(pick.rating) }}>
+              {pick.rating || '—'}
+            </span>
+            {dailyState === 'done' && <span className="chip chip--ok">Solved</span>}
+            {dailyState === 'skipped' && <span className="chip">Skipped</span>}
+          </div>
+          <div className="daily__name">{pick.name}</div>
+          {pick.tags.length > 0 && (
+            <div className="daily__tags">{pick.tags.slice(0, 4).join(' · ')}</div>
+          )}
+          <div className="card__actions">
+            <button type="button" className="primary" onClick={() => openUrl(pick.url)}>
+              Open
+            </button>
+            {dailyState === 'open' && (
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void load(() => send({ type: 'backlog:add', key: pick.key }))}
+                >
+                  Keep for later
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={busy}
+                  title="Ends the streak — use “Keep for later” if you mean to come back to it"
+                  onClick={() => void load(() => send({ type: 'daily:skip' }))}
+                >
+                  Skip
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {daily && (daily.easy || daily.hard) && (
+        <>
+          <div className="section-title">Or pick a different one</div>
+          <div className="trio">
+            {[daily.easy, daily.medium, daily.hard]
+              .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined)
+              .map((entry) => (
+                <button key={entry.key} type="button" className="trio__cell" onClick={() => openUrl(entry.url)}>
+                  {/* The coloured rating already says how hard it is — in
+                      Codeforces' own rank colours — so the label carries the
+                      other thing worth knowing. "Easier / A reach" would also
+                      be a lie whenever the search had to walk up past a band
+                      you have finished. */}
+                  <span className="trio__label">{entry.tags[0] ?? 'untagged'}</span>
+                  <span className="trio__rating" style={{ color: ratingColour(entry.rating) }}>
+                    {entry.rating}
+                  </span>
+                  <span className="trio__name">{entry.name}</span>
+                </button>
+              ))}
+          </div>
+        </>
+      )}
+
+      <div className="section-title">
+        Due now {data.dueTotal > 0 && <span className="tag tag--due">{data.dueTotal}</span>}
+      </div>
+      {data.due.length === 0 ? (
+        <div className="empty">Nothing due. The next one appears when its interval comes round.</div>
+      ) : (
+        <>
+          {data.due.map((problem) => (
+            <button key={problem.id} type="button" className="upsolve__row" onClick={onOpenDue}>
+              <span className="upsolve__state">{PLATFORM_SHORT[problem.platform] ?? '··'}</span>
+              <span className="upsolve__name">{problem.title}</span>
+              <span className={`upsolve__contest ${problem.dueAt <= data.now ? 'is-overdue' : ''}`}>
+                {formatDueIn(problem.dueAt, data.now)}
+              </span>
+            </button>
+          ))}
+          {data.dueTotal > data.due.length && (
+            <button type="button" className="ghost" style={{ marginTop: 8 }} onClick={onOpenDue}>
+              See all {data.dueTotal}
+            </button>
+          )}
+        </>
+      )}
+
+      {data.backlog.length > 0 && (
+        <>
+          <div className="section-title">Kept for later</div>
+          {data.backlog.map((entry) => (
+            <div key={entry.key} className="upsolve__row" style={{ cursor: 'default' }}>
+              <span className="upsolve__state mono" style={{ color: ratingColour(entry.rating) }}>
+                {entry.rating || '—'}
+              </span>
+              <button type="button" className="upsolve__name link" onClick={() => openUrl(entry.url)}>
+                {entry.name}
+              </button>
+              <button
+                type="button"
+                className="iconbtn"
+                disabled={busy}
+                onClick={() => void load(() => send({ type: 'backlog:remove', key: entry.key }))}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </>
+      )}
+    </>
+  );
+}
+
 export function App() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1204,7 +1383,7 @@ export function App() {
   const [retryingAll, setRetryingAll] = useState(false);
   const [query, setQuery] = useState('');
   const [label, setLabel] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>('due');
+  const [tab, setTab] = useState<Tab>('home');
 
   const load = useCallback(async () => {
     try {
@@ -1420,6 +1599,7 @@ export function App() {
       <nav className="tabs" role="tablist">
         {(
           [
+            ['home', 'Home'],
             ['due', `Due${due.length > 0 ? ` (${due.length})` : ''}`],
             ['all', `Solved (${data.stats.total})`],
             ['contests', 'Contests'],
@@ -1440,6 +1620,8 @@ export function App() {
       </nav>
 
       <div className="scroll">
+        {tab === 'home' && <HomeTab onOpenDue={() => setTab('due')} />}
+
         {tab === 'due' && (
           <>
             {due.length === 0 ? (

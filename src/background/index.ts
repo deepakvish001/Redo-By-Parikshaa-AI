@@ -47,6 +47,8 @@ import {
   noteSolved,
   type CfProblemView,
 } from './cf-mirror.ts';
+import { dayKey as utcDay } from '../core/daily.ts';
+import { addToBacklog, buildHome, removeFromBacklog, skipToday } from './home.ts';
 import { codeforcesProfile, fetchUpsolve, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
@@ -56,6 +58,7 @@ const DIGEST_ALARM = 'daily-digest';
 const CONTEST_ALARM = 'refresh-contests';
 const WRAPPED_ALARM = 'weekly-wrapped';
 const BACKUP_ALARM = 'daily-backup';
+const STREAK_ALARM = 'streak-nudge';
 
 const DIAGNOSTIC_KEY = 'detectionLog';
 /** Enough to cover a submission flow, small enough to stay in storage. */
@@ -623,6 +626,18 @@ async function handle(request: Request): Promise<unknown> {
       return lookup(request.keys, handles.codeforces, mine);
     }
 
+    case 'daily:get':
+      return buildHome();
+
+    case 'daily:skip':
+      return skipToday();
+
+    case 'backlog:add':
+      return addToBacklog(request.key);
+
+    case 'backlog:remove':
+      return removeFromBacklog(request.key);
+
     case 'cf:refresh': {
       const { handles } = await getSettings();
       await ensureProblemset(true);
@@ -753,6 +768,8 @@ chrome.runtime.onInstalled.addListener((details) => {
   // Checked daily; the nudge itself only fires once a week (see below).
   chrome.alarms.create(WRAPPED_ALARM, { periodInMinutes: 60 * 24 });
   chrome.alarms.create(BACKUP_ALARM, { periodInMinutes: 60 * 24 });
+  // Hourly, but it only ever says anything in the evening (see below).
+  chrome.alarms.create(STREAK_ALARM, { periodInMinutes: 60 });
   void refreshBadge();
   if (details.reason === 'install') void chrome.runtime.openOptionsPage();
 });
@@ -771,7 +788,50 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === CONTEST_ALARM) void tickContests();
   if (alarm.name === WRAPPED_ALARM) void offerWrapped();
   if (alarm.name === BACKUP_ALARM) void dailyBackup();
+  if (alarm.name === STREAK_ALARM) void nudgeStreak();
 });
+
+const STREAK_SENT_KEY = 'streakNudgedOn';
+
+/**
+ * One nudge, in the evening, only when a streak is genuinely at risk.
+ *
+ * The bar is deliberately high. A notification that fires when nothing is
+ * actually about to be lost is the kind people turn off within a week, taking
+ * the useful ones with it — so this stays quiet unless there is a run of at
+ * least three days, today is still open, and it is late enough that "later"
+ * has stopped being a plausible answer.
+ */
+async function nudgeStreak(): Promise<void> {
+  const settings = await getSettings();
+  if (!settings.revision.notify) return;
+
+  // Local hour, not UTC: the point is that it is evening where the user is.
+  const hour = new Date().getHours();
+  if (hour < 19 || hour > 22) return;
+
+  // The daily problem's calendar, so "already nudged today" and "today's pick"
+  // never disagree across the UTC boundary.
+  const today = utcDay(Date.now());
+  const stored = await chrome.storage.local.get(STREAK_SENT_KEY);
+  if (stored[STREAK_SENT_KEY] === today) return;
+
+  const home = await buildHome().catch(() => undefined);
+  if (!home) return;
+  if (!home.streak.todayPending || home.streak.current < 3) return;
+  if (home.solvedToday > 0) return;
+
+  await chrome.storage.local.set({ [STREAK_SENT_KEY]: today });
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
+    title: `${home.streak.current}-day streak, still going`,
+    message: home.daily?.main
+      ? `Today's problem is ${home.daily.main.key} (${home.daily.main.rating}). It keeps the run alive.`
+      : 'Solve one problem today to keep it.',
+    priority: 0,
+  });
+}
 
 /**
  * Commits the backup once a day, quietly.

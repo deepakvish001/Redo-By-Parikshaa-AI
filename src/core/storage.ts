@@ -3,6 +3,7 @@ import { appendEvent } from './journal.ts';
 import type { ParikshaaCredentials } from './parikshaa.ts';
 import type { UpsolveItem } from './upsolve.ts';
 import { claimSubmissions, type Claim } from './watermark.ts';
+import type { DailyLog, DailyRecord } from './daily.ts';
 import {
   PLATFORMS,
   type AttemptEvent,
@@ -20,6 +21,8 @@ const KEYS = {
   parikshaaApi: 'parikshaaApiKey',
   upsolve: 'upsolve',
   watermarks: 'watermarks',
+  daily: 'daily',
+  backlog: 'backlog',
 } as const;
 
 /** Aggregate counters that do not belong to any single problem. */
@@ -52,6 +55,7 @@ export const DEFAULT_SETTINGS: Settings = {
     tags: true,
     timer: true,
     listings: true,
+    profile: true,
   },
   diagnostics: {
     enabled: false,
@@ -268,6 +272,41 @@ export async function getUpsolve(): Promise<UpsolveItem[]> {
 export async function saveUpsolve(items: UpsolveItem[]): Promise<UpsolveItem[]> {
   await chrome.storage.local.set({ [KEYS.upsolve]: items });
   return items;
+}
+
+/* ------------------------------------------------------- the daily problem */
+
+export async function getDailyLog(): Promise<DailyLog> {
+  return readKey<DailyLog>(KEYS.daily, {});
+}
+
+export async function saveDailyRecord(day: string, record: DailyRecord): Promise<DailyLog> {
+  const log = await getDailyLog();
+  log[day] = record;
+  await chrome.storage.local.set({ [KEYS.daily]: pruneDailyLog(log, day) });
+  return log;
+}
+
+/**
+ * A year of picks is enough for any streak worth showing, and it keeps the log
+ * from growing without limit on an install that runs for years.
+ */
+export function pruneDailyLog(log: DailyLog, today: string, keepDays = 400): DailyLog {
+  const floor = new Date(Date.parse(`${today}T00:00:00Z`) - keepDays * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  return Object.fromEntries(Object.entries(log).filter(([day]) => day >= floor));
+}
+
+/** Problems kept for later, newest first. Deliberately a short list. */
+export async function getBacklog(): Promise<string[]> {
+  return readKey<string[]>(KEYS.backlog, []);
+}
+
+export async function saveBacklog(keys: string[]): Promise<string[]> {
+  const trimmed = [...new Set(keys)].slice(0, 50);
+  await chrome.storage.local.set({ [KEYS.backlog]: trimmed });
+  return trimmed;
 }
 
 /* ------------------------------------------------- submission watermarks */

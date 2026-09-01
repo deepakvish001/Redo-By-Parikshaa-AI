@@ -65,6 +65,12 @@ Solving is the easy part. Remembering three months later is the part nothing els
   the ladder, how often you forgot it on review, how many attempts it took to get accepted,
   how many hints you needed, and how long it took relative to the difficulty — so "dynamic
   programming: 34" is a claim backed by your own history.
+- **Gives you one problem a day, at your level.** Picked from the band your solved history
+  actually sits in, never one you have already solved, and *fixed for the day* — reopening the
+  panel does not reshuffle it, and two devices agree. A run of days shows as a streak with a
+  five-week calendar. Too busy? **Keep for later** puts it in a backlog and the day stays open;
+  **Skip** is the deliberate version and ends the run. One quiet nudge in the evening, only when a
+  run of three or more is genuinely about to be lost.
 - **Puts itself on the Codeforces page.** A card in the sidebar of every problem: the rating
   (shown even with the site's own tags switched off), a **Reveal tags** button for when you give
   up, a clock running since you opened it, your attempts on this problem, your note, and — when it
@@ -374,6 +380,10 @@ URLs, which anchor — and a single runner (`src/content/inject/`) owns the rest
 waiting for it to appear, handing the feature an isolated shadow root with Redo's palette already
 inside, tearing it down on navigation or when a switch goes off, and putting it back when the host
 page re-renders it away. One feature throwing costs one missing card, never the page.
+
+Three mounts so far: the **problem rail**, the **listing marks**, and a card on **your own
+Codeforces profile** with your streaks and today's picks. Only your own — somebody else's profile
+showing your streak would be misleading.
 
 **One cached mirror of Codeforces, not one fetch per feature.** The rating chip on a problem page,
 the ticks down a listing, and everything the roadmap has planned after them are the same two tables

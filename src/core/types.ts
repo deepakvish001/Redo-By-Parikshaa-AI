@@ -247,6 +247,8 @@ export interface Settings {
     timer: boolean;
     /** Solved ticks, due badges and rating chips down listing pages. */
     listings: boolean;
+    /** Streak and today's picks on your own Codeforces profile. */
+    profile: boolean;
   };
   diagnostics: {
     /**

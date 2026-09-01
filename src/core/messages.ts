@@ -10,6 +10,7 @@ import type { ParikshaaCredentials, SessionDiagnostic } from './parikshaa.ts';
 import type { UpsolveItem, UpsolveSummary } from './upsolve.ts';
 import type { Claim } from './watermark.ts';
 import type { CfProblemView } from '../background/cf-mirror.ts';
+import type { DailyPick, DailySet, Streak } from './daily.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
@@ -79,7 +80,11 @@ export type Request =
   | { type: 'submissions:claim'; platform: string; ids: string[]; watched: string[] }
   | { type: 'rail:get'; platform: string; slug: string }
   | { type: 'cf:lookup'; keys: string[] }
-  | { type: 'cf:refresh' };
+  | { type: 'cf:refresh' }
+  | { type: 'daily:get' }
+  | { type: 'daily:skip' }
+  | { type: 'backlog:add'; key: string }
+  | { type: 'backlog:remove'; key: string };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -121,6 +126,37 @@ export interface ResponseMap {
   'rail:get': RailData;
   'cf:lookup': Record<string, CfProblemView>;
   'cf:refresh': MirrorState;
+  'daily:get': HomeData;
+  'daily:skip': HomeData;
+  'backlog:add': HomeData;
+  'backlog:remove': HomeData;
+}
+
+/**
+ * Everything the Home tab draws.
+ *
+ * Assembled in one place because the tab's whole job is answering "what should
+ * I do in the next hour" — and an answer that arrives in five pieces, each
+ * shifting the layout as it lands, is not an answer.
+ */
+export interface HomeData {
+  today: string;
+  /** Today's picks. Absent when there is no handle, or the mirror is cold. */
+  daily?: DailySet;
+  /** Set when today's pick has been solved, skipped or is still open. */
+  dailyState: 'done' | 'skipped' | 'open' | 'unavailable';
+  streak: Streak;
+  /** Days solved in a row overall, which Redo has always tracked. */
+  solveStreak: number;
+  calendar: Array<{ day: string; state: 'done' | 'skipped' | 'missed' | 'future' | 'none' }>;
+  backlog: DailyPick[];
+  /** Problems due right now, newest first, capped for the preview. */
+  due: DueProblem[];
+  dueTotal: number;
+  solvedToday: number;
+  /** Why the daily problem cannot be offered, when it cannot. */
+  reason?: string;
+  now: number;
 }
 
 /**

@@ -1759,3 +1759,165 @@ body.gate {
   border-radius: 4px;
   padding: 1px 5px;
 }
+
+/* --------------------------------------------------------------- home tab */
+
+.home__streak {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 15px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(var(--accent-wash), var(--accent-wash)), var(--surface);
+  margin-bottom: 10px;
+}
+
+.home__flame {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--accent);
+}
+
+.home__flame svg { align-self: center; flex: none; }
+
+.home__count {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.home__unit {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.home__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* Five weeks of the daily problem. Deliberately tiny — it is a texture you
+   glance at, not a chart you read. */
+.cal {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  margin-bottom: 4px;
+}
+
+.cal__day {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background: var(--surface-raised);
+  border: 1px solid transparent;
+}
+
+.cal__day--done { background: var(--accent); }
+.cal__day--skipped { background: var(--surface-raised); border-color: var(--border-strong); }
+.cal__day--missed { background: hsl(0 84% 62% / 0.28); }
+.cal__day--future { background: var(--surface-raised); border-color: var(--accent); }
+
+.daily {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px 13px;
+}
+
+.daily.is-done { border-left-color: var(--ok); }
+
+.daily__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.daily__key {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+
+.daily__rating {
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.daily__name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.daily__tags {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.trio {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.trio__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 8px 9px;
+  min-width: 0;
+}
+
+.trio__label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.trio__rating {
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.trio__name {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.upsolve__contest.is-overdue { color: var(--amber); }
+
+.upsolve__name.link {
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.upsolve__name.link:hover { color: var(--accent-soft); }
