@@ -21,6 +21,50 @@ export type Problemset = Record<string, ProblemMeta>;
 
 /* ------------------------------------------------------------- histogram */
 
+/**
+ * How far back a chart looks.
+ *
+ * `undefined` is all time, which stays the default: for most people the whole
+ * record is the interesting picture, and a window is what you reach for when
+ * you want to know whether the last month went differently from the year.
+ */
+export type Window = number | undefined;
+
+/** The windows offered, in the order they are offered. */
+export const WINDOWS: Array<{ days: Window; label: string }> = [
+  { days: undefined, label: 'All time' },
+  { days: 365, label: '1 year' },
+  { days: 90, label: '90 days' },
+  { days: 30, label: '30 days' },
+];
+
+/**
+ * The problems inside a window.
+ *
+ * Timestamps come from Codeforces in Unix *seconds*, and a problem with no
+ * timestamp at all — an older cache, or a submission the API returned without
+ * one — is kept only when there is no window. Dropping it from every window
+ * would quietly shrink the all-time chart; keeping it in a 30-day window would
+ * put a solve from 2019 in it.
+ */
+export function within(
+  keys: Iterable<string>,
+  at: ReadonlyMap<string, number>,
+  days: Window,
+  now: number,
+): Set<string> {
+  const all = new Set(keys);
+  if (days === undefined) return all;
+
+  const cutoff = (now - days * 86_400_000) / 1000;
+  const inside = new Set<string>();
+  for (const key of all) {
+    const seconds = at.get(key);
+    if (seconds !== undefined && seconds >= cutoff) inside.add(key);
+  }
+  return inside;
+}
+
 export interface Bin {
   rating: number;
   count: number;

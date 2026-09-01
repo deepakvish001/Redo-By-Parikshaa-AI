@@ -42,7 +42,8 @@ import {
 } from '../core/messages.ts';
 import { bandFloor, type RatingGoal } from '../core/rating.ts';
 import { problemUrl } from '../core/daily.ts';
-import { heatmapGrid, type Bin, type HeatDay, type TagCount } from '../core/insights.ts';
+import { collectNotes, excerpt, noteMatches, type Note } from '../core/notes.ts';
+import { WINDOWS, heatmapGrid, type Bin, type HeatDay, type TagCount, type Window } from '../core/insights.ts';
 import type { InsightsData } from '../background/insights.ts';
 import type { TrainData } from '../background/train.ts';
 import type { Suggestion } from '../core/recommend.ts';
@@ -1394,22 +1395,54 @@ function OutcomeBars({
 function CodeforcesInsights() {
   const [data, setData] = useState<InsightsData | null>(null);
   const [opened, setOpened] = useState<Bin | null>(null);
+  const [days, setDays] = useState<Window>(undefined);
 
   useEffect(() => {
-    void send({ type: 'insights:get' })
+    setOpened(null);
+    void send({ type: 'insights:get', days })
       .then(setData)
       .catch(() => setData(null));
-  }, []);
+  }, [days]);
+
+  /**
+   * One window for the counting charts, not one per chart.
+   *
+   * The reference puts a range picker on each card, which reads as three
+   * independent questions when it is really one: *over what stretch?* Three
+   * pickers also let them disagree, and a doughnut and a bar chart that
+   * silently cover different months are worse than no picker at all.
+   */
+  const picker = (
+    <div className="windows">
+      {WINDOWS.map((entry) => (
+        <button
+          key={entry.label}
+          type="button"
+          className={entry.days === days ? 'is-on' : ''}
+          onClick={() => setDays(entry.days)}
+        >
+          {entry.label}
+        </button>
+      ))}
+    </div>
+  );
 
   if (!data) return <div className="empty">Reading your Codeforces history…</div>;
-  if (data.reason) return <div className="banner">{data.reason}</div>;
+  if (data.reason && data.solvedCount === 0) return <div className="banner">{data.reason}</div>;
 
   return (
     <>
       <div className="section-title">Activity</div>
+      {/* Always the whole record: it has a year selector of its own, and a
+          30-day heatmap is a row of squares. */}
       <Heatmap heat={data.heat} years={data.years} />
 
-      <div className="section-title">Solved by rating ({data.solvedCount})</div>
+      {picker}
+      {data.reason && <div className="banner">{data.reason}</div>}
+
+      <div className="section-title">
+        Solved by rating ({days === undefined ? data.solvedCount : data.windowCount})
+      </div>
       <Histogram bins={data.histogram} onPick={(bin) => setOpened(bin === opened ? null : bin)} />
       {opened && (
         <div className="bin">
@@ -1460,6 +1493,8 @@ function CodeforcesInsights() {
 
       {data.unsolved.length > 0 && (
         <>
+          {/* All time, whatever the window says: a problem you gave up on in
+              2023 is still unsolved today. */}
           <div className="section-title">Attempted, never solved ({data.unsolved.length})</div>
           {data.unsolved.slice(0, 12).map((entry) => (
             <button
@@ -1910,6 +1945,55 @@ function HomeTab({ onOpenDue }: { onOpenDue: () => void }) {
   );
 }
 
+/**
+ * One note, with the problem it belongs to.
+ *
+ * Collapsed to its first line until opened, because people write a heading and
+ * then the detail — and a list of forty full notes is the same wall the
+ * expander was there to avoid.
+ */
+function NoteRow({ note }: { note: Note }) {
+  const [open, setOpen] = useState(false);
+  const head = excerpt(note.note);
+  const more = note.note.trim() !== head;
+
+  return (
+    <div className="note">
+      <div className="note__head">
+        <a className="note__title" href={note.url} target="_blank" rel="noreferrer">
+          {note.title}
+        </a>
+        <span className="note__meta">{PLATFORM_LABELS[note.platform]}</span>
+        <span className="note__meta">
+          {new Date(note.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+        </span>
+      </div>
+
+      <div className="note__body">{open ? note.note : head}</div>
+
+      <div className="note__foot">
+        {note.complexity?.time && (
+          <span className="note__chip mono">time {note.complexity.time}</span>
+        )}
+        {note.complexity?.space && (
+          <span className="note__chip mono">space {note.complexity.space}</span>
+        )}
+        {note.labels.map((entry) => (
+          <span key={entry} className="note__chip">
+            {entry}
+          </span>
+        ))}
+        <span className="note__spacer" />
+        {more && (
+          <button type="button" className="link" onClick={() => setOpen(!open)}>
+            {open ? 'Less' : 'More'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1918,6 +2002,8 @@ export function App() {
   const [retryingAll, setRetryingAll] = useState(false);
   const [query, setQuery] = useState('');
   const [label, setLabel] = useState<string | null>(null);
+  /** The Library shows either the folders or the notebook over the same filter. */
+  const [view, setView] = useState<'problems' | 'notes'>('problems');
   const [tab, setTab] = useState<Tab>('home');
 
   const load = useCallback(async () => {
@@ -2044,7 +2130,10 @@ export function App() {
         problem.slug.toLowerCase().includes(needle) ||
         problem.language.toLowerCase().includes(needle) ||
         problem.tags.some((tag) => tag.toLowerCase().includes(needle)) ||
-        (problem.labels ?? []).some((label) => label.includes(needle))
+        (problem.labels ?? []).some((label) => label.includes(needle)) ||
+        // The note too. Searching for "monotonic stack" should find the problem
+        // where you wrote that down, not only the ones the judge tagged so.
+        (problem.note ?? '').toLowerCase().includes(needle)
       );
     },
     [query],
@@ -2053,6 +2142,17 @@ export function App() {
   const labels = useMemo(
     () => (data ? countLabels(data.problems, data.now) : []),
     [data],
+  );
+
+  /** Every note there is, and the ones this search and label leave standing. */
+  const allNotes = useMemo(() => (data ? collectNotes(data.problems) : []), [data]);
+  const notes = useMemo(
+    () =>
+      allNotes.filter(
+        (note) =>
+          noteMatches(note, query) && (label === null || note.labels.includes(label)),
+      ),
+    [allNotes, query, label],
   );
 
   const folders = useMemo(() => {
@@ -2274,7 +2374,7 @@ export function App() {
                   <input
                     type="text"
                     value={query}
-                    placeholder="Filter by title, tag, label or language"
+                    placeholder="Filter by title, tag, label, language or note"
                     onChange={(event) => setQuery(event.target.value)}
                   />
                   {query && (
@@ -2309,7 +2409,47 @@ export function App() {
                   </div>
                 )}
 
-                {folders.length === 0 ? (
+                <div className="segmented">
+                  <button
+                    type="button"
+                    className={view === 'problems' ? 'is-on' : ''}
+                    onClick={() => setView('problems')}
+                  >
+                    Problems
+                  </button>
+                  <button
+                    type="button"
+                    className={view === 'notes' ? 'is-on' : ''}
+                    onClick={() => setView('notes')}
+                  >
+                    Notes
+                    {allNotes.length > 0 && <span className="segmented__count">{allNotes.length}</span>}
+                  </button>
+                </div>
+
+                {view === 'notes' ? (
+                  allNotes.length === 0 ? (
+                    <Empty title="No notes yet">
+                      Write one from the sidebar card on a problem page, or from any problem below.
+                      Notes travel into the committed README too.
+                    </Empty>
+                  ) : notes.length === 0 ? (
+                    <Empty title="No note matches">
+                      Searching here reads the notes themselves, not just titles and tags.
+                    </Empty>
+                  ) : (
+                    <>
+                      <div className="section-hint">
+                        {notes.length === allNotes.length
+                          ? `${allNotes.length} note${allNotes.length === 1 ? '' : 's'} across ${data.problems.length} problems`
+                          : `${notes.length} of ${allNotes.length} notes`}
+                      </div>
+                      {notes.map((note) => (
+                        <NoteRow key={note.id} note={note} />
+                      ))}
+                    </>
+                  )
+                ) : folders.length === 0 ? (
                   <Empty title="Nothing matches">Try a different word, or clear the filter.</Empty>
                 ) : (
                   folders.map(({ platform, problems }) => (

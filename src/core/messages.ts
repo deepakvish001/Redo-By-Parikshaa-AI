@@ -87,7 +87,7 @@ export type Request =
   | { type: 'daily:skip' }
   | { type: 'backlog:add'; key: string }
   | { type: 'backlog:remove'; key: string }
-  | { type: 'insights:get' }
+  | { type: 'insights:get'; days?: number }
   | { type: 'train:get' }
   | { type: 'train:start'; ratings: number[]; minutes: number }
   | { type: 'train:reroll'; index: number }

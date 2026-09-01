@@ -654,7 +654,7 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
       return removeFromBacklog(request.key);
 
     case 'insights:get':
-      return buildInsights();
+      return buildInsights(request.days);
 
     case 'cf:handles':
       return handleCards(request.handles);

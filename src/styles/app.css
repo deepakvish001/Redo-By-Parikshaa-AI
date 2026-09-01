@@ -2243,3 +2243,150 @@ body.gate {
   color: var(--text-faint);
   line-height: 1.45;
 }
+
+/* ------------------------------------------------------------- the notebook */
+
+/* Two views over one filter: the folders, or every note you have written.
+   A segmented control rather than a sixth tab, because the search box and the
+   label bar above it belong to both. */
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  margin-bottom: 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.segmented button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+}
+
+.segmented button.is-on {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.segmented__count {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--text-muted);
+}
+
+.section-hint {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin: 0 2px 9px;
+}
+
+.note {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.note__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.note__title {
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--text);
+  text-decoration: none;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note__title:hover { color: var(--accent); }
+
+.note__meta { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+
+/* `pre-wrap` because notes are written with line breaks that mean something —
+   a list of cases, a formula, the counterexample that broke the first try. */
+.note__body {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+}
+
+.note__foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.note__spacer { flex: 1; }
+
+.note__chip {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+}
+
+.note__foot .link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* --------------------------------------------------------- the chart window */
+
+.windows {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  margin: 4px 0 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.windows button {
+  flex: 1;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+}
+
+.windows button.is-on {
+  background: var(--surface-raised);
+  color: var(--text);
+}

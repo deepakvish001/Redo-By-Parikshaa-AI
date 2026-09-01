@@ -179,3 +179,43 @@ test('the grid starts on a Monday row', () => {
   const row = grid[0].indexOf(first);
   assert.equal(new Date(`${first}T00:00:00Z`).getUTCDay(), (row + 1) % 7);
 });
+
+/* ------------------------------------------------------------- the windows */
+
+import { WINDOWS, within } from '../src/core/insights.ts';
+
+const NOW = Date.UTC(2026, 5, 1);
+const secondsAgo = (days) => (NOW - days * 86_400_000) / 1000;
+
+test('no window keeps everything, timestamps or not', () => {
+  const at = new Map([['a', secondsAgo(500)]]);
+  assert.deepEqual([...within(['a', 'b'], at, undefined, NOW)].sort(), ['a', 'b']);
+});
+
+test('a window keeps only what falls inside it', () => {
+  const at = new Map([
+    ['recent', secondsAgo(5)],
+    ['old', secondsAgo(200)],
+  ]);
+  assert.deepEqual([...within(['recent', 'old'], at, 30, NOW)], ['recent']);
+  assert.deepEqual([...within(['recent', 'old'], at, 365, NOW)].sort(), ['old', 'recent']);
+});
+
+test('a problem with no timestamp is dropped from a window, not from all time', () => {
+  // An older cache has no date for it. Keeping it in a 30-day window would put
+  // a solve from years ago in it; dropping it from all time would shrink the
+  // chart that is supposed to show everything.
+  const at = new Map();
+  assert.equal(within(['x'], at, 30, NOW).size, 0);
+  assert.equal(within(['x'], at, undefined, NOW).size, 1);
+});
+
+test('the edge of the window is inside it', () => {
+  const at = new Map([['edge', secondsAgo(30)]]);
+  assert.equal(within(['edge'], at, 30, NOW).size, 1);
+});
+
+test('all time is the first window offered', () => {
+  assert.equal(WINDOWS[0].days, undefined);
+  assert.deepEqual(WINDOWS.map((w) => w.label), ['All time', '1 year', '90 days', '30 days']);
+});

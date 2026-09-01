@@ -28,6 +28,8 @@ export interface CfState {
   /** Roughly where you are, rounded to a Codeforces band. */
   band: number;
   solvedAt: Array<[string, number]>;
+  /** Last failure per never-solved problem, so the charts can be windowed. */
+  attemptedAt: Array<[string, number]>;
 }
 
 const EMPTY = {
@@ -37,6 +39,7 @@ const EMPTY = {
   attempted: new Set<string>(),
   band: 800,
   solvedAt: [] as Array<[string, number]>,
+  attemptedAt: [] as Array<[string, number]>,
 };
 
 export async function cfState(): Promise<CfState> {
@@ -101,5 +104,6 @@ export async function cfState(): Promise<CfState> {
         : undefined,
     ),
     solvedAt: status?.solvedAt ?? [],
+    attemptedAt: status?.attemptedAt ?? [],
   };
 }

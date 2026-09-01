@@ -116,6 +116,8 @@ export interface CfUserCache {
    * heatmap is the only reader, and it wants exactly this.
    */
   solvedAt?: Array<[string, number]>;
+  /** Last failure per never-solved problem, for the windowed charts. */
+  attemptedAt?: Array<[string, number]>;
 }
 
 /**
@@ -155,6 +157,7 @@ export async function ensureUserStatus(handle: string, force = false): Promise<C
       const solved = new Set<string>();
       const tried = new Set<string>();
       const firstAccepted = new Map<string, number>();
+      const lastTried = new Map<string, number>();
 
       for (const submission of submissions) {
         const { contestId, index } = submission.problem;
@@ -163,6 +166,14 @@ export async function ensureUserStatus(handle: string, force = false): Promise<C
 
         if (submission.verdict !== 'OK') {
           tried.add(problem);
+          // The *most recent* failure, which is the date that answers "am I
+          // still losing to this?" — unlike a solve, where the first one is
+          // the moment worth recording.
+          const failedAt = submission.creationTimeSeconds;
+          if (failedAt !== undefined) {
+            const seen = lastTried.get(problem);
+            if (seen === undefined || failedAt > seen) lastTried.set(problem, failedAt);
+          }
           continue;
         }
 
@@ -185,6 +196,7 @@ export async function ensureUserStatus(handle: string, force = false): Promise<C
         // and then solved belongs in `solved` and nowhere else.
         attempted: [...tried].filter((problem) => !solved.has(problem)),
         solvedAt: [...firstAccepted],
+        attemptedAt: [...lastTried].filter(([problem]) => !solved.has(problem)),
       };
       await idbPut(STORES.cfStatus, key, fresh);
       return fresh;
