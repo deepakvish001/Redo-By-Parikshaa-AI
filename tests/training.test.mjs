@@ -280,3 +280,40 @@ test('a round says which ratings it could not fill', () => {
 test('a fully filled round reports nothing missing', () => {
   assert.deepEqual(unfilled(buildContest(POOL, [1200, 1400], new Set(), 60, NOW)), []);
 });
+
+test('a problem you already abandoned says so, and is still offered', () => {
+  // Going back to one you lost to is a perfectly good choice — and for a
+  // "finish what you start" step it is the best one. Silently mixing it in
+  // with fresh problems is what would be wrong.
+  const pool = [
+    { key: '1A', name: 'Old', rating: 1200, tags: ['dp'] },
+    { key: '2B', name: 'New', rating: 1200, tags: ['greedy'] },
+  ];
+  const out = recommend(pool, new Set(), [], { rating: 1200, attempted: new Set(['1A']) });
+
+  assert.match(out.find((entry) => entry.key === '1A').because, /left this one unfinished/);
+  assert.doesNotMatch(out.find((entry) => entry.key === '2B').because, /unfinished/);
+});
+
+test('asking for a tag returns several problems, not one per tag signature', () => {
+  // Deduplicating on the tag signature is right for a mixed list and wrong for
+  // a drill: every match shares the requested tag by definition.
+  const pool = Array.from({ length: 5 }, (_, i) => ({
+    key: `${i}A`,
+    name: `P${i}`,
+    rating: 1200,
+    tags: ['dp'],
+  }));
+
+  assert.equal(recommend(pool, new Set(), [], { rating: 1200, only: ['dp'], limit: 4 }).length, 4);
+  assert.equal(recommend(pool, new Set(), [], { rating: 1200, limit: 4 }).length, 1);
+});
+
+test('a tag drill never returns a problem without that tag', () => {
+  const pool = [
+    { key: '1A', name: 'dp one', rating: 1200, tags: ['dp'] },
+    { key: '2B', name: 'geometry', rating: 1200, tags: ['geometry'] },
+  ];
+  const out = recommend(pool, new Set(), [], { rating: 1200, only: ['dp'] });
+  assert.deepEqual(out.map((entry) => entry.key), ['1A']);
+});

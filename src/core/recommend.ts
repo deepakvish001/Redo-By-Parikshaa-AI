@@ -27,6 +27,23 @@ export interface RecommendOptions {
   limit?: number;
   /** Tags to leave out — usually what another bucket already took. */
   exclude?: ReadonlySet<string>;
+  /**
+   * Only problems carrying one of these tags.
+   *
+   * Used by the roadmap, which asks for a specific technique rather than for
+   * whatever is most useful — a drill on dynamic programming that returns a
+   * geometry problem is not a drill.
+   */
+  only?: readonly string[];
+  /**
+   * Problems you have already tried and not finished.
+   *
+   * Not excluded — a problem you abandoned is a perfectly good thing to go
+   * back to, and for a "finish what you start" step it is the *best* thing.
+   * But it has to say so: a list that silently mixes fresh problems with ones
+   * you already lost to leaves you unable to tell which is which.
+   */
+  attempted?: ReadonlySet<string>;
 }
 
 /**
@@ -56,13 +73,15 @@ export function recommend(
 ): Suggestion[] {
   const counts = new Map(tags.map((entry) => [entry.tag, entry]));
   const exclude = options.exclude ?? new Set<string>();
+  const only = options.only && options.only.length > 0 ? new Set(options.only) : undefined;
 
   const scored = candidates
     .filter(
       (candidate) =>
         candidate.rating === options.rating &&
         !solved.has(candidate.key) &&
-        !candidate.tags.some((tag) => exclude.has(tag)),
+        !candidate.tags.some((tag) => exclude.has(tag)) &&
+        (only === undefined || candidate.tags.some((tag) => only.has(tag))),
     )
     .map((candidate) => {
       // The hardest tag on the problem decides, not the average: a problem is
@@ -82,6 +101,10 @@ export function recommend(
         }
       }
 
+      if (options.attempted?.has(candidate.key)) {
+        reason = `you left this one unfinished · ${reason}`;
+      }
+
       return { ...candidate, url: problemUrl(candidate.key), because: reason, score: best };
     })
     .sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
@@ -91,7 +114,10 @@ export function recommend(
   const seen = new Set<string>();
   const out: Suggestion[] = [];
   for (const suggestion of scored) {
-    const signature = suggestion.tags.slice().sort().join('|');
+    // Not when a tag was asked for: every match shares it by definition, and
+    // deduplicating on the signature would return one problem and call it a
+    // drill.
+    const signature = only ? suggestion.key : suggestion.tags.slice().sort().join('|');
     if (seen.has(signature)) continue;
     seen.add(signature);
     out.push(suggestion);

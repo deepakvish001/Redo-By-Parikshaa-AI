@@ -1,5 +1,7 @@
 import { tagCounts } from '../core/insights.ts';
 import { readiness, recommend, type Readiness, type Suggestion } from '../core/recommend.ts';
+import { buildRoadmap, type Roadmap } from '../core/roadmap.ts';
+import { getSettings, getUpsolve } from '../core/storage.ts';
 import { getTraining, saveTraining } from '../core/storage.ts';
 import {
   buildContest,
@@ -38,6 +40,8 @@ export interface TrainData {
   growth: Suggestion[];
   stretch: Suggestion[];
   readiness?: Readiness;
+  /** An ordered plan from the weak bands and tags, against the goal. */
+  roadmap?: Roadmap;
 
   reason?: string;
   now: number;
@@ -57,7 +61,12 @@ const EMPTY = {
 };
 
 export async function buildTrain(now = Date.now()): Promise<TrainData> {
-  const [state, store] = await Promise.all([cfState(), getTraining()]);
+  const [state, store, settings, upsolve] = await Promise.all([
+    cfState(),
+    getTraining(),
+    getSettings(),
+    getUpsolve(),
+  ]);
 
   if (!state.ok) {
     return { ...EMPTY, reason: state.reason, now };
@@ -88,6 +97,13 @@ export async function buildTrain(now = Date.now()): Promise<TrainData> {
     exclude: new Set(growth.flatMap((entry) => entry.tags)),
   });
 
+  // The goal you named, or the next band up — which is what almost everybody
+  // is actually working towards.
+  const target =
+    settings.handles.goal > 0 ? settings.handles.goal : Math.min(3500, band + 200);
+
+  const ready = readiness(target, solved, attempted, (key) => problemset[key]?.rating);
+
   return {
     contest: active,
     states,
@@ -103,12 +119,17 @@ export async function buildTrain(now = Date.now()): Promise<TrainData> {
     ladder: suggestedLadder(band),
     growth,
     stretch,
-    readiness: readiness(
-      Math.min(3500, band + 200),
-      solved,
-      attempted,
-      (key) => problemset[key]?.rating,
-    ),
+    readiness: ready,
+    roadmap: buildRoadmap({
+      target,
+      band,
+      bands: ready.bands,
+      tags,
+      upsolve: upsolve.filter((item) => item.state !== 'done'),
+      // The roadmap decides *what* to practise; the recommender decides which.
+      pick: (rating, wanted, limit) =>
+        recommend(candidates, solved, tags, { rating, limit, only: wanted, attempted }),
+    }),
     now,
   };
 }

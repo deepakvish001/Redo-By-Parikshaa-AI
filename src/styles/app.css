@@ -2490,3 +2490,65 @@ body.gate {
 .past__p.is-ok { background: var(--ok); border-color: transparent; color: hsl(152 40% 10%); }
 .past__p.is-bad { background: var(--danger); border-color: transparent; color: hsl(0 40% 12%); }
 .past__p:hover { border-color: var(--accent); }
+
+/* --------------------------------------------------------------- the plan */
+
+.step {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+
+.step__head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 9px 11px;
+  text-align: left;
+}
+
+/* Numbered, because the order is the advice: the plan is not a menu. */
+.step__n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: hsl(20 40% 8%);
+  font-size: 11px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.step__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.step__count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.step__body { padding: 0 11px 10px; }
+
+.step__why {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}

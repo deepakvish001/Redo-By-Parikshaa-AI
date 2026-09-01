@@ -48,6 +48,7 @@ import type { InsightsData } from '../background/insights.ts';
 import type { TrainData } from '../background/train.ts';
 import type { HistoryData } from '../background/history.ts';
 import type { Suggestion } from '../core/recommend.ts';
+import type { Step } from '../core/roadmap.ts';
 import { ratingColour } from '../content/mounts/cf-rail.ts';
 import type { Prediction } from '../background/rating.ts';
 import { dueProblems, formatDueIn, upcomingProblems } from '../core/srs.ts';
@@ -1712,6 +1713,15 @@ function TrainTab() {
         </>
       )}
 
+      {data.roadmap && data.roadmap.steps.length > 0 && (
+        <>
+          <div className="section-title">Your way to {data.roadmap.target}</div>
+          {data.roadmap.steps.map((step, index) => (
+            <RoadmapStep key={`${step.kind}-${step.rating}-${step.tags?.[0] ?? index}`} step={step} index={index} />
+          ))}
+        </>
+      )}
+
       {data.growth.length > 0 && (
         <>
           <div className="section-title">Worth solving next</div>
@@ -1872,6 +1882,43 @@ function ContestHistory() {
         </div>
       ))}
     </>
+  );
+}
+
+/**
+ * One step of the plan, with its evidence and its problems.
+ *
+ * The evidence line is the whole point. "Drill dynamic programming" is advice
+ * anybody could give; "you leave 58% of dynamic-programming problems
+ * unfinished, and at 1100 the technique is the only hard part" is advice only
+ * something holding your record can give, and it is the difference between a
+ * plan you follow and a plan you close.
+ */
+function RoadmapStep({ step, index }: { step: Step; index: number }) {
+  const [open, setOpen] = useState(index === 0);
+
+  return (
+    <div className="step">
+      <button type="button" className="step__head" onClick={() => setOpen(!open)}>
+        <span className="step__n mono">{index + 1}</span>
+        <span className="step__title">{step.title}</span>
+        <span className="step__count mono">{step.count}</span>
+      </button>
+
+      {open && (
+        <div className="step__body">
+          <div className="step__why">{step.why}</div>
+          {step.problems.length === 0 ? (
+            <div className="faint">
+              Nothing left at {step.rating}
+              {step.tags ? ` tagged ${step.tags.join(', ')}` : ''} that you have not solved.
+            </div>
+          ) : (
+            step.problems.map((entry) => <SuggestionRow key={entry.key} entry={entry} />)
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
