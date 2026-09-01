@@ -9,9 +9,9 @@ browser.
 ## The short version
 
 Redo has no server, no account and no analytics. Everything it records is kept in your own
-browser. The only data that leaves your machine goes directly to services **you** connect —
-your GitHub repository and, optionally, your Parikshaa account — and nothing is sent anywhere
-else, ever.
+browser. The only data that leaves your machine goes directly to services **you** connect — your
+GitHub repository, optionally your Parikshaa account, and — only if you switch translation on and
+supply your own key — Google's Gemini API. Nothing is sent anywhere else, ever.
 
 ## What is stored, and where
 
@@ -30,6 +30,7 @@ All of the following lives in `chrome.storage.local`, on your device:
 | Labels you add to problems | To group and filter your own list |
 | Unsolved problems from your recent Codeforces contests | To build the upsolve queue |
 | Your Codeforces handle and LeetCode username | To read your public contest rating |
+| Your Google Gemini key, if you add one | To translate statements when you press Translate |
 | Unfinished code and test cases you type in the workspace | To give them back when you reopen the problem |
 
 ## What is sent, and to whom
@@ -37,7 +38,7 @@ All of the following lives in `chrome.storage.local`, on your device:
 Redo makes network requests to exactly these places:
 
 1. **The judge you are on** (LeetCode, Codeforces, AtCoder, CodeChef, HackerRank,
-   GeeksforGeeks) — to read the problem's own details and your own submission's source. These
+   GeeksforGeeks, CSES) — to read the problem's own details and your own submission's source. These
    are the same requests the page itself makes, and they carry only your existing session with
    that site.
 2. **api.github.com** — only if you turn GitHub sync on, and only to the repository you name.
