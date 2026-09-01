@@ -192,6 +192,52 @@ export function readLatestVerdict(
   return undefined;
 }
 
+export interface SubmissionRow {
+  id: string;
+  verdict: string;
+  waiting: boolean;
+  language?: string;
+  time?: string;
+  memory?: string;
+  when?: string;
+}
+
+/**
+ * Your own submissions for one problem, from the status page.
+ *
+ * The language cell is the one immediately before the verdict cell rather than
+ * "the cell containing a language word" — Codeforces has a language called
+ * `Secret_171`, and the problem title cell comes first, which is how "Secret
+ * Santa" once got filed as its own language.
+ */
+export function readSubmissions(document_: Document, problem: string): SubmissionRow[] {
+  const rows: SubmissionRow[] = [];
+
+  for (const row of document_.querySelectorAll('tr[data-submission-id]')) {
+    const href = row.querySelector('a[href*="/problem/"]')?.getAttribute('href') ?? '';
+    const match = /\/problem\/([A-Za-z0-9]+)/.exec(href);
+    if (!match || match[1]?.toUpperCase() !== problem.toUpperCase()) continue;
+
+    const cells = [...row.querySelectorAll('td')];
+    const verdictCell = row.querySelector('.status-verdict-cell');
+    const verdictAt = verdictCell ? cells.indexOf(verdictCell as HTMLTableCellElement) : -1;
+    const text = (cell: Element | undefined) => cell?.textContent?.trim() || undefined;
+
+    rows.push({
+      id: row.getAttribute('data-submission-id') ?? '',
+      verdict: text(verdictCell ?? undefined) ?? '',
+      waiting: verdictCell?.getAttribute('waiting') === 'true',
+      language: verdictAt > 0 ? text(cells[verdictAt - 1]) : undefined,
+      // Time and memory sit immediately after the verdict, in that order.
+      time: verdictAt >= 0 ? text(cells[verdictAt + 1]) : undefined,
+      memory: verdictAt >= 0 ? text(cells[verdictAt + 2]) : undefined,
+      when: text(cells[1]),
+    });
+  }
+
+  return rows;
+}
+
 /* ------------------------------------------------------------ the requests */
 
 /**
@@ -283,4 +329,9 @@ export interface Verdict {
 /** One look at your own status page for this contest. */
 export async function readVerdict(target: SubmitTarget): Promise<Verdict | undefined> {
   return readLatestVerdict(await fetchPage(statusUrl(target)), target.index);
+}
+
+/** Everything you have sent for this problem, newest first. */
+export async function fetchSubmissions(target: SubmitTarget): Promise<SubmissionRow[]> {
+  return readSubmissions(await fetchPage(statusUrl(target)), target.index);
 }

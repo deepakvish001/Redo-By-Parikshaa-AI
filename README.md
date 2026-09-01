@@ -94,15 +94,16 @@ Solving is the easy part. Remembering three months later is the part nothing els
 - **Shows your friends' solutions.** Save a few handles and any problem page will tell you which of
   them solved it, in what language and when, with a link to the code. One Codeforces call per
   handle, so it only looks when you ask.
-- **Puts the statement beside an editor.** *Open workspace* on a Codeforces problem splits the page:
-  the statement on the left, a real editor on the right, with syntax highlighting, your usual
-  compilers pinned to the top of the list, the samples parsed out where you can read and copy them,
-  and Submit going through Codeforces' own form — the verdict comes back into the toolbar. What you
-  type is saved as you type it, per problem, so a closed tab costs nothing. It is off by default and
-  it is a separate download: the editor is only fetched the first time you open one. **It cannot run
-  your code** — a browser has no compiler, and shipping your source to somebody else's judge to get
-  one would contradict the rest of this page — so the panel says so and links to Codeforces' own
-  custom invocation.
+- **Puts the statement beside an editor.** *Open workspace* on a Codeforces problem replaces it with
+  one screen: statement and tags on the left with a **My Submissions** tab beside them, a real
+  editor on the right — syntax highlighting, your usual compilers pinned to the top of the list, a
+  light and a dark theme — and the sample cases underneath, editable, with your own extra cases if
+  you want them. **Run** sends the current case to Codeforces' custom invocation; **Submit** sends
+  the solution through Codeforces' own submit form and polls the verdict back. Nothing is compiled
+  in the browser: source, compiler and input go to Codeforces, and Codeforces does the work — the
+  same requests the site makes when you press its own buttons, from your own session. What you type
+  is saved as you type it, per problem, along with your cases and your compiler. Off by default, and
+  a separate download: the editor is only fetched the first time you open one.
 - **Sets you a round.** The useful unit of practice is not a problem, it is a *round* — five
   problems, a clock, no editorial. Codeforces runs one a week and you cannot choose what it trains.
   Pick the ratings yourself and the same problemset becomes a speed drill, or an hour on the one
@@ -434,13 +435,20 @@ thing here and a person browsing the problemset should not parse an editor they 
 also the one part that covers the page rather than adding to it, so it takes an explicit switch and
 an explicit press. Two details in it are worth knowing:
 
-- The statement is **moved** into the left pane rather than copied. A copy loses the MathJax the
-  page has already rendered, and re-running MathJax over a clone is slow and frequently wrong. A
-  moved statement keeps the site's own CSS with it, so that pane stays in the light DOM and only
-  Redo's own chrome gets a shadow root.
+- The statement is **slotted**, not copied. A copy loses the MathJax the page has already rendered,
+  and re-running MathJax over a clone is slow and frequently wrong. A slotted node stays a light-DOM
+  child of the host — so Codeforces' own stylesheet still applies to it — while rendering inside the
+  shadow tree's layout. That is also why dark mode ships a second, tiny page-level stylesheet: the
+  site's CSS assumes a white page.
 - Closing works through an event on the document, not a module variable. Each injection of the
   bundle gets its own scope, so the copy that needs to close the overlay is never the copy that
   opened it.
+- **Nothing runs in the browser, by design.** A browser has no compiler, and shipping your source to
+  somebody else's judge to borrow one would contradict everything else on this page. Codeforces
+  already runs arbitrary code for you, on your own account, through its custom invocation page — so
+  Run posts there and shows what comes back. Its result page is the one piece of Codeforces markup
+  with no stable shape, so when the answer cannot be read in place the whole run is handed to a real
+  Codeforces tab instead. Run always ends somewhere useful rather than in an apology.
 
 **One cached mirror of Codeforces, not one fetch per feature.** The rating chip on a problem page,
 the ticks down a listing, and everything the roadmap has planned after them are the same two tables

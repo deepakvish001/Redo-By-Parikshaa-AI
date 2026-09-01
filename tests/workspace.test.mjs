@@ -10,6 +10,8 @@ import {
   readSamples,
   readSubmitError,
 } from '../src/workspace/codeforces.ts';
+import { readSubmissions } from '../src/workspace/codeforces.ts';
+import { readRunOutcome, runFields } from '../src/workspace/customtest.ts';
 import { MAX_DRAFTS, draftKey, putDraft, readDraft } from '../src/workspace/drafts.ts';
 import { grammarFor } from '../src/workspace/editor.ts';
 import { parseProblem } from '../src/core/cf-url.ts';
@@ -180,6 +182,96 @@ test('a problem with no submission yet has no verdict', () => {
 
 test('the problem index matches case-insensitively', () => {
   assert.ok(readLatestVerdict(parse(STATUS('Accepted', 'false')), 'c'));
+});
+
+/* ----------------------------------------------------------- submissions */
+
+const MY_STATUS = `
+<table>
+  <tr data-submission-id="991">
+    <td><a href="/contest/2000/submission/991">991</a></td>
+    <td>2 minutes ago</td>
+    <td><a href="/contest/2000/problem/F">2000F</a></td>
+    <td>GNU G++20 13.2</td>
+    <td class="status-verdict-cell" waiting="false">Accepted</td>
+    <td>140 ms</td><td>8200 KB</td>
+  </tr>
+  <tr data-submission-id="980">
+    <td><a href="/contest/2000/submission/980">980</a></td>
+    <td>1 hour ago</td>
+    <td><a href="/contest/2000/problem/A">2000A</a></td>
+    <td>Python 3.8</td>
+    <td class="status-verdict-cell" waiting="false">Accepted</td>
+    <td>15 ms</td><td>100 KB</td>
+  </tr>
+</table>`;
+
+test('only this problem’s submissions are listed', () => {
+  const rows = readSubmissions(parse(MY_STATUS), 'F');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, '991');
+});
+
+test('the language read is the cell before the verdict, not the first that looks like one', () => {
+  // The problem cell comes first, and Codeforces has a language called
+  // Secret_171 — which is how "Secret Santa" once became its own language.
+  const rows = readSubmissions(parse(MY_STATUS), 'F');
+  assert.equal(rows[0].language, 'GNU G++20 13.2');
+  assert.equal(rows[0].time, '140 ms');
+  assert.equal(rows[0].memory, '8200 KB');
+});
+
+test('a problem with no submissions lists none', () => {
+  assert.deepEqual(readSubmissions(parse(MY_STATUS), 'Z'), []);
+});
+
+/* ------------------------------------------------------- custom invocation */
+
+test('the run posts exactly the fields Codeforces’ own form posts', () => {
+  const fields = runFields({ csrf: 't', programTypeId: '89', source: 'x', input: '3\n1 2 3' });
+  assert.equal(fields.action, 'submitSolutionFormSubmitted');
+  assert.equal(fields.csrf_token, 't');
+  assert.equal(fields.programTypeId, '89');
+  assert.equal(fields.input, '3\n1 2 3');
+});
+
+test('an invocation result is read out of the page', () => {
+  const document_ = parse(`
+    <div class="roundbox customtest-results">
+      <div class="caption">Invocation result</div>
+      <table><tr><td class="verdict">Ok</td><td>31 ms</td><td>1200 KB</td></tr></table>
+      <div><pre>3
+1 2 3</pre></div>
+      <div><pre>6</pre></div>
+    </div>`);
+
+  const outcome = readRunOutcome(document_);
+  assert.equal(outcome.verdict, 'Ok');
+  assert.equal(outcome.output, '6', 'the last pre is the output; the first is the echoed input');
+  assert.equal(outcome.time, '31 ms');
+  assert.equal(outcome.memory, '1200 KB');
+});
+
+test('a block that only says what it is still counts', () => {
+  // Nothing on this page carries a stable class name, so the parser falls back
+  // to the box that names itself.
+  const outcome = readRunOutcome(parse(`
+    <div class="roundbox">Custom invocation<pre>hello</pre></div>`));
+  assert.equal(outcome.output, 'hello');
+});
+
+test('a compilation error is a verdict, not an output', () => {
+  const outcome = readRunOutcome(parse(`
+    <div class="customtest-results">Invocation result: Compilation error<br>main.cpp:3:1 error</div>`));
+  assert.equal(outcome.verdict, 'Compilation error');
+  assert.match(outcome.error, /main\.cpp/);
+});
+
+test('a page with no result at all reports none rather than an empty run', () => {
+  // `undefined` is what makes the caller offer a real Codeforces tab instead of
+  // inventing an output, so it matters that this is not `{}`.
+  assert.equal(readRunOutcome(parse('<div>Custom invocation</div>')), undefined);
+  assert.equal(readRunOutcome(parse('<p>signed out</p>')), undefined);
 });
 
 /* ------------------------------------------------------------------- urls */

@@ -30,7 +30,7 @@ All of the following lives in `chrome.storage.local`, on your device:
 | Labels you add to problems | To group and filter your own list |
 | Unsolved problems from your recent Codeforces contests | To build the upsolve queue |
 | Your Codeforces handle and LeetCode username | To read your public contest rating |
-| Unfinished code you type in the workspace | To give it back when you reopen the problem |
+| Unfinished code and test cases you type in the workspace | To give them back when you reopen the problem |
 
 ## What is sent, and to whom
 
@@ -51,12 +51,16 @@ Redo makes network requests to exactly these places:
 
 ## The workspace
 
-If you turn the workspace on and press Submit in it, your code goes to **Codeforces**, through
-Codeforces' own submit form, with the CSRF token that page issued to your own signed-in session.
-It is byte for byte the request the site makes when you press its own Submit button; the only
-difference is which element you clicked. Nothing is sent anywhere else, and there is no third-party
-compiler or runner involved — which is also why the workspace cannot run your code locally, and
-says so on the panel rather than quietly shipping it somewhere to be run.
+If you turn the workspace on, both of its buttons send your code to **Codeforces** and nowhere else:
+
+- **Submit** posts through Codeforces' own submit form — your source and the compiler id, with the
+  CSRF token that page issued to your signed-in session.
+- **Run** posts your source, the compiler id and the input of the case you are looking at to
+  Codeforces' **custom invocation** page, which is the site's own feature for running code.
+
+Both are byte for byte the requests the site makes when you press its own buttons; the only
+difference is which element you clicked. There is no third-party compiler, runner or judge involved
+at any point, and nothing in the workspace is sent to any server other than Codeforces.
 
 What you type is saved on your own machine as you type it, so that closing a tab does not lose a
 solution. Drafts for the sixty most recently touched problems are kept; older ones are dropped as

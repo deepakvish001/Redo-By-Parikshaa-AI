@@ -7,10 +7,23 @@
  * none of them run an unload handler you can rely on.
  */
 
+export interface TestCase {
+  input: string;
+  /** What the statement says the answer is, or what you typed instead. */
+  expected: string;
+}
+
 export interface Draft {
   source: string;
   /** Codeforces' `programTypeId`, so the language comes back with the code. */
   languageId?: string;
+  /**
+   * The cases as you left them — the samples plus any you added.
+   *
+   * Stored with the code because an extra case you wrote by hand is as easy to
+   * lose and as annoying to retype as the solution itself.
+   */
+  tests?: TestCase[];
   at: number;
 }
 
@@ -43,7 +56,9 @@ export function draftKey(contestId: string, index: string): string {
 export function putDraft(map: DraftMap, key: string, draft: Draft, limit = MAX_DRAFTS): DraftMap {
   const next: DraftMap = { ...map };
 
-  if (draft.source.trim() === '') {
+  // Test cases you typed are worth keeping even with the editor cleared; an
+  // empty draft with nothing in it at all is not.
+  if (draft.source.trim() === '' && (draft.tests?.length ?? 0) === 0) {
     delete next[key];
     return next;
   }
