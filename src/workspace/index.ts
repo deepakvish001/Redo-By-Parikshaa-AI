@@ -10,7 +10,13 @@ import {
   type LanguageOption,
   type SubmissionRow,
 } from './codeforces.ts';
-import { loadCustomTestForm, openCustomTest, runOnCodeforces, type RunOutcome } from './customtest.ts';
+import {
+  loadCustomTestForm,
+  openCustomTest,
+  runOnCodeforces,
+  type RunOutcome,
+  type RunRequest,
+} from './customtest.ts';
 import { caretLabel, createEditor, type Editor, type Theme } from './editor.ts';
 import { DRAFTS_KEY, draftKey, putDraft, type Draft, type DraftMap, type TestCase } from './drafts.ts';
 import { WORKSPACE_CSS, statementCss } from './ui.css.ts';
@@ -342,7 +348,9 @@ export async function openWorkspace(): Promise<void> {
   const caseRow = h('div', { class: 'cases' });
   const input = h('textarea', { spellcheck: 'false' });
   const expected = h('textarea', { spellcheck: 'false' });
-  const resultBody = h('div', {}, h('div', { class: 'faint', text: 'Press Run to send this case to Codeforces.' }));
+  const resultBody = h('div', { class: 'result' },
+    h('div', { class: 'faint', text: 'Press Run to send this case to Codeforces.' }),
+  );
 
   const samplesBody = h('div', {},
     caseRow,
@@ -608,7 +616,7 @@ export async function openWorkspace(): Promise<void> {
     showTests('result');
     resultBody.replaceChildren(h('div', { class: 'wait', text: 'Running on Codeforces…' }));
 
-    const request = {
+    const request: RunRequest = {
       csrf: '',
       programTypeId: languages.value,
       source,
@@ -618,6 +626,9 @@ export async function openWorkspace(): Promise<void> {
     try {
       const form = await loadCustomTestForm();
       request.csrf = form.csrf;
+      // The page's own hidden fields travel with the run: without them
+      // Codeforces hands the form back and no result ever appears.
+      request.fields = form.fields;
 
       const outcome = await runOnCodeforces(request);
       if (controller.signal.aborted) return;
@@ -681,11 +692,11 @@ export async function openWorkspace(): Promise<void> {
     return wrap;
   }
 
-  function handOff(request: { csrf: string; programTypeId: string; source: string; input: string }): HTMLElement {
+  function handOff(request: RunRequest): HTMLElement {
     return h('div', { class: 'row', style: 'margin-top:8px' },
       h('span', {
         class: 'faint',
-        text: 'Codeforces ran it but Redo could not read the result page.',
+        text: 'No result came back from Codeforces. Run it there instead:',
       }),
       button('Open it on Codeforces', () => openCustomTest(request)),
     );
@@ -741,6 +752,7 @@ export async function openWorkspace(): Promise<void> {
         csrf: fresh.csrf,
         programTypeId: languages.value,
         source,
+        fields: fresh.fields,
       });
 
       if (!result.ok) {

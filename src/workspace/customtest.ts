@@ -1,4 +1,11 @@
-import { readCsrf, readLanguages, orderLanguages, type LanguageOption } from './codeforces.ts';
+import {
+  completeFields,
+  orderLanguages,
+  readCsrf,
+  readFormFields,
+  readLanguages,
+  type LanguageOption,
+} from './codeforces.ts';
 
 /**
  * Running a solution — on Codeforces, by Codeforces.
@@ -24,6 +31,8 @@ export function customTestUrl(): string {
 export interface CustomTestForm {
   csrf: string;
   languages: LanguageOption[];
+  /** The page's own hidden fields, including the fingerprints. */
+  fields: Record<string, string>;
 }
 
 export interface RunOutcome {
@@ -54,10 +63,8 @@ export function readRunOutcome(document_: Document): RunOutcome | undefined {
   const text = block.textContent ?? '';
   const outcome: RunOutcome = {};
 
-  const pres = [...block.querySelectorAll('pre')];
-  // Codeforces prints the input back above the output; the output is the last.
-  const output = pres.at(-1);
-  if (output) outcome.output = trimTrailing(output.textContent ?? '');
+  const output = readOutput(block);
+  if (output !== undefined) outcome.output = output;
 
   // "Ok", or a failure. Read from a verdict cell when there is one, and from the
   // block's own words when there is not.
@@ -75,19 +82,76 @@ export function readRunOutcome(document_: Document): RunOutcome | undefined {
     outcome.error = trimTrailing(text).slice(0, 4000);
   }
 
-  return outcome.output !== undefined || outcome.verdict ? outcome : undefined;
+  // Neither an output nor a verdict means the page had no result on it — the
+  // form before a run looks exactly like this, and reporting it as a run that
+  // printed nothing would be worse than admitting the page could not be read.
+  return outcome.output || outcome.verdict ? outcome : undefined;
 }
 
-function resultBlock(document_: Document): Element | undefined {
-  const named = document_.querySelector('#customTestResults, .customtest-results, .customtest');
-  if (named) return named;
+/** The box Codeforces prints the program's output into, when it has one. */
+const OUTPUT = 'textarea[name="output"], #outputFileTextarea, #output-file-content, .output-view';
 
-  // Nothing named it, so find the box that says what it is.
-  for (const box of document_.querySelectorAll('.roundbox, .datatable, table')) {
-    if (/invocation result|custom invocation/i.test(box.textContent ?? '')) return box;
+/** The boxes that hold what *you* typed, which must never be read as output. */
+const TYPED = new Set(['source', 'input', 'sourcefile']);
+
+/**
+ * What the program printed, or `undefined` when the block holds no output.
+ *
+ * A blank output counts as none. The custom invocation page ships an empty
+ * output box before anything has run, and a program that legitimately prints
+ * nothing still arrives with a verdict — so treating blank as "no result" costs
+ * nothing and stops the un-run form from being reported as a finished run.
+ */
+function readOutput(block: Element): string | undefined {
+  const named = block.querySelector(OUTPUT);
+  const candidates = named
+    ? [named]
+    : // Codeforces prints the input back above the output, so the last box wins
+      // — of the boxes that are not the ones you typed into.
+      [...block.querySelectorAll('pre, textarea')].filter(
+        (box) => !TYPED.has((box.getAttribute('name') ?? '').toLowerCase()),
+      );
+
+  for (const box of candidates.reverse()) {
+    // `tagName` rather than `instanceof HTMLTextAreaElement`: this parser runs
+    // against documents from `DOMParser` in the browser and from jsdom in the
+    // tests, and the constructor is a different object in each.
+    const raw =
+      box.tagName === 'TEXTAREA'
+        ? (box as HTMLTextAreaElement).value || box.textContent
+        : box.textContent;
+    const text = trimTrailing(raw ?? '');
+    if (text) return text;
   }
 
   return undefined;
+}
+
+function resultBlock(document_: Document): Element | undefined {
+  const named = document_.querySelector(
+    '#customTestResults, .customtest-results, .customtest, .custom-invocation-results',
+  );
+  if (named) return named;
+
+  // The output box, if the page has one, sits inside whatever Codeforces is
+  // currently calling the result box — so find it by the box that surrounds it.
+  const box = document_.querySelector(OUTPUT)?.closest('.roundbox, table, form, div');
+  if (box) return box;
+
+  // Nothing named it, so find the box that says what it is. "Invocation result"
+  // and not "custom invocation": the second is the page's own heading and is
+  // there before anything has run, so it would match the empty form. The
+  // smallest matching box, because an ancestor "says what it is" too — matching
+  // `body` would hand back the navigation as an output.
+  let best: Element | undefined;
+  for (const candidate of document_.querySelectorAll('.roundbox, .datatable, table, div')) {
+    if (!/invocation result/i.test(candidate.textContent ?? '')) continue;
+    if (!candidate.querySelector('pre, textarea')) continue;
+    const length = candidate.textContent?.length ?? 0;
+    if (!best || length < (best.textContent?.length ?? 0)) best = candidate;
+  }
+
+  return best;
 }
 
 function trimTrailing(text: string): string {
@@ -115,7 +179,7 @@ export async function loadCustomTestForm(): Promise<CustomTestForm> {
     );
   }
 
-  return { csrf, languages };
+  return { csrf, languages, fields: completeFields(readFormFields(document_)) };
 }
 
 export interface RunRequest {
@@ -123,18 +187,29 @@ export interface RunRequest {
   programTypeId: string;
   source: string;
   input: string;
+  /** The form's own hidden fields, read from the page. */
+  fields?: Record<string, string>;
 }
 
-/** The fields Codeforces' own custom invocation form posts. */
+/**
+ * The fields Codeforces' own custom invocation form posts.
+ *
+ * Built on top of whatever the page actually carried rather than from a list
+ * of the fields that seemed necessary. The first version left out `ftaa` and
+ * `bfaa` — two fingerprint fields the site's JavaScript fills in — and
+ * Codeforces answered every run by handing the form back with no result and no
+ * error, which reached the user as "Redo could not read the result page".
+ */
 export function runFields(request: RunRequest): Record<string, string> {
   return {
+    // Whatever the page carried — `action` and `tabSize` included, so the
+    // page's own values win over the defaults `completeFields` falls back to.
+    ...completeFields(request.fields ?? {}),
     csrf_token: request.csrf,
-    action: 'submitSolutionFormSubmitted',
     programTypeId: request.programTypeId,
     source: request.source,
-    // Codeforces names the box `input` on this page and `sourceFile` nowhere.
+    // Codeforces names the box `input` on this page.
     input: request.input,
-    tabSize: '4',
   };
 }
 

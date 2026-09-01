@@ -259,9 +259,86 @@ async function fetchPage(url: string): Promise<Document> {
   return parse(await response.text());
 }
 
+/**
+ * Every hidden field on the form, exactly as it stands.
+ *
+ * This is the fix for "Codeforces returned the form again without saying why".
+ * The submit form carries more than the CSRF token: `ftaa` and `bfaa` are two
+ * fingerprint fields the site's own JavaScript fills in, and a POST without
+ * them is refused *silently* — Codeforces answers 200 with the blank form and
+ * no error text at all, which is indistinguishable from any other rejection.
+ *
+ * Enumerating the fields I think are needed is how that happened. Reading the
+ * form and sending back whatever it actually contains is the version that
+ * keeps working when Codeforces adds the next one.
+ */
+export function readFormFields(document_: Document): Record<string, string> {
+  const form =
+    document_.querySelector('form.submit-form') ??
+    document_.querySelector('select[name="programTypeId"]')?.closest('form') ??
+    document_.querySelector('form');
+
+  const fields: Record<string, string> = {};
+  for (const input of form?.querySelectorAll('input[name]') ?? []) {
+    const name = input.getAttribute('name');
+    const type = (input.getAttribute('type') ?? 'text').toLowerCase();
+    // A file input has no value to carry, and a submit button's value is the
+    // button's label rather than data.
+    if (!name || type === 'file' || type === 'submit' || type === 'button') continue;
+    fields[name] = input.getAttribute('value') ?? '';
+  }
+
+  return fields;
+}
+
+/**
+ * A value for one of Codeforces' fingerprint fields.
+ *
+ * The site's JavaScript computes these in the page; a content script in the
+ * isolated world cannot read what it computed, and the copy in the fetched HTML
+ * is blank because the JS has not run there. What the form needs is a
+ * well-formed value present under that name — so one is generated, and kept for
+ * the life of the tab so a session's submissions look like one browser rather
+ * than a new one each time.
+ */
+function fingerprint(length: number, alphabet: string): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  return [...bytes].map((byte) => alphabet[byte % alphabet.length]).join('');
+}
+
+let ftaa: string | undefined;
+let bfaa: string | undefined;
+
+export function fingerprints(): { ftaa: string; bfaa: string } {
+  ftaa ??= fingerprint(18, 'abcdefghijklmnopqrstuvwxyz0123456789');
+  bfaa ??= fingerprint(32, '0123456789abcdef');
+  return { ftaa, bfaa };
+}
+
+/**
+ * Fills the blanks the page's own JavaScript would have filled.
+ *
+ * Only the blanks: a field the fetched form already carries a value for is
+ * left exactly as Codeforces sent it.
+ */
+export function completeFields(fields: Record<string, string>): Record<string, string> {
+  const filled = { ...fields };
+  const marks = fingerprints();
+
+  if (!filled.ftaa) filled.ftaa = marks.ftaa;
+  if (!filled.bfaa) filled.bfaa = marks.bfaa;
+  filled.action ||= 'submitSolutionFormSubmitted';
+  filled.tabSize ||= '4';
+  filled.sourceFile ??= '';
+
+  return filled;
+}
+
 export interface SubmitForm {
   csrf: string;
   languages: LanguageOption[];
+  /** The form's own hidden fields, to be posted back with the solution. */
+  fields: Record<string, string>;
 }
 
 /**
@@ -282,7 +359,7 @@ export async function loadSubmitForm(target: SubmitTarget): Promise<SubmitForm> 
     );
   }
 
-  return { csrf, languages };
+  return { csrf, languages, fields: completeFields(readFormFields(document_)) };
 }
 
 /**
@@ -294,16 +371,24 @@ export async function loadSubmitForm(target: SubmitTarget): Promise<SubmitForm> 
  */
 export async function submitSolution(
   target: SubmitTarget,
-  submission: { csrf: string; programTypeId: string; source: string },
+  submission: { csrf: string; programTypeId: string; source: string; fields?: Record<string, string> },
 ): Promise<SubmitResult> {
   const body = new FormData();
+
+  // Everything the form itself carried, first — including the fingerprint
+  // fields whose absence is what made Codeforces hand the form straight back.
+  for (const [name, value] of Object.entries(completeFields(submission.fields ?? {}))) {
+    body.set(name, value);
+  }
+
   body.set('csrf_token', submission.csrf);
-  body.set('action', 'submitSolutionFormSubmitted');
   body.set('submittedProblemIndex', target.index.toUpperCase());
   body.set('programTypeId', submission.programTypeId);
   body.set('source', submission.source);
-  body.set('tabSize', '4');
-  body.set('sourceFile', '');
+  // Codeforces warns rather than refuses when the source matches an earlier
+  // submission, and the warning is a second form you never see. Confirming up
+  // front is what makes resubmitting the same file work at all.
+  body.set('sourceCodeConfirmed', 'true');
 
   const url = `${submitUrl(target)}?csrf_token=${encodeURIComponent(submission.csrf)}`;
   const response = await fetch(url, {

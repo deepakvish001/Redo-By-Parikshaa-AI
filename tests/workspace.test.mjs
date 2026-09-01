@@ -3,8 +3,11 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 
 import {
+  completeFields,
+  fingerprints,
   orderLanguages,
   readCsrf,
+  readFormFields,
   readLanguages,
   readLatestVerdict,
   readSamples,
@@ -151,6 +154,54 @@ test('a redirect away from the form is not an error', () => {
   assert.equal(readSubmitError(parse('<table class="status-frame-datatable"></table>')), undefined);
 });
 
+/* ------------------------------------------------------------ form fields */
+
+test('every hidden field on the form is carried back', () => {
+  const fields = readFormFields(parse(`
+    <form class="submit-form">
+      <input type="hidden" name="csrf_token" value="form-token">
+      <input type="hidden" name="ftaa" value="abc123">
+      <input type="hidden" name="bfaa" value="deadbeef">
+      <input type="hidden" name="action" value="submitSolutionFormSubmitted">
+      <input type="file" name="sourceFile">
+      <input type="submit" name="submit" value="Submit">
+      <select name="programTypeId"><option value="89">GNU G++20</option></select>
+    </form>`));
+
+  assert.equal(fields.ftaa, 'abc123');
+  assert.equal(fields.bfaa, 'deadbeef');
+  assert.equal(fields.csrf_token, 'form-token');
+  assert.equal(fields.sourceFile, undefined, 'a file input has no value to carry');
+  assert.equal(fields.submit, undefined, 'a button’s value is its label, not data');
+});
+
+test('the form is found even when it carries no class', () => {
+  // The submit page and the custom invocation page do not name their form the
+  // same way; the language select is on both.
+  const fields = readFormFields(parse(`
+    <div><form><input type="hidden" name="ftaa" value="xyz">
+      <select name="programTypeId"><option value="89">G++</option></select>
+    </form></div>`));
+
+  assert.equal(fields.ftaa, 'xyz');
+});
+
+test('only the blank fingerprints are filled in', () => {
+  // The page's JavaScript computes these, and a content script in the isolated
+  // world cannot see what it computed — so a well-formed value is generated for
+  // whichever one arrived empty, and never for one that arrived filled.
+  const filled = completeFields({ ftaa: 'already-here', bfaa: '' });
+
+  assert.equal(filled.ftaa, 'already-here');
+  assert.equal(filled.bfaa, fingerprints().bfaa);
+  assert.equal(filled.action, 'submitSolutionFormSubmitted', 'a blank action gets the default');
+});
+
+test('the fingerprints stay the same for the life of the tab', () => {
+  // One browser per session rather than a new one per submission.
+  assert.deepEqual(fingerprints(), fingerprints());
+});
+
 /* --------------------------------------------------------------- verdicts */
 
 const STATUS = (verdict, waiting) => `
@@ -235,6 +286,29 @@ test('the run posts exactly the fields Codeforces’ own form posts', () => {
   assert.equal(fields.input, '3\n1 2 3');
 });
 
+test('the run carries the fingerprint fields the page would have carried', () => {
+  // Their absence is the whole bug: Codeforces answers a run without `ftaa` and
+  // `bfaa` by handing the form back with no result and no error, which reached
+  // the user as "Redo could not read the result page".
+  const fields = runFields({ csrf: 't', programTypeId: '89', source: 'x', input: '' });
+  assert.match(fields.ftaa, /^[a-z0-9]{18}$/);
+  assert.match(fields.bfaa, /^[0-9a-f]{32}$/);
+});
+
+test('the run keeps the values the page actually sent', () => {
+  const fields = runFields({
+    csrf: 't',
+    programTypeId: '89',
+    source: 'x',
+    input: '',
+    fields: { ftaa: 'from-the-page', action: 'someOtherAction', tabSize: '8' },
+  });
+
+  assert.equal(fields.ftaa, 'from-the-page', 'a filled field is never overwritten');
+  assert.equal(fields.action, 'someOtherAction', 'the page knows its own action better than we do');
+  assert.equal(fields.tabSize, '8');
+});
+
 test('an invocation result is read out of the page', () => {
   const document_ = parse(`
     <div class="roundbox customtest-results">
@@ -256,8 +330,36 @@ test('a block that only says what it is still counts', () => {
   // Nothing on this page carries a stable class name, so the parser falls back
   // to the box that names itself.
   const outcome = readRunOutcome(parse(`
-    <div class="roundbox">Custom invocation<pre>hello</pre></div>`));
+    <div class="roundbox">Invocation result<pre>hello</pre></div>`));
   assert.equal(outcome.output, 'hello');
+});
+
+test('the form before a run is not read as a run that printed nothing', () => {
+  // "Custom invocation" is the page's own heading, so it is on the page before
+  // anything has run. Matching it used to hand the *source box* back as the
+  // program's output; now only a real result counts.
+  const empty = parse(`
+    <div class="roundbox">
+      <div class="caption">Custom invocation</div>
+      <form>
+        <textarea name="source">int main(){}</textarea>
+        <textarea name="input">3</textarea>
+        <textarea name="output"></textarea>
+      </form>
+    </div>`);
+
+  assert.equal(readRunOutcome(empty), undefined);
+});
+
+test('the output box is read even when the source sits below it', () => {
+  const outcome = readRunOutcome(parse(`
+    <div class="roundbox">
+      <div class="caption">Invocation result</div>
+      <textarea name="output">6</textarea>
+      <textarea name="source">int main(){}</textarea>
+    </div>`));
+
+  assert.equal(outcome.output, '6', 'the box named output beats "the last box"');
 });
 
 test('a compilation error is a verdict, not an output', () => {
