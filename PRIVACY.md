@@ -50,6 +50,21 @@ Redo makes network requests to exactly these places:
 5. **Codeforces' and LeetCode's public rating APIs** — only if you enter a handle. Each receives
    only the handle you gave it, and only the one that belongs to it.
 
+## Community threads
+
+Off by default. With it on and a repository named, opening a problem's thread reads **issues** in
+that repository through the GitHub API, and **Post my solution** opens an issue or adds a comment
+to it. Posting is **public, under your own GitHub account, in the repository you chose** — the
+button says so, with the repository's name on it, rather than asking you to confirm a dialog.
+
+Redo does not hold any of it: the threads are GitHub's, readable and deletable by you there, and
+they outlive the extension. Reading uses the same token as the sync; posting additionally needs
+that token to have `Issues: read and write` on the community repository, which is a permission
+your solutions repository does not need — so use a separate repository if you would rather not
+grant it on the one holding your code.
+
+Other people's posts are shown as plain text, never rendered as markdown or HTML.
+
 ## Translation
 
 This is **the only part of Redo that sends anything to a third party**, and it is off until you

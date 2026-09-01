@@ -67,6 +67,11 @@ export const DEFAULT_SETTINGS: Settings = {
     workspaceAuto: false,
     skin: false,
   },
+  community: {
+    enabled: false,
+    owner: '',
+    repo: '',
+  },
   translate: {
     enabled: false,
     apiKey: '',
@@ -115,6 +120,7 @@ export async function getSettings(): Promise<Settings> {
     github: { ...DEFAULT_SETTINGS.github, ...stored.github },
     parikshaa: { ...DEFAULT_SETTINGS.parikshaa, ...stored.parikshaa },
     page: { ...DEFAULT_SETTINGS.page, ...stored.page },
+    community: { ...DEFAULT_SETTINGS.community, ...stored.community },
     translate: { ...DEFAULT_SETTINGS.translate, ...stored.translate },
     diagnostics: { ...DEFAULT_SETTINGS.diagnostics, ...stored.diagnostics },
     contests: {
@@ -136,6 +142,7 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
     github: { ...current.github, ...patch.github },
     parikshaa: { ...current.parikshaa, ...patch.parikshaa },
     page: { ...current.page, ...patch.page },
+    community: { ...current.community, ...patch.community },
     translate: { ...current.translate, ...patch.translate },
     diagnostics: { ...current.diagnostics, ...patch.diagnostics },
     contests: { ...current.contests, ...patch.contests },

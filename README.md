@@ -83,6 +83,11 @@ Solving is the easy part. Remembering three months later is the part nothing els
   The repository index also groups everything by topic, collapsed, beside the flat list — "what
   have I done about graphs" is usually the question somebody browsing a solutions repo is actually
   asking.
+- **Solution threads, without a server.** GitHub already runs one: a problem's thread is an
+  *issue* in a repository you name, replies are comments, and the whole feature is a naming
+  convention plus two API calls. Off by default, and the trade is stated on the button rather
+  than buried — posting is **public**, under your own GitHub account. More honest than a private
+  backend nobody can audit, and the threads outlive the extension.
 - **Reads the statement in your language.** Off by default and the only part of Redo that talks
   to a third party: with your own Gemini key, *Translate* on a Codeforces problem swaps the prose
   and puts it back when you press again. Formulas, code and sample blocks never leave the machine

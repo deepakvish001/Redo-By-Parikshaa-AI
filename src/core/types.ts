@@ -295,6 +295,19 @@ export interface Settings {
     skin: boolean;
   };
   /**
+   * Solution threads, as issues on a repository you name.
+   *
+   * No backend: GitHub already runs one. Posting is public, under your own
+   * account, in a repository you chose — which is stated in Settings rather
+   * than buried, because it is the whole trade.
+   */
+  community: {
+    enabled: boolean;
+    /** Defaults to your sync repository's owner when left blank. */
+    owner: string;
+    repo: string;
+  };
+  /**
    * Statement translation.
    *
    * The one feature that sends anything to a third party, so: off by default,

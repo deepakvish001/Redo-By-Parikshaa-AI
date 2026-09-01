@@ -1070,6 +1070,73 @@ export function App() {
 
       <section className="section-card">
         <h2 className="section-card__title">
+          <GithubIcon size={14} />
+          Community solutions
+        </h2>
+        <p className="section-card__hint">
+          Solution threads without a server, because GitHub already runs one: a problem's thread is
+          an <strong>issue</strong> in a repository you name, and replies are comments.{' '}
+          <strong>Posting is public, under your own GitHub account.</strong> That is the trade —
+          more honest than a private backend nobody can audit, and the threads outlive the
+          extension. Reading needs nothing but the repository; posting needs your token to have{' '}
+          <strong>Issues: read and write</strong> on it, which is a permission the sync itself does
+          not need.
+        </p>
+
+        <Toggle
+          checked={settings.community.enabled}
+          onChange={(enabled) =>
+            setSettings({ ...settings, community: { ...settings.community, enabled } })
+          }
+          label="Enable community threads"
+          hint="Nothing is read or posted until you open a problem's thread."
+        />
+
+        <div className="field field-row">
+          <div>
+            <label className="field__label" htmlFor="community-owner">
+              Owner
+            </label>
+            <input
+              id="community-owner"
+              type="text"
+              value={settings.community.owner}
+              placeholder={settings.github.owner || 'your-username'}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  community: { ...settings.community, owner: event.target.value.trim() },
+                })
+              }
+            />
+          </div>
+          <div>
+            <label className="field__label" htmlFor="community-repo">
+              Repository
+            </label>
+            <input
+              id="community-repo"
+              type="text"
+              value={settings.community.repo}
+              placeholder="dsa-discussions"
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  community: { ...settings.community, repo: event.target.value.trim() },
+                })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="field__hint">
+          Owner left blank uses your sync repository's owner. Issues have to be switched on for the
+          repository.
+        </div>
+      </section>
+
+      <section className="section-card">
+        <h2 className="section-card__title">
           <SparkIcon size={14} />
           Translate statements
         </h2>

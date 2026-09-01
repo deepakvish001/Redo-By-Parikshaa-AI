@@ -55,6 +55,7 @@ import { buildInsights } from './insights.ts';
 import { buildTrain, finishContest, rerollSlot, startContest } from './train.ts';
 import { buildHistory, loadRound } from './history.ts';
 import { translateStrings } from './translate.ts';
+import { postSolution, readThreads } from './community.ts';
 import { codeforcesProfile, fetchUpsolve, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
@@ -728,6 +729,14 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
     // a judge's tab.
     case 'translate:strings':
       return translateStrings(request.problem, request.strings);
+
+    case 'community:get':
+      return readThreads(request.problem);
+
+    // The code posted comes from the stored record, not from the caller, so a
+    // page cannot ask the worker to publish something arbitrary as you.
+    case 'community:post':
+      return postSolution(request.id);
 
     // One contest at a time, because the breakdown costs a request each and
     // the rate limit is one every two seconds.

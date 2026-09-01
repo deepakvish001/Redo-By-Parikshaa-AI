@@ -47,6 +47,7 @@ import { WINDOWS, heatmapGrid, type Bin, type HeatDay, type TagCount, type Windo
 import type { InsightsData } from '../background/insights.ts';
 import type { TrainData } from '../background/train.ts';
 import type { HistoryData } from '../background/history.ts';
+import type { CommunityData } from '../background/community.ts';
 import type { Suggestion } from '../core/recommend.ts';
 import type { Step } from '../core/roadmap.ts';
 import { ratingColour } from '../content/mounts/cf-rail.ts';
@@ -382,6 +383,7 @@ function ProblemCard({
   defaultOpen?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  const [discussing, setDiscussing] = useState(false);
   const [showAttempts, setShowAttempts] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [open, setOpen] = useState(defaultOpen);
@@ -595,6 +597,9 @@ function ProblemCard({
                 {problem.parikshaa.status === 'synced' ? 'Re-tick Parikshaa' : 'Parikshaa sync'}
               </button>
             )}
+            <button type="button" onClick={() => setDiscussing((value) => !value)}>
+              {discussing ? 'Hide thread' : 'Discuss'}
+            </button>
             <button type="button" className="ghost danger" onClick={() => onDelete(problem.id)}>
               Remove
             </button>
@@ -602,6 +607,7 @@ function ProblemCard({
         )}
       </div>
 
+      {discussing && <CommunityThread problem={problem} />}
       {editing && !showRecall && <DetailsEditor problem={problem} onSave={onSaveDetails} />}
     </div>
   );
@@ -1917,6 +1923,80 @@ function RoadmapStep({ step, index }: { step: Step; index: number }) {
             step.problems.map((entry) => <SuggestionRow key={entry.key} entry={entry} />)
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A problem's solution thread, from GitHub issues.
+ *
+ * Loaded only when opened, because it costs two API calls and most people will
+ * never press it. The consequence of posting is written on the button rather
+ * than in a confirmation dialog nobody reads: it says which repository, and it
+ * says public.
+ */
+function CommunityThread({ problem }: { problem: SolvedProblem }) {
+  const [data, setData] = useState<CommunityData | null>(null);
+  const [posting, setPosting] = useState(false);
+
+  useEffect(() => {
+    void send({ type: 'community:get', problem: problem.id })
+      .then(setData)
+      .catch((error: unknown) =>
+        setData({ reason: error instanceof Error ? error.message : String(error) }),
+      );
+  }, [problem.id]);
+
+  if (!data) return <div className="empty">Reading the thread…</div>;
+
+  return (
+    <div className="thread">
+      {data.reason && <div className="banner">{data.reason}</div>}
+
+      {data.thread ? (
+        <>
+          <button type="button" className="thread__open" onClick={() => openUrl(data.thread!.url)}>
+            {data.thread.posts.length} post{data.thread.posts.length === 1 ? '' : 's'} · open on
+            GitHub
+          </button>
+          {data.thread.posts.slice(0, 6).map((post) => (
+            <div key={`${post.id}-${post.at}`} className="thread__post">
+              <div className="thread__by">
+                <span>{post.author}</span>
+                <span className="faint">
+                  {post.at ? new Date(post.at).toLocaleDateString() : ''}
+                </span>
+              </div>
+              <div className="thread__body">{post.body}</div>
+            </div>
+          ))}
+        </>
+      ) : (
+        !data.reason && <div className="faint">No thread for this problem yet.</div>
+      )}
+
+      {data.repo && (
+        <button
+          type="button"
+          className="primary"
+          disabled={posting}
+          onClick={async () => {
+            setPosting(true);
+            try {
+              setData(await send({ type: 'community:post', id: problem.id }));
+            } catch (error) {
+              setData({
+                ...data,
+                reason: error instanceof Error ? error.message : String(error),
+              });
+            } finally {
+              setPosting(false);
+            }
+          }}
+        >
+          {posting ? 'Posting…' : `Post my solution publicly to ${data.repo}`}
+        </button>
       )}
     </div>
   );

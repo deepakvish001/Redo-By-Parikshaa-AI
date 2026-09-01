@@ -2552,3 +2552,53 @@ body.gate {
   line-height: 1.5;
   margin-bottom: 8px;
 }
+
+/* -------------------------------------------------------------- the thread */
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+
+.thread__open {
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.thread__post {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  background: var(--bg);
+}
+
+.thread__by {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* Posts are other people's markdown. Rendered as text on purpose — a panel
+   that renders a stranger's markdown is a panel that renders whatever they
+   felt like sending. */
+.thread__body {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow: auto;
+}

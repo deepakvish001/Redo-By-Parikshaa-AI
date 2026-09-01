@@ -15,6 +15,7 @@ import type { InsightsData } from '../background/insights.ts';
 import type { TrainData } from '../background/train.ts';
 import type { HistoryData } from '../background/history.ts';
 import type { TranslateResult } from '../background/translate.ts';
+import type { CommunityData } from '../background/community.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
@@ -101,7 +102,9 @@ export type Request =
   | { type: 'workspace:open' }
   | { type: 'workspace:drafts' }
   | { type: 'workspace:forget-drafts' }
-  | { type: 'translate:strings'; problem: string; strings: string[] };
+  | { type: 'translate:strings'; problem: string; strings: string[] }
+  | { type: 'community:get'; problem: string }
+  | { type: 'community:post'; id: string };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -160,6 +163,8 @@ export interface ResponseMap {
   'workspace:drafts': { count: number };
   'workspace:forget-drafts': { count: number };
   'translate:strings': TranslateResult;
+  'community:get': CommunityData;
+  'community:post': CommunityData & { posted?: boolean };
 }
 
 /**
