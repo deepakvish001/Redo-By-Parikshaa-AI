@@ -67,7 +67,7 @@ export function extensionForLanguage(language: string): string {
   // Python solve as `solution.c`.
   let best = '';
   for (const token of tokens) {
-    for (const [name, extension] of Object.entries(EXTENSIONS)) {
+    for (const name of Object.keys(EXTENSIONS)) {
       // Single-letter names are only ever a whole word. "whitespace" contains
       // a "c" and is not C; "d" is a real language and "delphi" is not it.
       if (name.length === 1) continue;

@@ -65,6 +65,7 @@ export const DEFAULT_SETTINGS: Settings = {
     // the page over, so it waits to be asked. Twice, for opening by itself.
     workspace: false,
     workspaceAuto: false,
+    skin: false,
   },
   diagnostics: {
     enabled: false,

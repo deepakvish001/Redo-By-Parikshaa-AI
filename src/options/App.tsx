@@ -1036,6 +1036,11 @@ export function App() {
                 'Open the workspace automatically',
                 'Every problem page opens straight into the workspace. Close or Escape puts the page back, and it stays back until you open another problem.',
               ],
+              [
+                'skin',
+                'Dark Codeforces',
+                "Restyles the site itself. The only switch here that changes the judge's own page rather than adding to it — rank colours and verdicts are left alone, because on Codeforces they are information.",
+              ],
             ] as Array<[keyof Settings['page'], string, string]>
           )
             // The automatic switch is meaningless without the workspace itself,

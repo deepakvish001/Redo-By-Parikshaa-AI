@@ -83,6 +83,11 @@ Solving is the easy part. Remembering three months later is the part nothing els
   The repository index also groups everything by topic, collapsed, beside the flat list — "what
   have I done about graphs" is usually the question somebody browsing a solutions repo is actually
   asking.
+- **A dark Codeforces, if you want one.** One switch, off by default, and the only thing here
+  that restyles the judge's own page rather than adding to it. It recolours and never relayouts —
+  Codeforces is a table-heavy layout people have used for fifteen years — and it leaves rank
+  colours and verdicts exactly as they are, because on Codeforces those are information rather
+  than decoration. Switching it off removes the stylesheet with no reload.
 - **Tells you where you actually placed.** "Rank 3,412 of 28,000" says nothing. On a standings
   page Redo adds your rank *in your country* and *at your college*, and can hide everyone else so
   the table is just the people you compete with. Both come from the page itself — each row already

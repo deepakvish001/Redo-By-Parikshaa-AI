@@ -285,6 +285,14 @@ export interface Settings {
      * the wrong one for everybody else.
      */
     workspaceAuto: boolean;
+    /**
+     * Restyle Codeforces itself, dark.
+     *
+     * The only thing here that changes the judge's own page rather than adding
+     * to it, so it is off by default and it is one stylesheet: switching it off
+     * removes it and the page is exactly as the site built it.
+     */
+    skin: boolean;
   };
   diagnostics: {
     /**
