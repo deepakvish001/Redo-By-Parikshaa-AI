@@ -1,3 +1,4 @@
+import { parseProblem } from '../../core/cf-url.ts';
 import { buildHintLadder } from '../../core/hints.ts';
 import { describeStruggle, summarise } from '../../core/journal.ts';
 import { send, type RailData } from '../../core/messages.ts';
@@ -17,9 +18,6 @@ import { showToast } from '../toast.ts';
  * except a side panel you had to open on purpose.
  */
 
-const PROBLEM_PATH =
-  /\/(?:contest|gym)\/(\d+)\/problem\/([A-Za-z0-9]+)|\/problemset\/problem\/(\d+)\/([A-Za-z0-9]+)/;
-
 const RECALLS: Array<{ recall: Recall; label: string; primary?: boolean }> = [
   { recall: 'forgot', label: 'Forgot' },
   { recall: 'hard', label: 'Hard' },
@@ -27,13 +25,9 @@ const RECALLS: Array<{ recall: Recall; label: string; primary?: boolean }> = [
   { recall: 'easy', label: 'Easy' },
 ];
 
-export function parseProblem(pathname: string): { contestId: string; index: string } | null {
-  const match = PROBLEM_PATH.exec(pathname);
-  if (!match) return null;
-  const contestId = match[1] ?? match[3];
-  const index = match[2] ?? match[4];
-  return contestId && index ? { contestId, index: index.toUpperCase() } : null;
-}
+// Re-exported because the mount's own tests — and its readers — expect to find
+// the page-matching rule next to the mount that uses it.
+export { parseProblem };
 
 /** Codeforces' own rank colours, which are what a rating means to a reader. */
 export function ratingColour(rating: number | undefined): string {
@@ -272,6 +266,28 @@ async function render(context: MountContext): Promise<void> {
   }
 
   const actions = h('div', { class: 'row' });
+
+  if (data.page.workspace) {
+    const open = button('Open workspace', async () => {
+      open.disabled = true;
+      try {
+        // The content script cannot inject a second bundle into its own tab, so
+        // the request goes to the service worker, which knows which tab asked.
+        const result = await send({ type: 'workspace:open' });
+        if (!result.ok) {
+          showToast({
+            title: 'Could not open the workspace',
+            body: result.error ?? 'Unknown error.',
+            tone: 'error',
+          });
+        }
+      } finally {
+        open.disabled = false;
+      }
+    }, { class: 'primary', title: 'Statement beside an editor, on this page' });
+    actions.append(open);
+  }
+
   actions.append(
     h('a', {
       href: `/contest/${parsed.contestId}/standings`,

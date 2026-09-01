@@ -265,6 +265,14 @@ export interface Settings {
     friends: boolean;
     /** A College tab and your country rank on a standings page. */
     standings: boolean;
+    /**
+     * The split-pane workspace: statement beside an editor.
+     *
+     * Off by default, unlike everything else here. The others add a line to a
+     * page; this one covers it, and it costs a two-hundred-kilobyte editor
+     * that is only downloaded once you ask for it.
+     */
+    workspace: boolean;
   };
   diagnostics: {
     /**

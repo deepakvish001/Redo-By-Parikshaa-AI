@@ -61,6 +61,9 @@ export const DEFAULT_SETTINGS: Settings = {
     hovercards: true,
     friends: true,
     standings: true,
+    // The one exception to "quiet additions default on": the workspace takes
+    // the page over, so it waits to be asked.
+    workspace: false,
   },
   diagnostics: {
     enabled: false,

@@ -19,6 +19,15 @@
     "rename": "node scripts/rename.mjs"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.0",
+    "@codemirror/lang-cpp": "^6.0.3",
+    "@codemirror/lang-java": "^6.0.2",
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.2",
+    "@codemirror/view": "^6.43.10",
+    "@lezer/highlight": "^1.2.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
@@ -29,6 +38,7 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",
     "fast-xml-parser": "^5.10.1",
+    "jsdom": "^30.0.1",
     "linkedom": "^0.18.13",
     "playwright": "^1.62.1",
     "typescript": "^5.7.0",

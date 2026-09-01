@@ -56,6 +56,7 @@ import { buildTrain, finishContest, rerollSlot, startContest } from './train.ts'
 import { codeforcesProfile, fetchUpsolve, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
+import { DRAFTS_KEY } from '../workspace/drafts.ts';
 
 const BADGE_ALARM = 'refresh-badge';
 const DIGEST_ALARM = 'daily-digest';
@@ -315,7 +316,7 @@ async function reviewProblem(
 
 /* --------------------------------------------------------------- routing */
 
-async function handle(request: Request): Promise<unknown> {
+async function handle(request: Request, sender: chrome.runtime.MessageSender): Promise<unknown> {
   switch (request.type) {
     case 'submission:accepted':
       return recordSubmission(request.submission);
@@ -664,6 +665,48 @@ async function handle(request: Request): Promise<unknown> {
       return { solves: await friendSolves(watched, request.problem), watched: watched.length };
     }
 
+    /**
+     * Injects the workspace bundle into the tab that asked for it.
+     *
+     * It lives outside the always-on content script because CodeMirror is the
+     * single heaviest thing this extension ships, and a person reading the
+     * problemset should never pay for an editor they did not open. A content
+     * script cannot inject itself, so the request comes here and the tab id
+     * comes from the sender rather than from the message — a page cannot ask
+     * for code to be run in a tab that is not its own.
+     */
+    case 'workspace:open': {
+      const tabId = sender.tab?.id;
+      if (tabId === undefined) return { ok: false, error: 'No tab to open the workspace in.' };
+
+      const { page } = await getSettings();
+      if (!page.enabled || !page.workspace) {
+        return { ok: false, error: 'The workspace is switched off in Settings.' };
+      }
+
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId, frameIds: sender.frameId === undefined ? undefined : [sender.frameId] },
+          files: ['workspace.js'],
+        });
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+
+    case 'workspace:drafts': {
+      const stored = await chrome.storage.local.get(DRAFTS_KEY);
+      return { count: Object.keys(stored[DRAFTS_KEY] ?? {}).length };
+    }
+
+    // Unfinished code is the most personal thing this extension holds, so
+    // there is a button that deletes it rather than only a promise that it
+    // eventually rolls over.
+    case 'workspace:forget-drafts':
+      await chrome.storage.local.remove(DRAFTS_KEY);
+      return { count: 0 };
+
     case 'train:get':
       return buildTrain();
 
@@ -775,8 +818,8 @@ async function handle(request: Request): Promise<unknown> {
   }
 }
 
-chrome.runtime.onMessage.addListener((request: Request, _sender, sendResponse) => {
-  handle(request)
+chrome.runtime.onMessage.addListener((request: Request, sender, sendResponse) => {
+  handle(request, sender)
     .then((data) => sendResponse({ ok: true, data } as Response<Request['type']>))
     .catch((error: unknown) =>
       sendResponse({

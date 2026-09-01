@@ -10,6 +10,7 @@
     "notifications",
     "sidePanel",
     "tabs",
+    "scripting",
     "unlimitedStorage"
   ],
   "host_permissions": [

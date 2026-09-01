@@ -13,18 +13,23 @@ import { claimSubmissions } from '../src/core/watermark.ts';
 
 test('every Codeforces problem URL shape yields the same key', () => {
   // The rail has to appear on all of them, and they all mean 1352A.
-  assert.deepEqual(parseProblem('/contest/1352/problem/A'), { contestId: '1352', index: 'A' });
-  assert.deepEqual(parseProblem('/problemset/problem/1352/A'), { contestId: '1352', index: 'A' });
-  assert.deepEqual(parseProblem('/gym/102253/problem/A'), { contestId: '102253', index: 'A' });
+  const at = (path) => {
+    const parsed = parseProblem(path);
+    return parsed && { contestId: parsed.contestId, index: parsed.index };
+  };
+
+  assert.deepEqual(at('/contest/1352/problem/A'), { contestId: '1352', index: 'A' });
+  assert.deepEqual(at('/problemset/problem/1352/A'), { contestId: '1352', index: 'A' });
+  assert.deepEqual(at('/gym/102253/problem/A'), { contestId: '102253', index: 'A' });
 });
 
 test('a lower-case index is normalised, as the rest of the extension keys it', () => {
-  assert.deepEqual(parseProblem('/contest/2000/problem/c'), { contestId: '2000', index: 'C' });
+  assert.equal(parseProblem('/contest/2000/problem/c').index, 'C');
 });
 
 test('multi-character indices survive', () => {
   // Div. 1 + Div. 2 rounds really do have problems E1 and E2.
-  assert.deepEqual(parseProblem('/contest/1918/problem/E2'), { contestId: '1918', index: 'E2' });
+  assert.equal(parseProblem('/contest/1918/problem/E2').index, 'E2');
 });
 
 test('pages that are not a problem get no rail', () => {

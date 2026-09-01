@@ -94,6 +94,15 @@ Solving is the easy part. Remembering three months later is the part nothing els
 - **Shows your friends' solutions.** Save a few handles and any problem page will tell you which of
   them solved it, in what language and when, with a link to the code. One Codeforces call per
   handle, so it only looks when you ask.
+- **Puts the statement beside an editor.** *Open workspace* on a Codeforces problem splits the page:
+  the statement on the left, a real editor on the right, with syntax highlighting, your usual
+  compilers pinned to the top of the list, the samples parsed out where you can read and copy them,
+  and Submit going through Codeforces' own form — the verdict comes back into the toolbar. What you
+  type is saved as you type it, per problem, so a closed tab costs nothing. It is off by default and
+  it is a separate download: the editor is only fetched the first time you open one. **It cannot run
+  your code** — a browser has no compiler, and shipping your source to somebody else's judge to get
+  one would contradict the rest of this page — so the panel says so and links to Codeforces' own
+  custom invocation.
 - **Sets you a round.** The useful unit of practice is not a problem, it is a *round* — five
   problems, a clock, no editorial. Codeforces runs one a week and you cannot choose what it trains.
   Pick the ratings yourself and the same problemset becomes a speed drill, or an hour on the one
@@ -418,6 +427,20 @@ Five mounts so far: the **problem rail**, the **listing marks**, a card on **you
 profile** with your streaks and the rating heatmap, your **place in the standings**, and a
 **preview card** on any handle you hover. The profile card is only ever your own — somebody else's
 page showing your streak would be misleading.
+
+**The workspace is not one of them, deliberately.** It is a separate bundle (`src/workspace/`)
+injected by `chrome.scripting` when you press the button, because CodeMirror is by far the heaviest
+thing here and a person browsing the problemset should not parse an editor they never opened. It is
+also the one part that covers the page rather than adding to it, so it takes an explicit switch and
+an explicit press. Two details in it are worth knowing:
+
+- The statement is **moved** into the left pane rather than copied. A copy loses the MathJax the
+  page has already rendered, and re-running MathJax over a clone is slow and frequently wrong. A
+  moved statement keeps the site's own CSS with it, so that pane stays in the light DOM and only
+  Redo's own chrome gets a shadow root.
+- Closing works through an event on the document, not a module variable. Each injection of the
+  bundle gets its own scope, so the copy that needs to close the overlay is never the copy that
+  opened it.
 
 **One cached mirror of Codeforces, not one fetch per feature.** The rating chip on a problem page,
 the ticks down a listing, and everything the roadmap has planned after them are the same two tables

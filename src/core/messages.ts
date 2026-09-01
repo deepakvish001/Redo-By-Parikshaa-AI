@@ -93,7 +93,10 @@ export type Request =
   | { type: 'train:reroll'; index: number }
   | { type: 'train:finish' }
   | { type: 'cf:handles'; handles: string[] }
-  | { type: 'cf:friends'; problem: string };
+  | { type: 'cf:friends'; problem: string }
+  | { type: 'workspace:open' }
+  | { type: 'workspace:drafts' }
+  | { type: 'workspace:forget-drafts' };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -146,6 +149,9 @@ export interface ResponseMap {
   'train:finish': TrainData;
   'cf:handles': Record<string, CfHandleCard>;
   'cf:friends': { solves: FriendSolve[]; watched: number };
+  'workspace:open': { ok: boolean; error?: string };
+  'workspace:drafts': { count: number };
+  'workspace:forget-drafts': { count: number };
 }
 
 /**

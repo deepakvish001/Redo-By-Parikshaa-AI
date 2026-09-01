@@ -104,6 +104,44 @@ function Toggle({
 }
 
 /**
+ * How much unfinished code the workspace is holding, and a way to delete it.
+ *
+ * Drafts are the most personal thing the extension stores — half-written
+ * solutions, saved without being asked for — so there is a button that removes
+ * them rather than only a promise that they eventually roll over.
+ */
+function WorkspaceDrafts() {
+  const [count, setCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    void send({ type: 'workspace:drafts' })
+      .then((result) => setCount(result.count))
+      .catch(() => setCount(0));
+  }, []);
+
+  if (count === null || count === 0) return null;
+
+  return (
+    <div className="field__hint" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span>
+        {count} saved draft{count === 1 ? '' : 's'} on this computer, so a closed tab does not cost
+        you a solution.
+      </span>
+      <button
+        type="button"
+        onClick={() => {
+          void send({ type: 'workspace:forget-drafts' })
+            .then(() => setCount(0))
+            .catch(() => undefined);
+        }}
+      >
+        Forget them
+      </button>
+    </div>
+  );
+}
+
+/**
  * Export, import and restore.
  *
  * Kept as its own component with its own state because none of it goes through
@@ -988,6 +1026,11 @@ export function App() {
               ['hovercards', 'Preview on hover', 'Rank and rating when you hover any handle.'],
               ['friends', "Friends' submissions", 'Which of your saved handles solved the problem you are on.'],
               ['standings', 'Your place in the standings', 'College and country rank, from the page itself.'],
+              [
+                'workspace',
+                'Workspace button on problem pages',
+                'Statement beside a code editor, opened on demand. The editor is only downloaded the first time you open it.',
+              ],
             ] as Array<[keyof Settings['page'], string, string]>
           ).map(([key, label, hint]) => (
             <Toggle
@@ -1001,6 +1044,8 @@ export function App() {
             />
           ))}
         </div>
+
+        {settings.page.workspace && <WorkspaceDrafts />}
 
         <div className="field__hint">
           Ratings and tags come from Codeforces' public problemset, cached locally for a week. Your

@@ -30,6 +30,7 @@ All of the following lives in `chrome.storage.local`, on your device:
 | Labels you add to problems | To group and filter your own list |
 | Unsolved problems from your recent Codeforces contests | To build the upsolve queue |
 | Your Codeforces handle and LeetCode username | To read your public contest rating |
+| Unfinished code you type in the workspace | To give it back when you reopen the problem |
 
 ## What is sent, and to whom
 
@@ -47,6 +48,20 @@ Redo makes network requests to exactly these places:
    public schedule endpoints. These requests contain no personal data.
 5. **Codeforces' and LeetCode's public rating APIs** — only if you enter a handle. Each receives
    only the handle you gave it, and only the one that belongs to it.
+
+## The workspace
+
+If you turn the workspace on and press Submit in it, your code goes to **Codeforces**, through
+Codeforces' own submit form, with the CSRF token that page issued to your own signed-in session.
+It is byte for byte the request the site makes when you press its own Submit button; the only
+difference is which element you clicked. Nothing is sent anywhere else, and there is no third-party
+compiler or runner involved — which is also why the workspace cannot run your code locally, and
+says so on the panel rather than quietly shipping it somewhere to be run.
+
+What you type is saved on your own machine as you type it, so that closing a tab does not lose a
+solution. Drafts for the sixty most recently touched problems are kept; older ones are dropped as
+newer ones arrive, and clearing the editor deletes that problem's draft outright. Settings shows how
+many are stored and has a **Forget them** button that deletes all of them at once.
 
 ## Backups
 
