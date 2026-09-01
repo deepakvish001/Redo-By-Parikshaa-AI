@@ -49,6 +49,7 @@ import {
 } from './cf-mirror.ts';
 import { dayKey as utcDay } from '../core/daily.ts';
 import { addToBacklog, buildHome, removeFromBacklog, skipToday } from './home.ts';
+import { buildInsights } from './insights.ts';
 import { codeforcesProfile, fetchUpsolve, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
@@ -637,6 +638,9 @@ async function handle(request: Request): Promise<unknown> {
 
     case 'backlog:remove':
       return removeFromBacklog(request.key);
+
+    case 'insights:get':
+      return buildInsights();
 
     case 'cf:refresh': {
       const { handles } = await getSettings();

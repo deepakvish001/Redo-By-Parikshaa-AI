@@ -1921,3 +1921,149 @@ body.gate {
 }
 
 .upsolve__name.link:hover { color: var(--accent-soft); }
+
+/* ---------------------------------------------------------------- charts */
+
+/* A histogram of bars whose height is the count and whose colour is the band,
+   so the shape and the difficulty are two separate readings of one chart. */
+.hist {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 108px;
+  padding: 14px 0 0;
+  overflow-x: auto;
+}
+
+.hist__col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  flex: 1 0 22px;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.hist__count {
+  font-size: 9px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.hist__bar {
+  width: 100%;
+  min-height: 3px;
+  border-radius: 2px 2px 0 0;
+  transition: filter 120ms ease;
+}
+
+.hist__col:hover .hist__bar { filter: brightness(1.35); }
+
+.hist__label {
+  font-size: 8.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  writing-mode: vertical-rl;
+  height: 26px;
+}
+
+.bin {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  margin-top: 8px;
+}
+
+.dough {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.dough__svg { width: 104px; height: 104px; flex: none; }
+
+.dough__key {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dough__key li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+}
+
+.dough__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.dough__tag {
+  flex: 1;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dough__n { color: var(--text-faint); }
+
+.heat__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.heat__head .faint { flex: 1; font-size: 10px; }
+
+.heat__year {
+  font: inherit;
+  font-size: 11px;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 2px 5px;
+}
+
+/* Scrolls on its own so a year of columns never widens the panel. */
+.heat { overflow-x: auto; padding-bottom: 4px; }
+
+.heat__grid { display: flex; gap: 2px; width: max-content; }
+
+.heat__col { display: flex; flex-direction: column; gap: 2px; }
+
+.heat__day {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--surface-raised);
+}
+
+.heat__day.is-blank { background: none; }
+
+.bar--split { display: flex; gap: 1px; background: var(--bg); }
+
+.bar__seg { height: 100%; display: block; }
+.bar__seg--ok { background: var(--ok); }
+.bar__seg--bad { background: var(--danger); }

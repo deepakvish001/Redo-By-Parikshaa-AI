@@ -108,6 +108,14 @@ export interface CfUserCache {
   solved: string[];
   /** Problem keys submitted to and never accepted. */
   attempted: string[];
+  /**
+   * When each problem was first solved, in seconds since epoch.
+   *
+   * A pair array rather than a map because it serialises smaller, and this is
+   * the largest thing in the cache — a three-thousand-problem history. The
+   * heatmap is the only reader, and it wants exactly this.
+   */
+  solvedAt?: Array<[string, number]>;
 }
 
 /**
@@ -123,6 +131,7 @@ const STATUS_TTL = 60 * 60_000;
 interface CfSubmission {
   problem: { contestId?: number; index: string };
   verdict?: string;
+  creationTimeSeconds?: number;
 }
 
 const statusInFlight = new Map<string, Promise<CfUserCache>>();
@@ -145,12 +154,27 @@ export async function ensureUserStatus(handle: string, force = false): Promise<C
 
       const solved = new Set<string>();
       const tried = new Set<string>();
+      const firstAccepted = new Map<string, number>();
+
       for (const submission of submissions) {
         const { contestId, index } = submission.problem;
         if (contestId === undefined) continue;
         const problem = problemKeyOf(contestId, index);
-        if (submission.verdict === 'OK') solved.add(problem);
-        else tried.add(problem);
+
+        if (submission.verdict !== 'OK') {
+          tried.add(problem);
+          continue;
+        }
+
+        solved.add(problem);
+        // The *first* accepted one. Codeforces returns newest first, and a
+        // re-solve years later would otherwise move the problem to today and
+        // put a false square on the heatmap.
+        const at = submission.creationTimeSeconds;
+        if (at !== undefined) {
+          const existing = firstAccepted.get(problem);
+          if (existing === undefined || at < existing) firstAccepted.set(problem, at);
+        }
       }
 
       const fresh: CfUserCache = {
@@ -160,6 +184,7 @@ export async function ensureUserStatus(handle: string, force = false): Promise<C
         // Attempted means "tried and never got it" — a problem you failed twice
         // and then solved belongs in `solved` and nowhere else.
         attempted: [...tried].filter((problem) => !solved.has(problem)),
+        solvedAt: [...firstAccepted],
       };
       await idbPut(STORES.cfStatus, key, fresh);
       return fresh;

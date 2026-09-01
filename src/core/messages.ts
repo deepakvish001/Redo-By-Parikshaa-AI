@@ -11,6 +11,7 @@ import type { UpsolveItem, UpsolveSummary } from './upsolve.ts';
 import type { Claim } from './watermark.ts';
 import type { CfProblemView } from '../background/cf-mirror.ts';
 import type { DailyPick, DailySet, Streak } from './daily.ts';
+import type { InsightsData } from '../background/insights.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
@@ -84,7 +85,8 @@ export type Request =
   | { type: 'daily:get' }
   | { type: 'daily:skip' }
   | { type: 'backlog:add'; key: string }
-  | { type: 'backlog:remove'; key: string };
+  | { type: 'backlog:remove'; key: string }
+  | { type: 'insights:get' };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -130,6 +132,7 @@ export interface ResponseMap {
   'daily:skip': HomeData;
   'backlog:add': HomeData;
   'backlog:remove': HomeData;
+  'insights:get': InsightsData;
 }
 
 /**

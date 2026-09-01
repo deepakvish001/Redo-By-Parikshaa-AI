@@ -1,3 +1,4 @@
+import { heatmapGrid } from '../../core/insights.ts';
 import { send } from '../../core/messages.ts';
 import { h } from '../inject/dom.ts';
 import type { Mount, MountContext } from '../inject/registry.ts';
@@ -57,6 +58,68 @@ function pickRow(label: string, pick: { key: string; name: string; rating: numbe
   );
 }
 
+/**
+ * A year of days, coloured by the hardest problem solved on each.
+ *
+ * The profile page is where this belongs — it is the one chart Codeforces
+ * already draws here, and draws worse: its own heatmap counts problems, so a
+ * day of ten 800s outshines a day with one 2400.
+ */
+function heatSection(
+  heat: Record<string, { count: number; peak: number }>,
+  years: number[],
+): HTMLElement | null {
+  if (years.length === 0) return null;
+
+  const wrap = h('div', { style: 'display:flex;flex-direction:column;gap:7px' });
+
+  const picker = h('select', {
+    style:
+      'font:inherit;font-size:11px;background:var(--surface-raised);color:var(--text);' +
+      'border:1px solid var(--border-strong);border-radius:6px;padding:2px 5px',
+  });
+  for (const year of years) {
+    const option = h('option', { value: String(year) });
+    option.textContent = String(year);
+    picker.append(option);
+  }
+
+  wrap.append(
+    h('div', { class: 'row' },
+      h('span', { class: 'faint', style: 'flex:1', text: 'Hardest problem solved each day' }),
+      picker,
+    ),
+  );
+
+  const scroller = h('div', { style: 'overflow-x:auto;padding-bottom:3px' });
+  wrap.append(scroller);
+
+  const draw = (year: number) => {
+    const grid = h('div', { style: 'display:flex;gap:2px;width:max-content' });
+    for (const column of heatmapGrid(year)) {
+      const col = h('div', { style: 'display:flex;flex-direction:column;gap:2px' });
+      for (const day of column) {
+        const entry = day ? heat[day] : undefined;
+        const cell = h('span', {
+          style:
+            'width:9px;height:9px;border-radius:2px;background:' +
+            (day ? (entry ? ratingColour(entry.peak || undefined) : 'var(--surface-raised)') : 'transparent'),
+          title: entry
+            ? `${day} — ${entry.count} solved, hardest ${entry.peak || 'unrated'}`
+            : day || '',
+        });
+        col.append(cell);
+      }
+      grid.append(col);
+    }
+    scroller.replaceChildren(grid);
+  };
+
+  draw(years[0]!);
+  picker.addEventListener('change', () => draw(Number(picker.value)));
+  return wrap;
+}
+
 async function render(context: MountContext): Promise<void> {
   const home = await send({ type: 'daily:get' });
   if (context.signal.aborted) return;
@@ -86,11 +149,18 @@ async function render(context: MountContext): Promise<void> {
     body.append(h('div', { class: 'sep' }), h('div', { class: 'faint', text: home.reason }));
   }
 
+  // Labelled by where each pick actually landed. When everything easier is
+  // already solved the search walks upward, and calling an 1800 "easier" than
+  // another 1800 would be a plain lie.
+  const level = home.daily?.medium?.rating ?? 0;
+  const relative = (rating: number) =>
+    rating < level ? 'Easier' : rating > level ? 'Harder' : 'Also';
+
   const picks = [
     pickRow('Today', home.daily?.medium, home.dailyState === 'done'),
-    pickRow('Easier', home.daily?.easy, false),
-    pickRow('Harder', home.daily?.hard, false),
-  ].filter((row): row is HTMLElement => row !== null);
+    home.daily?.easy && pickRow(relative(home.daily.easy.rating), home.daily.easy, false),
+    home.daily?.hard && pickRow(relative(home.daily.hard.rating), home.daily.hard, false),
+  ].filter((row): row is HTMLElement => Boolean(row));
 
   if (picks.length > 0) {
     body.append(h('div', { class: 'sep' }), ...picks);
@@ -110,6 +180,14 @@ async function render(context: MountContext): Promise<void> {
 
   card.append(body);
   context.el.replaceChildren(card);
+
+  // Fetched after the card is up: the mirror may have to be read, and the
+  // streak should not wait on a chart.
+  const insights = await send({ type: 'insights:get' }).catch(() => undefined);
+  if (context.signal.aborted || !insights) return;
+
+  const heat = heatSection(insights.heat, insights.years);
+  if (heat) body.append(h('div', { class: 'sep' }), heat);
 }
 
 export const codeforcesProfile: Mount = {

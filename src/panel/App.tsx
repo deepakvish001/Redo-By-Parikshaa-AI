@@ -41,6 +41,9 @@ import {
   type UpsolveResponse,
 } from '../core/messages.ts';
 import { bandFloor, type RatingGoal } from '../core/rating.ts';
+import { problemUrl } from '../core/daily.ts';
+import { heatmapGrid, type Bin, type HeatDay, type TagCount } from '../core/insights.ts';
+import type { InsightsData } from '../background/insights.ts';
 import { ratingColour } from '../content/mounts/cf-rail.ts';
 import type { Prediction } from '../background/rating.ts';
 import { dueProblems, formatDueIn, upcomingProblems } from '../core/srs.ts';
@@ -1198,6 +1201,284 @@ function TopicBars({ topics, title }: { topics: TopicStat[]; title: string }) {
   );
 }
 
+/* ------------------------------------------------------------------ charts */
+
+/** Solved problems per rating, in Codeforces' own rank colours. */
+function Histogram({ bins, onPick }: { bins: Bin[]; onPick: (bin: Bin) => void }) {
+  if (bins.length === 0) return null;
+  const peak = Math.max(...bins.map((bin) => bin.count));
+
+  return (
+    <div className="hist">
+      {bins.map((bin) => (
+        <button
+          key={bin.rating}
+          type="button"
+          className="hist__col"
+          title={`${bin.count} solved at ${bin.rating}`}
+          onClick={() => onPick(bin)}
+        >
+          <span className="hist__count">{bin.count}</span>
+          <span
+            className="hist__bar"
+            style={{
+              height: `${Math.max(3, (bin.count / peak) * 100)}%`,
+              background: ratingColour(bin.rating),
+            }}
+          />
+          <span className="hist__label">{bin.rating}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The tag breakdown, as a doughnut.
+ *
+ * Drawn with `stroke-dasharray` on one circle per slice rather than with arc
+ * paths — the maths is a running offset instead of trigonometry, and it stays
+ * readable.
+ */
+function Doughnut({ tags }: { tags: TagCount[] }) {
+  const top = tags.slice(0, 10);
+  const total = top.reduce((sum, entry) => sum + entry.solved, 0);
+  if (total === 0) return null;
+
+  const R = 42;
+  const CIRC = 2 * Math.PI * R;
+  let offset = 0;
+
+  // Ten steps around the accent's hue, so slices are distinguishable without
+  // introducing a second palette.
+  const colourFor = (index: number) => `hsl(${(22 + index * 34) % 360} 70% 58%)`;
+
+  return (
+    <div className="dough">
+      <svg viewBox="0 0 100 100" className="dough__svg" aria-hidden="true">
+        {top.map((entry, index) => {
+          const length = (entry.solved / total) * CIRC;
+          const dash = `${length} ${CIRC - length}`;
+          const slice = (
+            <circle
+              key={entry.tag}
+              cx="50"
+              cy="50"
+              r={R}
+              fill="none"
+              stroke={colourFor(index)}
+              strokeWidth="14"
+              strokeDasharray={dash}
+              strokeDashoffset={-offset}
+              transform="rotate(-90 50 50)"
+            />
+          );
+          offset += length;
+          return slice;
+        })}
+      </svg>
+      <ul className="dough__key">
+        {top.map((entry, index) => (
+          <li key={entry.tag}>
+            <span className="dough__dot" style={{ background: colourFor(index) }} />
+            <span className="dough__tag">{entry.tag}</span>
+            <span className="dough__n mono">{entry.solved}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * A year of days, coloured by the hardest problem solved on each.
+ *
+ * Codeforces' own heatmap counts problems, so a day of ten 800s outshines a day
+ * with one 2400 — which is backwards as a picture of progress.
+ */
+function Heatmap({ heat, years }: { heat: Record<string, HeatDay>; years: number[] }) {
+  const [year, setYear] = useState(years[0] ?? new Date().getUTCFullYear());
+  const grid = useMemo(() => heatmapGrid(year), [year]);
+
+  if (years.length === 0) return null;
+
+  return (
+    <>
+      <div className="heat__head">
+        <span className="faint">Colour is the hardest problem that day</span>
+        <select
+          className="heat__year"
+          value={year}
+          onChange={(event) => setYear(Number(event.target.value))}
+        >
+          {years.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="heat">
+        <div className="heat__grid">
+          {grid.map((column, index) => (
+            <div className="heat__col" key={index}>
+              {column.map((day, row) => {
+                const entry = day ? heat[day] : undefined;
+                return (
+                  <span
+                    key={day || `${index}-${row}`}
+                    className={`heat__day ${day ? '' : 'is-blank'}`}
+                    style={entry ? { background: ratingColour(entry.peak || undefined) } : undefined}
+                    title={
+                      entry
+                        ? `${day} — ${entry.count} solved, hardest ${entry.peak || 'unrated'}`
+                        : day || undefined
+                    }
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Solved against abandoned, per tag or per band. */
+function OutcomeBars({
+  rows,
+}: {
+  rows: Array<{ label: string; solved: number; unsolved: number }>;
+}) {
+  if (rows.length === 0) return null;
+
+  return (
+    <>
+      {rows.map((row) => {
+        const total = row.solved + row.unsolved;
+        return (
+          <div className="bar-row" key={row.label}>
+            <div>
+              <div className="bar-row__label">{row.label}</div>
+              <div className="bar bar--split">
+                <span
+                  className="bar__seg bar__seg--ok"
+                  style={{ width: `${(row.solved / total) * 100}%` }}
+                />
+                <span
+                  className="bar__seg bar__seg--bad"
+                  style={{ width: `${(row.unsolved / total) * 100}%` }}
+                />
+              </div>
+            </div>
+            <div className="bar-row__value">{Math.round((row.unsolved / total) * 100)}%</div>
+          </div>
+        );
+      })}
+      <div className="insight insight--quiet">
+        Green is solved, red is attempted and never accepted. The number is how often it beat you.
+      </div>
+    </>
+  );
+}
+
+/**
+ * The Codeforces half of the Stats tab.
+ *
+ * Loaded on its own rather than with the dashboard: it needs the mirror, which
+ * may have to be fetched, and the rest of the tab should not wait for it.
+ */
+function CodeforcesInsights() {
+  const [data, setData] = useState<InsightsData | null>(null);
+  const [opened, setOpened] = useState<Bin | null>(null);
+
+  useEffect(() => {
+    void send({ type: 'insights:get' })
+      .then(setData)
+      .catch(() => setData(null));
+  }, []);
+
+  if (!data) return <div className="empty">Reading your Codeforces history…</div>;
+  if (data.reason) return <div className="banner">{data.reason}</div>;
+
+  return (
+    <>
+      <div className="section-title">Activity</div>
+      <Heatmap heat={data.heat} years={data.years} />
+
+      <div className="section-title">Solved by rating ({data.solvedCount})</div>
+      <Histogram bins={data.histogram} onPick={(bin) => setOpened(bin === opened ? null : bin)} />
+      {opened && (
+        <div className="bin">
+          <div className="faint">
+            {opened.count} at {opened.rating}
+          </div>
+          {opened.keys.slice(0, 24).map((key) => (
+            <button
+              key={key}
+              type="button"
+              className="label"
+              onClick={() => openUrl(problemUrl(key))}
+            >
+              {key}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="section-title">Topics</div>
+      <Doughnut tags={data.tags} />
+
+      {data.weakTags.length > 0 && (
+        <>
+          <div className="section-title">Where you give up</div>
+          <OutcomeBars
+            rows={data.weakTags.map((entry) => ({
+              label: entry.tag,
+              solved: entry.solved,
+              unsolved: entry.unsolved,
+            }))}
+          />
+        </>
+      )}
+
+      {data.weakBands.length > 0 && (
+        <>
+          <div className="section-title">Hardest bands</div>
+          <OutcomeBars
+            rows={data.weakBands.map((entry) => ({
+              label: String(entry.rating),
+              solved: entry.solved,
+              unsolved: entry.unsolved,
+            }))}
+          />
+        </>
+      )}
+
+      {data.unsolved.length > 0 && (
+        <>
+          <div className="section-title">Attempted, never solved ({data.unsolved.length})</div>
+          {data.unsolved.slice(0, 12).map((entry) => (
+            <button
+              key={entry.key}
+              type="button"
+              className="upsolve__row"
+              onClick={() => openUrl(problemUrl(entry.key))}
+            >
+              <span className="upsolve__state mono" style={{ color: ratingColour(entry.rating) }}>
+                {entry.rating ?? '—'}
+              </span>
+              <span className="upsolve__name">{entry.name}</span>
+              <span className="upsolve__contest">{entry.tags[0] ?? ''}</span>
+            </button>
+          ))}
+        </>
+      )}
+    </>
+  );
+}
+
 /**
  * Home: what to do in the next hour.
  *
@@ -1897,6 +2178,8 @@ export function App() {
             })}
 
             <FailureReport problems={data.problems} />
+
+            <CodeforcesInsights />
 
             <TopicBars topics={data.stats.weakestTopics} title="Needs work" />
             <TopicBars topics={data.stats.strongestTopics} title="Solid" />

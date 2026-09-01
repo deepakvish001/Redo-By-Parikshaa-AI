@@ -78,6 +78,12 @@ Solving is the easy part. Remembering three months later is the part nothing els
   open. Down every listing, each problem link gets its rating in Codeforces' own rank colour and a
   tick if you have solved it. Every part of it is a switch in Settings, and the master switch puts
   the page back exactly as the judge built it.
+- **Charts your whole Codeforces history.** A heatmap where the colour is the *hardest* problem
+  you solved that day rather than how many — Codeforces' own counts problems, so ten 800s outshine
+  one 2400, which is backwards as a picture of progress. Beside it: solved-by-rating as bars in the
+  site's own rank colours, clickable into the list; your topics as a doughnut; where you give up,
+  by tag and by band; and everything you attempted and never got. The heatmap is also injected
+  under your own Codeforces profile, which is where you go to ask the question.
 - **Says why your submissions get rejected.** The attempt journal holds the verdict of every
   failed submit, so the Stats tab can say the thing a solved-count never can: *"40% of your
   rejected submissions are 'too slow', and dynamic programming is where it happens most."*
@@ -382,8 +388,8 @@ inside, tearing it down on navigation or when a switch goes off, and putting it 
 page re-renders it away. One feature throwing costs one missing card, never the page.
 
 Three mounts so far: the **problem rail**, the **listing marks**, and a card on **your own
-Codeforces profile** with your streaks and today's picks. Only your own — somebody else's profile
-showing your streak would be misleading.
+Codeforces profile** with your streaks, today's picks and the rating heatmap. Only your own —
+somebody else's profile showing your streak would be misleading.
 
 **One cached mirror of Codeforces, not one fetch per feature.** The rating chip on a problem page,
 the ticks down a listing, and everything the roadmap has planned after them are the same two tables
