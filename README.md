@@ -226,16 +226,46 @@ rather than being polled, and reminders are checked every quarter hour.
 
 ## Install
 
-The extension is not on the Web Store yet, so load it unpacked:
+The extension is not on the Web Store yet, so load it unpacked. You need
+[Node](https://nodejs.org) 20 or newer — check with `node -v`.
 
 ```bash
+git clone https://github.com/deepakvish001/Redo-By-Parikshaa-AI.git
+cd Redo-By-Parikshaa-AI
 npm install
 npm run build
 ```
 
-1. Open `chrome://extensions` and turn on **Developer mode**.
-2. Click **Load unpacked** and select the `dist/` folder.
-3. The options page opens on first install.
+`npm run build` writes a `dist/` folder. That folder *is* the extension.
+
+1. Open `chrome://extensions` and turn on **Developer mode** (top right).
+2. Click **Load unpacked** and select the `dist/` folder — the folder itself, not a file inside it.
+3. The options page opens on first install. Pin the Redo icon to your toolbar while you are there.
+
+After changing any code, run `npm run build` again and press the **reload** arrow on Redo's card
+in `chrome://extensions`. A content-script change also needs the judge's tab reloaded.
+
+### Five minutes to see everything working
+
+Nothing below needs a GitHub token; sync is the only part that does.
+
+1. **Settings → On the judge's page** — the switches are on by default except the workspace. Turn
+   **Workspace button on problem pages** on.
+2. Enter your **Codeforces handle** under People. This is what fills the rating chips, the solved
+   ticks, the heatmap and the recommender — without it most of the panel has nothing to draw.
+3. Open any Codeforces problem, for example
+   [1352A](https://codeforces.com/contest/1352/problem/A). The sidebar gets Redo's card with the
+   rating, a **Reveal tags** button, the solve clock and **Open workspace**.
+4. Press **Open workspace**: statement on the left, editor on the right, samples underneath.
+   Write something and press **Run** — it goes to Codeforces' custom invocation and the output
+   comes back into **Test Result**. **Submit** sends it through Codeforces' own submit form and
+   polls the verdict. You must be signed in to Codeforces in that browser for either to work.
+5. Open `/problemset` — every row now carries its rating and a tick if you have solved it.
+6. Click the toolbar icon for the side panel: **Home** has today's problem and your streak,
+   **Insights** the heatmap and charts, **Train** a custom round and recommendations.
+
+Solve something for real and it lands in **Due**, scheduled for revision — and, once GitHub is
+configured below, in your repository.
 
 Clicking the toolbar icon opens Redo in Chrome's **side panel**, docked to the right of the page
 — so the due list, the hint ladder and the problem you are solving are on screen at once,
