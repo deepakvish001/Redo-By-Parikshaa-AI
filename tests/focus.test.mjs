@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   DEFAULT_FOCUS,
   canPause,
+  dayKey,
   decide,
   isAllowed,
   isPaused,

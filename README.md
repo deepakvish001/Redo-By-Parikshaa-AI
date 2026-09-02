@@ -49,9 +49,11 @@ Solving is the easy part. Remembering three months later is the part nothing els
   problems you fought hardest for, and the revision queue.
 - **Focus mode: one problem first.** Optional and off by default. With it on, browsing anywhere
   outside the judges, Parikshaa and GitHub lands on a page that points you at one problem —
-  a revision that is due, LeetCode's daily, or the problem set. One emergency pause a day buys
-  three hours. This is the only feature that needs the browsing-history permission; it reads
-  the address of a tab and never a page's contents.
+  a revision that is due, LeetCode's daily, or the problem set. It applies to the tab you are
+  looking at the moment you switch it on, to a reload, and to a background tab when you switch
+  to it — not only to a fresh navigation. One emergency pause a day buys three hours. This is
+  the only feature that needs the browsing-history permission; it reads the address of a tab and
+  never a page's contents.
 - **Gives you something to post.** A weekly card — problems solved, revisions, the difficulty
   mix, your topics and the problem you fought hardest for — copied to the clipboard as a PNG
   in one click, with a caption to go with it. Rendered locally; nothing is uploaded. It is
