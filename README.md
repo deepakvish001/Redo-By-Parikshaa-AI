@@ -184,11 +184,22 @@ It takes ten to twenty seconds, because the algorithm needs the whole field: one
 plus a handful of bulk lookups, spaced to respect the API's one-request-every-two-seconds limit.
 That is why it sits behind a button rather than refreshing on its own.
 
-**LeetCode can be reported but not predicted.** They publish your rating, your global rank and
-your history, and all of that is shown. They do not publish the other entrants' ratings, and
-computing a prediction without them would mean sending your username to a third-party service —
-which would break the one promise this extension makes about your data. So it says so instead of
-inventing a figure.
+**LeetCode: the whole history, and an estimate that admits what it is.** Every contest you have
+entered is listed from LeetCode's own API — the contest, your rank, problems solved, and what your
+rating did — along with your global rank and top percentage. All of it is fact, read back from
+your profile.
+
+In the day or two between a contest ending and LeetCode applying the rating, a figure is offered
+for the one that is waiting. It is **fitted to your own past results**, not computed from the
+contest's field, and it is shown with the spread it was fitted against — `+18 ± 30` is meant to
+read as "barely a signal", because that is what it would be. It appears only once you have four
+rated contests to fit to; below that there is nothing honest to say.
+
+The real calculation is not possible here, and that is a deliberate limit rather than a missing
+feature. LeetCode's Elo needs the current rating of all twenty-odd thousand entrants, and LeetCode
+publishes nobody's rating but your own. The sites that do predict it crawl and store the whole
+field — using one would mean handing them your username, which is the one thing this extension
+does not do.
 
 Two things worth knowing about the Codeforces number: participants who have never been rated are
 seeded from zero, which is how Codeforces treats them; and unofficial, virtual and team entries

@@ -41,6 +41,7 @@ import {
   type UpsolveResponse,
 } from '../core/messages.ts';
 import { bandFloor, type RatingGoal } from '../core/rating.ts';
+import type { LeetCodeProfile } from '../background/rating.ts';
 import { problemUrl } from '../core/daily.ts';
 import { collectNotes, excerpt, noteMatches, type Note } from '../core/notes.ts';
 import { WINDOWS, heatmapGrid, type Bin, type HeatDay, type TagCount, type Window } from '../core/insights.ts';
@@ -1026,19 +1027,9 @@ function RatingCard() {
               .join(' · ')}
           </div>
 
-          {leetcode.last && (
-            <div className="rating__note">
-              {leetcode.last.rated
-                ? `${leetcode.last.title}: rank ${leetcode.last.ranking.toLocaleString()}, rating applied.`
-                : `${leetcode.last.title}: rank ${leetcode.last.ranking.toLocaleString()} — rating usually lands a day later.`}
-            </div>
-          )}
+          {leetcode.form && <div className="rating__note">{leetcode.form}</div>}
 
-          <div className="card__hint">
-            LeetCode publishes your rating but not the other entrants', so a prediction cannot be
-            computed here. Doing it would mean sending your username to somebody else's server,
-            which this extension does not do.
-          </div>
+          <LeetCodeContests profile={leetcode} />
         </div>
       )}
 
@@ -1779,6 +1770,123 @@ function TrainTab() {
  * that needs the rounds beside each other with what you actually got out of
  * them, not a line.
  */
+/**
+ * Every LeetCode contest you have entered, and what each one paid.
+ *
+ * The estimate at the top is the part that needs care. A rating predictor
+ * computes the real number from every entrant's rating; LeetCode publishes
+ * nobody's rating but your own, so that number cannot be computed here without
+ * handing your username to a site that crawls the field — which is the one
+ * thing this extension does not do.
+ *
+ * What is shown instead is fitted to *your own* past results and is labelled as
+ * that, with the spread it was fitted against. "+18 ± 30" is meant to read as
+ * "barely a signal", because that is what it is.
+ */
+function LeetCodeContests({ profile }: { profile: LeetCodeProfile }) {
+  const [open, setOpen] = useState(false);
+  const contests = [...profile.contests].reverse();
+
+  if (contests.length === 0) {
+    return (
+      <div className="card__hint">
+        No rated contests on this account yet. Enter a weekly or biweekly and the history shows up
+        here.
+      </div>
+    );
+  }
+
+  const { summary, estimate } = profile;
+
+  return (
+    <>
+      {estimate && (
+        <div className="lcpred">
+          <div className="lcpred__head">
+            {estimate.contest} · rank {estimate.rank.toLocaleString()} · not yet rated
+          </div>
+          <div className="lcpred__value">
+            <span className={estimate.delta >= 0 ? 'is-up' : 'is-down'}>
+              {estimate.delta >= 0 ? '+' : ''}
+              {estimate.delta}
+            </span>
+            <small>± {estimate.spread}</small>
+          </div>
+          <div className="lcpred__basis">
+            Estimated from your own {estimate.n} contests
+            {estimate.nearby ? ' at around this rating' : ''} — not from this contest's field.
+            LeetCode publishes nobody's rating but yours, so a true prediction would mean sending
+            your username to a site that crawls everyone else's. The real number lands in a day or
+            two.
+          </div>
+        </div>
+      )}
+
+      <div className="roundsum">
+        <div className="roundsum__cell">
+          <span className={summary.net >= 0 ? 'is-up' : 'is-down'}>
+            {summary.net >= 0 ? '+' : ''}
+            {summary.net}
+          </span>
+          <small>since 1500</small>
+        </div>
+        <div className="roundsum__cell">
+          <span>
+            {summary.up}/{summary.contests}
+          </span>
+          <small>contests up</small>
+        </div>
+        <div className="roundsum__cell">
+          <span>#{summary.bestRank.toLocaleString()}</span>
+          <small>best rank</small>
+        </div>
+      </div>
+
+      <div className="lclist">
+        {(open ? contests : contests.slice(0, 6)).map((contest) => (
+          <a
+            key={`${contest.title}-${contest.at}`}
+            className="past__head"
+            href={
+              contest.slug
+                ? `https://leetcode.com/contest/${contest.slug}/ranking/`
+                : 'https://leetcode.com/contest/'
+            }
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span
+              className={`past__delta mono ${
+                contest.pending ? 'is-wait' : contest.delta >= 0 ? 'is-up' : 'is-down'
+              }`}
+            >
+              {contest.pending
+                ? '—'
+                : `${contest.delta >= 0 ? '+' : ''}${Math.round(contest.delta)}`}
+            </span>
+            <span className="past__name">
+              {contest.title}
+              {contest.solved !== undefined && contest.total !== undefined && (
+                <small className="faint">
+                  {' '}
+                  {contest.solved}/{contest.total}
+                </small>
+              )}
+            </span>
+            <span className="past__rank mono">#{contest.rank.toLocaleString()}</span>
+          </a>
+        ))}
+      </div>
+
+      {contests.length > 6 && (
+        <button type="button" className="linkish" onClick={() => setOpen(!open)}>
+          {open ? 'Show fewer' : `Show all ${contests.length}`}
+        </button>
+      )}
+    </>
+  );
+}
+
 function ContestHistory() {
   const [data, setData] = useState<HistoryData | null>(null);
   const [open, setOpen] = useState<number | null>(null);

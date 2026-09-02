@@ -2804,3 +2804,57 @@ details.field > summary {
   color: var(--text);
   font-weight: 600;
 }
+
+/* ------------------------------------------------ leetcode contest history */
+
+.lclist {
+  margin: 8px 0 6px;
+}
+
+.lclist .past__head {
+  text-decoration: none;
+}
+
+/* Ranked but not yet rated: neither a gain nor a loss, and it must not be
+   coloured as either. */
+.past__delta.is-wait {
+  color: var(--text-muted);
+}
+
+/* The estimate. Deliberately not styled like the facts around it — it is the
+   one number on this card that is a guess, and it should not borrow their
+   authority. */
+.lcpred {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.lcpred__head {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.lcpred__value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 2px 0 4px;
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.lcpred__value small {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.lcpred__basis {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}

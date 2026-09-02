@@ -51,7 +51,10 @@ Redo makes network requests to exactly these places:
 4. **Contest listings** — `codeforces.com`, `leetcode.com`, `codechef.com` and `atcoder.jp`
    public schedule endpoints. These requests contain no personal data.
 5. **Codeforces' and LeetCode's public rating APIs** — only if you enter a handle. Each receives
-   only the handle you gave it, and only the one that belongs to it.
+   only the handle you gave it, and only the one that belongs to it. Your LeetCode contest history
+   is read from LeetCode itself; the rating estimate shown for a contest awaiting its result is
+   computed on your machine from your own past results, and **no rating-predictor service is
+   contacted** — doing so would mean handing your username to a third party.
 6. **api.github.com's repository list** — only when you press *Choose from my repositories*, and
    only so the picker has something to show. It receives your token and nothing else.
 
