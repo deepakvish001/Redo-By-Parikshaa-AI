@@ -81,7 +81,7 @@ purposes unrelated to the single purpose, and is not used for creditworthiness o
 
 **Privacy policy URL**
 ```
-https://github.com/deepakvish001/New-Repo/blob/main/PRIVACY.md
+https://github.com/deepakvish001/Redo-By-Parikshaa-AI/blob/main/PRIVACY.md
 ```
 
 ## Permission justifications

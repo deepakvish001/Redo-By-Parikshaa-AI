@@ -2602,3 +2602,27 @@ body.gate {
   max-height: 200px;
   overflow: auto;
 }
+
+/* ------------------------------------------------------------ device flow */
+
+.devicecode {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Big and letter-spaced: it is read off the screen and typed somewhere else,
+   and a code you have to squint at is a code you mistype. */
+.devicecode__code {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  white-space: nowrap;
+}

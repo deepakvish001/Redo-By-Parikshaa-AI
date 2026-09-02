@@ -126,6 +126,11 @@ them. For that reason:
 
 - Use a **fine-grained** GitHub token scoped to the single repository you sync to, with the
   `Contents: read and write` permission and nothing else.
+- If you use **Sign in with GitHub** instead, the token GitHub issues can read and write every
+  repository you have access to. That is a property of OAuth, not a choice made here, and it is
+  why the fine-grained token is still the recommendation. The sign-in talks only to
+  `github.com`, over a permission requested when you press the button and released when the
+  sign-in ends; the code you type is shown to you and to nobody else.
 - The Parikshaa session is read from the site's own storage — it is the session you are already
   signed in with, not a new credential — and Redo never refreshes or extends it.
 - Turn either integration off, and Redo stops using that credential.
@@ -164,4 +169,4 @@ with the date above updated.
 ## Contact
 
 Questions or requests: open an issue at
-<https://github.com/deepakvish001/New-Repo/issues>.
+<https://github.com/deepakvish001/Redo-By-Parikshaa-AI/issues>.

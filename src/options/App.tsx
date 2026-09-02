@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FOCUS_MODE_LABELS, type FocusMode } from '../core/focus.ts';
 import { send, type DiagnosticEntry } from '../core/messages.ts';
 import {
@@ -18,6 +18,8 @@ import {
 import type { SessionDiagnostic } from '../core/parikshaa.ts';
 import { DEFAULT_SETTINGS } from '../core/storage.ts';
 import { DEFAULT_PORT, bridgeOrigin } from '../core/bridge.ts';
+import { GITHUB_CLIENT_ID } from '../core/brand.ts';
+import { GITHUB_ORIGIN, formatUserCode, type DeviceCode } from '../core/device-flow.ts';
 import { LANGUAGES } from '../core/translate.ts';
 import { PLATFORMS, PLATFORM_LABELS, type Platform, type Settings } from '../core/types.ts';
 import { downloadBlob } from '../panel/share.ts';
@@ -139,6 +141,160 @@ function WorkspaceDrafts() {
       >
         Forget them
       </button>
+    </div>
+  );
+}
+
+/**
+ * Signing in to GitHub instead of pasting a token.
+ *
+ * Offered *beside* the token, never in place of it, and the copy says which is
+ * better: a device-flow token can read and write every repository you can, and
+ * a fine-grained token can be scoped to the one you sync to. That is a real
+ * difference in what a leaked credential costs.
+ *
+ * The polling timer lives here rather than in the service worker. MV3 would
+ * kill a fifteen-minute loop there anyway, and this page is open — the user is
+ * looking at it.
+ */
+function DeviceSignIn({ onToken }: { onToken: (token: string) => void }) {
+  const [code, setCode] = useState<DeviceCode | null>(null);
+  const [status, setStatus] = useState<Status>(null);
+  const [busy, setBusy] = useState(false);
+
+  // The callback through a ref, so a parent re-render cannot restart the poll
+  // timer — an inline arrow prop is a new function every render, and a timer
+  // that resets every render is a timer that never fires.
+  const deliver = useRef(onToken);
+  deliver.current = onToken;
+
+  /** Hands github.com back the moment the flow is over, however it ended. */
+  const release = () => {
+    void chrome.permissions.remove({ origins: [GITHUB_ORIGIN] }).catch(() => undefined);
+  };
+
+  useEffect(() => {
+    if (!code) return;
+    let cancelled = false;
+    let interval = code.interval * 1000;
+    let timer = 0;
+
+    const stop = (next: Status) => {
+      setCode(null);
+      setStatus(next);
+      release();
+    };
+
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const result = await send({ type: 'github:device-poll', deviceCode: code.deviceCode });
+        if (cancelled) return;
+
+        if (result.token) {
+          deliver.current(result.token);
+          // Only api.github.com is needed from here on, and that one is not
+          // optional — so github.com goes straight back.
+          stop({ tone: 'ok', message: 'Signed in. Fill in the repository below and save.' });
+          return;
+        }
+        if (result.error) {
+          stop({ tone: 'error', message: result.error });
+          return;
+        }
+        // GitHub asking to be polled less often is an instruction, not advice.
+        if (result.interval) interval = result.interval * 1000;
+      } catch {
+        /* One missed poll is not a failure; the next one is due anyway. */
+      }
+
+      if (Date.now() > code.expiresAt) {
+        stop({ tone: 'error', message: 'The code expired. Start again.' });
+        return;
+      }
+      timer = setTimeout(() => void tick(), interval) as unknown as number;
+    };
+
+    timer = setTimeout(() => void tick(), interval) as unknown as number;
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [code]);
+
+  // A build with no client id cannot do this at all, and a button that can only
+  // ever fail is worse than no button. The id is a build constant, so this is
+  // answered here rather than by asking the service worker.
+  if (!GITHUB_CLIENT_ID.trim()) return null;
+
+  return (
+    <div className="field">
+      {code ? (
+        <div className="devicecode">
+          <span className="devicecode__code mono">{formatUserCode(code.userCode)}</span>
+          <div>
+            <div>
+              Enter that code at{' '}
+              <a href={code.verificationUri} target="_blank" rel="noreferrer">
+                {code.verificationUri.replace('https://', '')}
+              </a>
+              , then come back — this page is waiting.
+            </div>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => {
+                setCode(null);
+                release();
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            setStatus(null);
+            try {
+              // github.com is an *optional* permission, asked for here and not
+              // at install: the flow talks to github.com rather than the API
+              // host the extension already has, and one optional sign-in is no
+              // reason for every install to grant it. It must be requested
+              // from the click — Chrome refuses without a user gesture, which
+              // is also why this is not in the service worker.
+              const granted = await chrome.permissions.request({ origins: [GITHUB_ORIGIN] });
+              if (!granted) {
+                setStatus({
+                  tone: 'error',
+                  message: 'Without access to github.com the sign-in cannot run. Paste a token instead.',
+                });
+                return;
+              }
+
+              const result = await send({ type: 'github:device-start', includePrivate: false });
+              if (result.code) setCode(result.code);
+              else setStatus({ tone: 'error', message: result.error ?? 'GitHub sent no code.' });
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <GithubIcon size={13} />
+          {busy ? 'Asking GitHub…' : 'Sign in with GitHub instead'}
+        </button>
+      )}
+
+      {status && <div className={`status status--${status.tone}`}>{status.message}</div>}
+
+      <span className="field__hint">
+        Signing in is quicker; a token is <strong>safer</strong>. A signed-in token can read and
+        write every repository you have access to, and a fine-grained token can be limited to the
+        one you sync to, with <code>Contents</code> and nothing else.
+      </span>
     </div>
   );
 }
@@ -626,6 +782,8 @@ export function App() {
           label="Commit accepted solutions to GitHub"
           hint="Off means solutions stay in this browser only."
         />
+
+        <DeviceSignIn onToken={(token) => patchGithub({ token })} />
 
         <div className="field">
           <label className="field__label" htmlFor="token">

@@ -313,6 +313,24 @@ to your browser profile can read it, which is exactly why the token should be sc
 single repository and no other permissions. If the machine is shared, leave sync off and use
 the extension purely as a local revision tracker.
 
+### Signing in instead of pasting
+
+Builds published with a GitHub OAuth client id also offer **Sign in with GitHub**, which uses
+the device flow: GitHub shows you a short code, you type it in on github.com, and the token
+arrives on its own. It is quicker, and it is **less precise** — a signed-in token can read and
+write every repository you have access to, where a fine-grained token can be limited to the one
+you sync to. The paste-a-token path is the recommendation and is not going away.
+
+It needs access to `github.com` (the device endpoints are on the website, not the API host), so
+it is an *optional* permission: Chrome asks when you press the button, and Redo hands it back as
+soon as the sign-in finishes. Nothing is requested at install.
+
+Forks and local builds have no client id — an OAuth App belongs to whoever publishes a build,
+not to this source — so the button is hidden rather than offered and then failing. To enable it,
+register an OAuth App with **Device Flow** ticked and put its Client ID in
+`src/core/brand.ts`. There is no client secret; the device flow does not use one, which is
+exactly why it is the only OAuth flow an extension can run honestly.
+
 ## Parikshaa sync
 
 Turn on **Mark matching problems solved on Parikshaa** in options. There is nothing to paste

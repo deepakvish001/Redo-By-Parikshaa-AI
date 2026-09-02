@@ -17,6 +17,7 @@ import type { HistoryData } from '../background/history.ts';
 import type { TranslateResult } from '../background/translate.ts';
 import type { CommunityData } from '../background/community.ts';
 import type { BridgeResult } from '../background/bridge.ts';
+import type { PollResult, StartResult } from '../background/device-flow.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
@@ -106,7 +107,9 @@ export type Request =
   | { type: 'translate:strings'; problem: string; strings: string[] }
   | { type: 'community:get'; problem: string }
   | { type: 'community:post'; id: string }
-  | { type: 'bridge:test'; port: number };
+  | { type: 'bridge:test'; port: number }
+  | { type: 'github:device-start'; includePrivate: boolean }
+  | { type: 'github:device-poll'; deviceCode: string };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -168,6 +171,8 @@ export interface ResponseMap {
   'community:get': CommunityData;
   'community:post': CommunityData & { posted?: boolean };
   'bridge:test': BridgeResult;
+  'github:device-start': StartResult;
+  'github:device-poll': PollResult;
 }
 
 /**

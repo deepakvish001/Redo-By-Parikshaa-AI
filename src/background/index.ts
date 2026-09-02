@@ -57,6 +57,7 @@ import { buildHistory, loadRound } from './history.ts';
 import { translateStrings } from './translate.ts';
 import { postSolution, readThreads } from './community.ts';
 import { pushToEditor, testBridge } from './bridge.ts';
+import { pollDeviceFlow, startDeviceFlow } from './device-flow.ts';
 import { codeforcesProfile, fetchUpsolve, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
@@ -744,6 +745,14 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
 
     case 'bridge:test':
       return testBridge(request.port);
+
+    case 'github:device-start':
+      return startDeviceFlow(request.includePrivate);
+
+    // One poll per call: a fifteen-minute loop in the service worker would be
+    // killed by MV3 anyway, so the page that is open holds the timer.
+    case 'github:device-poll':
+      return pollDeviceFlow(request.deviceCode);
 
     // One contest at a time, because the breakdown costs a request each and
     // the rate limit is one every two seconds.
