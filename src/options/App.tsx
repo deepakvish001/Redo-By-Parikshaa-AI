@@ -1844,6 +1844,11 @@ export function App() {
                 'Problem of the day on the problemset',
                 'Two rows pinned above the list — a global one and one at your level — and your streak calendar in the sidebar. Only on /problemset, where you are already choosing what to solve.',
               ],
+              [
+                'next',
+                'Editorial and similar problems',
+                'On the rail: the round\u2019s editorial, and three unsolved problems sharing a tag and a rating band. The editorial stays behind a press until you have solved it.',
+              ],
               ['hovercards', 'Preview on hover', 'Rank and rating when you hover any handle.'],
               ['friends', "Friends' submissions", 'Which of your saved handles solved the problem you are on.'],
               ['standings', 'Your place in the standings', 'College and country rank, from the page itself.'],

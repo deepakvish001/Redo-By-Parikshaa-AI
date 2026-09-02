@@ -226,6 +226,69 @@ function dueBlock(data: RailData, context: MountContext): HTMLElement | null {
 
 /* --------------------------------------------------------------- the mount */
 
+/**
+ * A way out, and a way on.
+ *
+ * The editorial when you are beaten, and three like it when you are not — the
+ * two things you go looking for at opposite ends of a problem, both of them a
+ * search away today, which is far enough that most people do neither.
+ *
+ * The editorial link is not shown for a problem you have not solved unless you
+ * ask for it: a link marked "Editorial" sitting in the corner of a problem you
+ * are still thinking about is not an offer, it is a temptation, and the whole
+ * hint ladder exists because giving the answer away is the easy mistake.
+ */
+function nextBlock(data: RailData): HTMLElement | null {
+  if (!data.page.next) return null;
+
+  const editorial = data.editorial;
+  const similar = data.similar ?? [];
+  if (!editorial && similar.length === 0) return null;
+
+  const wrap = h('div', { class: 'row', style: 'flex-direction:column;align-items:stretch;gap:6px' });
+  const solved = data.cf?.solved || data.problem !== undefined;
+
+  if (editorial) {
+    if (solved) {
+      wrap.append(link(editorial.url, 'Read the editorial'));
+    } else {
+      // Behind one press, the same way the tags are.
+      const reveal = button('Editorial', () => {
+        reveal.replaceWith(link(editorial.url, 'Read the editorial'));
+      }, { title: 'You have not solved this one yet' });
+      wrap.append(reveal);
+    }
+  }
+
+  if (similar.length > 0) {
+    wrap.append(h('div', { class: 'label', text: 'MORE LIKE THIS' }));
+    for (const problem of similar) {
+      const row = link(problem.url, '');
+      row.classList.add('similar');
+      row.replaceChildren(
+        h('span', { class: 'similar__name', text: problem.name }),
+        (() => {
+          const chip = h('span', { class: 'similar__rating mono', text: String(problem.rating) });
+          chip.style.color = ratingColour(problem.rating);
+          return chip;
+        })(),
+      );
+      row.title = `Shares ${problem.shared.join(', ')}`;
+      wrap.append(row);
+    }
+  }
+
+  return wrap;
+}
+
+function link(href: string, text: string): HTMLAnchorElement {
+  const anchor = h('a', { class: 'nextlink', text }) as HTMLAnchorElement;
+  anchor.href = href;
+  anchor.target = '_blank';
+  anchor.rel = 'noreferrer';
+  return anchor;
+}
+
 async function render(context: MountContext): Promise<void> {
   const parsed = parseProblem(context.url.pathname);
   if (!parsed) return;
@@ -258,6 +321,7 @@ async function render(context: MountContext): Promise<void> {
     dueBlock(data, context),
     historyRow(data),
     noteBlock(data, context),
+    nextBlock(data),
   ].filter((block): block is HTMLElement => block !== null);
 
   for (const [index, block] of blocks.entries()) {

@@ -21,6 +21,7 @@ import type { SyncState } from '../background/backup.ts';
 import type { PollResult, StartResult } from '../background/device-flow.ts';
 import type { RepoChoice } from './github.ts';
 import type { CfConnection } from './cf-auth.ts';
+import type { Material, Similar } from './cf-materials.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
@@ -244,6 +245,10 @@ export interface RailData {
   openedAt?: number;
   /** Rating, tags and solved state from the Codeforces mirror. */
   cf?: CfProblemView;
+  /** The round's editorial, when one has been published. */
+  editorial?: Material;
+  /** Three unsolved problems sharing a tag and a rating band with this one. */
+  similar?: Similar[];
   page: Settings['page'];
   now: number;
 }

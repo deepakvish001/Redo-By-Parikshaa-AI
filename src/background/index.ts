@@ -59,6 +59,8 @@ import { postSolution, readThreads } from './community.ts';
 import { pushToEditor, testBridge } from './bridge.ts';
 import { pollDeviceFlow, startDeviceFlow } from './device-flow.ts';
 import { connectCodeforces } from './cf-connect.ts';
+import { editorialFor, similarTo } from './cf-next.ts';
+import type { Material, Similar } from '../core/cf-materials.ts';
 import { codeforcesProfile, fetchUpsolve, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
@@ -664,6 +666,18 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
         )?.[request.slug];
       }
 
+      // Both are Codeforces-only and both are extras: a slow contest page must
+      // not hold up the card, so a failure is nothing rather than an error.
+      let editorial: Material | undefined;
+      let similar: Similar[] = [];
+      if (request.platform === 'codeforces' && settings.page.next) {
+        const contestId = /^(\d+)/.exec(request.slug)?.[1];
+        [editorial, similar] = await Promise.all([
+          contestId ? editorialFor(contestId).catch(() => undefined) : undefined,
+          similarTo(request.slug).catch(() => []),
+        ]);
+      }
+
       return {
         problem,
         // A solved problem carries its own journal on the record.
@@ -671,6 +685,8 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
         due: problem ? isDue(problem.revision, Date.now()) : false,
         openedAt: opened[id],
         cf,
+        editorial,
+        similar,
         page: settings.page,
         now: Date.now(),
       };

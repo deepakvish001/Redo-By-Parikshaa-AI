@@ -47,6 +47,11 @@ Solving is the easy part. Remembering three months later is the part nothing els
 - **Publishes an animated coding profile.** `PROFILE.md` and `assets/profile.svg` are rebuilt
   on every sync: totals, streak, difficulty and platform breakdowns, topic mastery, the
   problems you fought hardest for, and the revision queue.
+- **A way out, and a way on.** On a Codeforces problem: the round's **editorial**, read from the
+  contest's own "Contest materials" — the only place Codeforces publishes it — and three unsolved
+  problems sharing a tag and a rating band with this one, ranked by shared tags first. On a
+  problem you have not solved the editorial stays behind a press: a link marked *Editorial* in the
+  corner of a problem you are still thinking about is not an offer, it is a temptation.
 - **Revision as a session, not a list.** Nineteen problems due is a decision to make nineteen
   times before any work happens. **Start a session** makes it one decision and then hands you one
   problem at a time, with a bar that fills. The set is fixed when it starts, so rating something

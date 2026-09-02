@@ -188,6 +188,45 @@ textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; 
 
 a { color: var(--accent); text-underline-offset: 2px; }
 
+/* A small caption above a group, as on the rail's "MORE LIKE THIS". */
+.label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.nextlink {
+  display: block;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.nextlink:hover { border-color: var(--accent); }
+
+.similar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
+.similar__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.similar__rating {
+  flex: none;
+  font-weight: 700;
+  font-size: 11px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }

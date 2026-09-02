@@ -337,6 +337,13 @@ export interface Settings {
      * choosing what to solve — anywhere else it would be an interruption.
      */
     daily: boolean;
+    /**
+     * The editorial and three similar problems, on the rail.
+     *
+     * The two things you reach for at opposite ends of a problem: a way out
+     * when you are beaten, and a way on when you are not.
+     */
+    next: boolean;
     /** A preview card when you hover a Codeforces handle. */
     hovercards: boolean;
     /** Which of your saved handles has solved the problem you are on. */
