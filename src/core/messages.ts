@@ -17,6 +17,7 @@ import type { HistoryData } from '../background/history.ts';
 import type { TranslateResult } from '../background/translate.ts';
 import type { CommunityData } from '../background/community.ts';
 import type { BridgeResult } from '../background/bridge.ts';
+import type { SyncState } from '../background/backup.ts';
 import type { PollResult, StartResult } from '../background/device-flow.ts';
 import type { RepoChoice } from './github.ts';
 import type { CfConnection } from './cf-auth.ts';
@@ -86,6 +87,8 @@ export type Request =
   | { type: 'backup:import'; text: string }
   | { type: 'backup:push' }
   | { type: 'backup:pull' }
+  | { type: 'sync:now' }
+  | { type: 'sync:status' }
   | { type: 'submissions:claim'; platform: string; ids: string[]; watched: string[] }
   | { type: 'rail:get'; platform: string; slug: string }
   | { type: 'cf:lookup'; keys: string[] }
@@ -158,6 +161,8 @@ export interface ResponseMap {
   'backup:import': RestoreResult;
   'backup:push': { path: string; commitUrl?: string };
   'backup:pull': RestoreResult;
+  'sync:now': SyncState;
+  'sync:status': SyncState;
   'submissions:claim': Claim;
   'rail:get': RailData;
   'cf:lookup': Record<string, CfProblemView>;

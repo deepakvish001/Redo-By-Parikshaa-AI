@@ -48,6 +48,7 @@ export const DEFAULT_SETTINGS: Settings = {
     enabled: false,
     commitMessage: 'solve: {title} ({platform})',
     backup: true,
+    sync: false,
   },
   parikshaa: {
     enabled: false,
@@ -186,9 +187,21 @@ export async function getProblem(id: string): Promise<SolvedProblem | undefined>
   return (await getProblems())[id];
 }
 
+/**
+ * Stamps a record as changed.
+ *
+ * Every write goes through here so that two machines can be compared. Without
+ * it the only timestamp on a problem is `solvedAt`, which does not move when
+ * you *revise* — so a revision done on the laptop and one done on the desktop
+ * would tie, and the merge would keep whichever it happened to see last.
+ */
+function stamped(problem: SolvedProblem, at = Date.now()): SolvedProblem {
+  return { ...problem, updatedAt: at };
+}
+
 export async function putProblem(problem: SolvedProblem): Promise<void> {
   const problems = await getProblems();
-  problems[problem.id] = problem;
+  problems[problem.id] = stamped(problem);
   await chrome.storage.local.set({ [KEYS.problems]: problems });
 }
 
@@ -199,7 +212,7 @@ export async function updateProblem(
   const problems = await getProblems();
   const existing = problems[id];
   if (!existing) return undefined;
-  const updated = mutate(existing);
+  const updated = stamped(mutate(existing));
   problems[id] = updated;
   await chrome.storage.local.set({ [KEYS.problems]: problems });
   return updated;

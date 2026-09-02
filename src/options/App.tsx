@@ -23,6 +23,7 @@ import { GITHUB_ORIGIN, formatUserCode, type DeviceCode } from '../core/device-f
 import { LANGUAGES } from '../core/translate.ts';
 import { PLATFORMS, PLATFORM_LABELS, type Platform, type Settings } from '../core/types.ts';
 import type { CfConnection } from '../core/cf-auth.ts';
+import type { SyncState } from '../background/backup.ts';
 import type { RepoChoice, RepoTarget } from '../core/github.ts';
 import { downloadBlob } from '../panel/share.ts';
 
@@ -314,6 +315,58 @@ function DeviceSignIn({
         and a fine-grained token can be limited to the one you sync to, with <code>Contents</code>{' '}
         and nothing else.
       </span>
+    </div>
+  );
+}
+
+/**
+ * What the last sync did, and a way to run one now.
+ *
+ * A sync that runs on a timer needs to be visible or nobody trusts it — and
+ * "keeping two machines in step" is exactly the sort of promise that has to be
+ * checkable, because the failure mode is silent and only noticed weeks later
+ * when a schedule turns out to be wrong.
+ */
+function SyncStatus() {
+  const [state, setState] = useState<SyncState | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = () => {
+    void send({ type: 'sync:status' })
+      .then(setState)
+      .catch(() => setState(null));
+  };
+
+  useEffect(load, []);
+
+  return (
+    <div className="field__hint" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ flex: 1 }}>
+        {state?.error ? (
+          <span className="status status--error">Last sync failed: {state.error}</span>
+        ) : state?.at ? (
+          <>
+            Last synced {new Date(state.at).toLocaleString()}
+            {state.pulled ? ` — brought in ${state.pulled} record${state.pulled === 1 ? '' : 's'}.` : ' — nothing new.'}
+          </>
+        ) : (
+          'Not synced yet.'
+        )}
+      </span>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            setState(await send({ type: 'sync:now' }));
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? 'Syncing…' : 'Sync now'}
+      </button>
     </div>
   );
 }
@@ -1697,6 +1750,15 @@ export function App() {
           }
           label="Back up daily to my repository"
         />
+
+        <Toggle
+          checked={settings.github.sync}
+          onChange={(sync) => setSettings({ ...settings, github: { ...settings.github, sync } })}
+          label="Keep this browser in step with that backup"
+          hint="Two machines, one schedule. Pulls the repository's copy, merges it with what is here, and pushes the result — on startup, every half hour, and a couple of minutes after you solve or revise something."
+        />
+
+        {settings.github.sync && <SyncStatus />}
       </section>
 
       <section className="section-card">

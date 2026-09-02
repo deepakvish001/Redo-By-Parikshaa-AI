@@ -90,6 +90,74 @@ export async function applyBackup(plan: RestorePlan): Promise<RestoreResult> {
   };
 }
 
+/* ------------------------------------------------------------ keeping in step */
+
+const STATE_KEY = 'syncState';
+
+export interface SyncState {
+  at?: number;
+  /** Problems and journal entries the last sync brought in. */
+  pulled?: number;
+  error?: string;
+}
+
+export async function getSyncState(): Promise<SyncState> {
+  const stored = await chrome.storage.local.get(STATE_KEY);
+  return (stored[STATE_KEY] as SyncState | undefined) ?? {};
+}
+
+/**
+ * One round of keeping this browser in step with the repository.
+ *
+ * Pull, merge, push. All three, in that order, and the order is the feature:
+ * pulling alone means the other machine never learns what this one did, and
+ * pushing alone means this one overwrites it. Merging in between is what makes
+ * two machines converge rather than take turns winning.
+ *
+ * Nothing is committed when the merged state matches what is already in the
+ * repository — `commitFiles` builds the tree first and stops when it is
+ * identical to the branch's, so a quiet machine adds no commits at all.
+ *
+ * A failure is recorded rather than thrown at whatever triggered it: this runs
+ * on a timer and on startup, and a network blip is not something to interrupt
+ * somebody's morning about.
+ */
+export async function syncNow(): Promise<SyncState> {
+  const { settings } = await readEverything();
+  if (!settings.github.sync || !isConfigured(settings.github)) {
+    return getSyncState();
+  }
+
+  try {
+    let pulled = 0;
+
+    const content = await getFileContent(settings.github, BACKUP_PATH);
+    if (content !== undefined) {
+      // A repository whose backup is unreadable must not stop this machine
+      // from pushing a good one — that is how a bad file becomes permanent.
+      try {
+        const result = await applyBackup(readBackup(content));
+        pulled = result.problems + result.journals;
+      } catch (error) {
+        if (!(error instanceof BackupError)) throw error;
+      }
+    }
+
+    await pushBackup();
+
+    const state: SyncState = { at: Date.now(), pulled };
+    await chrome.storage.local.set({ [STATE_KEY]: state });
+    return state;
+  } catch (error) {
+    const state: SyncState = {
+      ...(await getSyncState()),
+      error: error instanceof Error ? error.message : String(error),
+    };
+    await chrome.storage.local.set({ [STATE_KEY]: state });
+    return state;
+  }
+}
+
 export async function pullBackup(): Promise<RestoreResult> {
   const { settings } = await readEverything();
   if (!isConfigured(settings.github)) {

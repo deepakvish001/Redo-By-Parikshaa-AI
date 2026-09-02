@@ -38,7 +38,7 @@ import type {
 } from '../core/types.ts';
 import { getCachedContests, refreshContests, sendContestReminders } from './contests.ts';
 import { focusState, startPause, watchNavigation } from './focus.ts';
-import { applyBackup, currentBackup, pullBackup, pushBackup } from './backup.ts';
+import { applyBackup, currentBackup, getSyncState, pullBackup, pushBackup, syncNow } from './backup.ts';
 import {
   ensureProblemset,
   ensureUserStatus,
@@ -69,6 +69,20 @@ const DIGEST_ALARM = 'daily-digest';
 const CONTEST_ALARM = 'refresh-contests';
 const WRAPPED_ALARM = 'weekly-wrapped';
 const BACKUP_ALARM = 'daily-backup';
+const SYNC_ALARM = 'repo-sync';
+/**
+ * A one-off sync, a couple of minutes after something changed.
+ *
+ * Creating an alarm that already exists replaces it, so solving five problems
+ * in a row schedules one sync two minutes after the fifth rather than five
+ * syncs — a debounce with no timer to keep alive, which matters because an MV3
+ * worker will not be alive to run one.
+ */
+const SYNC_SOON_ALARM = 'repo-sync-soon';
+
+function syncSoon(): void {
+  chrome.alarms.create(SYNC_SOON_ALARM, { delayInMinutes: 2 });
+}
 const STREAK_ALARM = 'streak-nudge';
 
 const DIAGNOSTIC_KEY = 'detectionLog';
@@ -255,6 +269,7 @@ async function recordSubmission(
     );
   }
 
+  syncSoon();
   const [github, parikshaa] = await Promise.all([
     syncProblem(problem, settings),
     syncToParikshaa(problem, settings),
@@ -283,6 +298,10 @@ async function reviewProblem(
 ): Promise<ResponseMap['problem:review']> {
   const settings = await getSettings();
   const now = Date.now();
+
+  // A review is the change most worth carrying to the other machine — it moves
+  // the schedule, which is the thing worth having in two places at all.
+  syncSoon();
 
   const problem = await updateProblem(id, (current) => {
     const revision = applyRecall(current.revision, recall, settings.revision.intervals, now);
@@ -603,6 +622,12 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
     case 'backup:pull':
       return pullBackup();
 
+    case 'sync:now':
+      return syncNow();
+
+    case 'sync:status':
+      return getSyncState();
+
     case 'submissions:claim':
       return claimSubmissionIds(request.platform, request.ids, request.watched);
 
@@ -909,6 +934,10 @@ chrome.runtime.onInstalled.addListener((details) => {
   // Checked daily; the nudge itself only fires once a week (see below).
   chrome.alarms.create(WRAPPED_ALARM, { periodInMinutes: 60 * 24 });
   chrome.alarms.create(BACKUP_ALARM, { periodInMinutes: 60 * 24 });
+  // Half-hourly. Often enough that moving between two machines in an evening
+  // works, rare enough that a quiet day adds no commits — a sync that changes
+  // nothing writes nothing.
+  chrome.alarms.create(SYNC_ALARM, { periodInMinutes: 30 });
   // Hourly, but it only ever says anything in the evening (see below).
   chrome.alarms.create(STREAK_ALARM, { periodInMinutes: 60 });
   void refreshBadge();
@@ -917,6 +946,9 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 chrome.runtime.onStartup.addListener(() => {
   void refreshBadge();
+  // The browser opening is the moment the other machine's work is most likely
+  // to be waiting, and the moment before this one starts making its own.
+  void syncNow();
 });
 
 // Registered unconditionally: the listener itself checks whether focus mode is
@@ -929,6 +961,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === CONTEST_ALARM) void tickContests();
   if (alarm.name === WRAPPED_ALARM) void offerWrapped();
   if (alarm.name === BACKUP_ALARM) void dailyBackup();
+  if (alarm.name === SYNC_ALARM || alarm.name === SYNC_SOON_ALARM) void syncNow();
   if (alarm.name === STREAK_ALARM) void nudgeStreak();
 });
 

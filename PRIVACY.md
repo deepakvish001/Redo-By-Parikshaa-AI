@@ -120,6 +120,10 @@ GitHub token**, which is stripped out deliberately: a backup is a file people co
 themselves and drop in cloud storage, and a repository-scoped write token inside one would be a
 credential leak with a very long tail. Re-pasting a token takes ten seconds.
 
+If you also turn on **Keep this browser in step with that backup**, the same file is read back and
+merged, so two machines share one schedule. Nothing new leaves your browser for it — it is the
+repository you already sync to, and no other party is involved at any point.
+
 The same file is what **Download a backup** saves to your computer. Nothing is uploaded anywhere
 else, and the daily backup can be turned off in Settings.
 

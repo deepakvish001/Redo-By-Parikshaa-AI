@@ -47,6 +47,12 @@ Solving is the easy part. Remembering three months later is the part nothing els
 - **Publishes an animated coding profile.** `PROFILE.md` and `assets/profile.svg` are rebuilt
   on every sync: totals, streak, difficulty and platform breakdowns, topic mastery, the
   problems you fought hardest for, and the revision queue.
+- **Two machines, one schedule.** Optional. Redo already committed a backup to your repository;
+  with sync on it also *reads* it — pull, merge, push, on startup, every half hour, and a couple
+  of minutes after you solve or revise. So a schedule built on the laptop is the same schedule on
+  the desktop. **The repository is the whole mechanism**; there is no server and there is not
+  going to be one. A quiet day writes no commits, because a sync that changes nothing commits
+  nothing.
 - **Focus mode: one problem first.** Optional and off by default. With it on, browsing anywhere
   outside the judges, Parikshaa and GitHub lands on a page that points you at one problem —
   a revision that is due, LeetCode's daily, or the problem set. It applies to the tab you are

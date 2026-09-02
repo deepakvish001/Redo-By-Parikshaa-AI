@@ -176,6 +176,16 @@ export interface SolvedProblem {
   github: GithubSyncState;
   parikshaa: ParikshaaSyncState;
   revision: RevisionState;
+  /**
+   * When this record last changed, on whichever machine changed it.
+   *
+   * Exists for syncing between machines: `solvedAt` does not move when a
+   * problem is *revised*, so without this a review done on the laptop and one
+   * done on the desktop are indistinguishable and the merge has nothing to pick
+   * on. Optional because records written before this existed do not have it —
+   * those fall back to the newest timestamp they do carry.
+   */
+  updatedAt?: number;
 }
 
 export interface ParikshaaSyncState {
@@ -268,6 +278,15 @@ export interface Settings {
      * Daily rather than per-solve so the file does not bloat every commit.
      */
     backup: boolean;
+    /**
+     * Keep this browser in step with that backup, both ways.
+     *
+     * With it on, the extension pulls the repository's copy, merges it with
+     * what is here, and pushes the result — so a schedule built on the laptop
+     * is the same schedule on the desktop. The repository is the whole sync
+     * mechanism; there is no server, and there is not going to be one.
+     */
+    sync: boolean;
   };
   parikshaa: {
     /** Mark matching problems solved on parikshaa.org. */
