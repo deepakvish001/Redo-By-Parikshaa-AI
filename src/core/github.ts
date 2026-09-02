@@ -1,4 +1,4 @@
-import type { Settings } from './types.ts';
+import type { Platform, Settings } from './types.ts';
 
 const API = 'https://api.github.com';
 
@@ -116,6 +116,44 @@ export async function verifyAccess(config: GithubConfig): Promise<RepoInfo> {
     canPush: repo.permissions?.push ?? false,
     branchExists: branchResponse.ok,
   };
+}
+
+/** Where one platform's solutions go, when it does not use the default. */
+export interface RepoTarget {
+  owner: string;
+  repo: string;
+  branch: string;
+}
+
+/**
+ * The repository a platform commits to.
+ *
+ * An override only counts when it names both an owner and a repository — a
+ * half-filled one would otherwise send that platform's solves to
+ * `undefined/undefined` and fail every sync with a 404, which is a long way to
+ * travel to learn that a field was left blank. A blank branch falls back to the
+ * default's, since that is nearly always the same word.
+ */
+export function configFor(github: GithubConfig, platform: Platform): GithubConfig {
+  const override = github.perPlatform?.[platform];
+  if (!override?.owner?.trim() || !override.repo?.trim()) return github;
+
+  return {
+    ...github,
+    owner: override.owner.trim(),
+    repo: override.repo.trim(),
+    branch: override.branch?.trim() || github.branch,
+  };
+}
+
+/** Identifies a repository, so problems bound for the same one can be grouped. */
+export function repoKey(config: { owner: string; repo: string; branch: string }): string {
+  return `${config.owner}/${config.repo}@${config.branch}`;
+}
+
+/** True when this platform goes somewhere other than the default repository. */
+export function hasOverride(github: GithubConfig, platform: Platform): boolean {
+  return repoKey(configFor(github, platform)) !== repoKey(github);
 }
 
 export interface RepoChoice {

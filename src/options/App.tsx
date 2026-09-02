@@ -23,7 +23,7 @@ import { GITHUB_ORIGIN, formatUserCode, type DeviceCode } from '../core/device-f
 import { LANGUAGES } from '../core/translate.ts';
 import { PLATFORMS, PLATFORM_LABELS, type Platform, type Settings } from '../core/types.ts';
 import type { CfConnection } from '../core/cf-auth.ts';
-import type { RepoChoice } from '../core/github.ts';
+import type { RepoChoice, RepoTarget } from '../core/github.ts';
 import { downloadBlob } from '../panel/share.ts';
 
 type Status = { tone: 'ok' | 'error'; message: string } | null;
@@ -441,6 +441,105 @@ function RepoPicker({
 
       {status && <div className={`status status--${status.tone}`}>{status.message}</div>}
     </div>
+  );
+}
+
+/**
+ * A repository per judge, for people who keep LeetCode and Codeforces apart.
+ *
+ * Everything without an entry goes to the default repository above, so one
+ * repository for everything stays the default and costs nobody a decision. The
+ * whole feature is opt-in per row.
+ *
+ * Each repository then gets an index and a profile built from **its own**
+ * problems, not from everything you have ever solved: a repository holding your
+ * LeetCode solves that lists Codeforces problems it does not contain would be
+ * lying about itself.
+ */
+function PerPlatformRepos({
+  github,
+  platforms,
+  onChange,
+}: {
+  github: Settings['github'];
+  platforms: Record<Platform, boolean>;
+  onChange: (perPlatform: Settings['github']['perPlatform']) => void;
+}) {
+  const [picking, setPicking] = useState<Platform | null>(null);
+
+  const set = (platform: Platform, target: RepoTarget | undefined) => {
+    const next = { ...github.perPlatform };
+    if (target) next[platform] = target;
+    else delete next[platform];
+    onChange(next);
+    setPicking(null);
+  };
+
+  const fallback = github.owner && github.repo ? `${github.owner}/${github.repo}` : 'the repository above';
+
+  return (
+    <details className="field">
+      <summary>
+        A different repository per judge
+        {Object.keys(github.perPlatform ?? {}).length > 0
+          ? ` — ${Object.keys(github.perPlatform ?? {}).length} set`
+          : ''}
+      </summary>
+      <p className="field__hint">
+        Leave a judge alone and its solutions go to <b>{fallback}</b>. Give it its own repository
+        and only that judge's solves go there — along with an index and a profile counting just
+        those, rather than everything you have solved anywhere.
+      </p>
+
+      <div className="perrepo">
+        {PLATFORMS.filter((platform) => platforms[platform]).map((platform) => {
+          const target = github.perPlatform?.[platform];
+          const named = target?.owner && target.repo;
+
+          return (
+            <div className="perrepo__row" key={platform}>
+              <span className="perrepo__judge">{PLATFORM_LABELS[platform]}</span>
+              <span className={`perrepo__where${named ? ' is-set' : ''}`}>
+                {named ? `${target.owner}/${target.repo}` : `default — ${fallback}`}
+                {named && target.branch ? ` · ${target.branch}` : ''}
+              </span>
+              <button
+                type="button"
+                className="mini"
+                onClick={() => setPicking(picking === platform ? null : platform)}
+              >
+                {picking === platform ? 'Close' : named ? 'Change' : 'Choose'}
+              </button>
+              {named && (
+                <button type="button" className="mini" onClick={() => set(platform, undefined)}>
+                  Use default
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {picking && (
+        <RepoPicker
+          token={github.token}
+          selected={(() => {
+            const target = github.perPlatform?.[picking];
+            return target ? `${target.owner}/${target.repo}` : '';
+          })()}
+          onPick={(repo) =>
+            set(picking, { owner: repo.owner, repo: repo.name, branch: repo.defaultBranch })
+          }
+          onBranches={() => undefined}
+        />
+      )}
+
+      <span className="field__hint">
+        Paths do not change: a LeetCode solve is still <code>leetcode/medium/…</code> wherever it
+        lands, so moving a judge to its own repository does not rewrite anything already committed.
+        The daily backup always goes to the default repository.
+      </span>
+    </details>
   );
 }
 
@@ -1228,6 +1327,12 @@ export function App() {
             </div>
           </div>
         </div>
+
+        <PerPlatformRepos
+          github={settings.github}
+          platforms={settings.platforms}
+          onChange={(perPlatform) => patchGithub({ perPlatform })}
+        />
 
         <div className="actions">
           <button type="button" onClick={() => void verify()} disabled={verifying}>

@@ -2762,3 +2762,45 @@ details.field > summary {
   content: '!';
   color: var(--warn, hsl(30 90% 45%));
 }
+
+/* --------------------------------------------------- a repository per judge */
+
+.perrepo {
+  margin: 8px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.perrepo__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+}
+
+.perrepo__row + .perrepo__row {
+  border-top: 1px solid var(--border);
+}
+
+.perrepo__judge {
+  flex: none;
+  width: 108px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.perrepo__where {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+/* A judge that has been pointed somewhere reads as a decision, not a default. */
+.perrepo__where.is-set {
+  color: var(--text);
+  font-weight: 600;
+}

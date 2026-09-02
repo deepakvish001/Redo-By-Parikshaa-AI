@@ -1,4 +1,5 @@
 import type { FocusSettings } from './focus.ts';
+import type { RepoTarget } from './github.ts';
 
 export type Platform =
   | 'leetcode'
@@ -251,6 +252,15 @@ export interface Settings {
     repo: string;
     branch: string;
     enabled: boolean;
+    /**
+     * A repository per platform, for people who keep LeetCode and Codeforces
+     * apart. Anything without an entry here goes to the repository above, so
+     * one repository for everything stays the default and needs no setup.
+     *
+     * An entry is only honoured when it names both an owner and a repository;
+     * a blank branch falls back to the default's.
+     */
+    perPlatform: Partial<Record<Platform, RepoTarget>>;
     /** Commit message template; `{title}` and `{platform}` are substituted. */
     commitMessage: string;
     /**

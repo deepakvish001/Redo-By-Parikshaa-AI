@@ -41,6 +41,7 @@ export const DEFAULT_SETTINGS: Settings = {
     token: '',
     clientId: '',
     signInPrivate: true,
+    perPlatform: {},
     owner: '',
     repo: '',
     branch: 'main',

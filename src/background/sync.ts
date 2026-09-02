@@ -1,6 +1,6 @@
 import { computeStats } from '../core/analytics.ts';
 import { INDEX_MARKERS } from '../core/brand.ts';
-import { commitFiles, getFileContent, isConfigured } from '../core/github.ts';
+import { commitFiles, configFor, getFileContent, isConfigured, repoKey } from '../core/github.ts';
 import { buildIndexReadme, buildProblemReadme } from '../core/markdown.ts';
 import { notesPath, solutionFiles, solutionPath } from '../core/paths.ts';
 import { buildProfileReadme, buildProfileSvg } from '../core/profile.ts';
@@ -52,7 +52,9 @@ export async function syncProblem(
   problem: SolvedProblem,
   settings: Settings,
 ): Promise<GithubSyncState> {
-  const config = settings.github;
+  // Where *this* problem goes. Platforms without an override land back on the
+  // default, so one repository for everything remains the untouched case.
+  const config = configFor(settings.github, problem.platform);
   if (!isConfigured(config)) {
     return { status: 'disabled' };
   }
@@ -72,12 +74,22 @@ export async function syncProblem(
         withCurrent.push({ ...problem, github: { ...problem.github, path } });
       }
 
+      // Only what actually lives in this repository. A repository holding just
+      // your LeetCode solves should say it holds just your LeetCode solves —
+      // an index listing Codeforces problems that are not in it, and a profile
+      // counting them, would be a repository lying about its own contents.
+      // With no overrides this is every problem, exactly as before.
+      const here = repoKey(config);
+      const mine = withCurrent.filter(
+        (candidate) => repoKey(configFor(settings.github, candidate.platform)) === here,
+      );
+
       const now = Date.now();
       const indexPath = await resolveIndexPath(config);
       // The profile and the week's card are views over the same local state, so
       // they are rebuilt from scratch rather than patched.
-      const stats = computeStats(withCurrent, settings.revision.intervals, now);
-      const recap = summariseWeek(withCurrent, now, stats.currentStreak);
+      const stats = computeStats(mine, settings.revision.intervals, now);
+      const recap = summariseWeek(mine, now, stats.currentStreak);
 
       // One commit, not five. Five separate writes meant four chances for the
       // Contents API's lagging sha cache to produce a conflict that no amount
@@ -88,9 +100,9 @@ export async function syncProblem(
           // Every language this problem has been solved in, not only the last.
           ...solutionFiles(problem).map((file) => ({ path: file.path, content: file.content })),
           { path: notesPath(problem), content: buildProblemReadme(problem) },
-          { path: indexPath, content: buildIndexReadme(withCurrent, now) },
-          { path: 'PROFILE.md', content: buildProfileReadme(withCurrent, stats, now) },
-          { path: 'assets/profile.svg', content: buildProfileSvg(withCurrent, stats, now) },
+          { path: indexPath, content: buildIndexReadme(mine, now) },
+          { path: 'PROFILE.md', content: buildProfileReadme(mine, stats, now) },
+          { path: 'assets/profile.svg', content: buildProfileSvg(mine, stats, now) },
           // Animated here because it is embedded in markdown rather than
           // rasterised, unlike the copy the panel exports.
           { path: 'assets/week.svg', content: buildWrappedSvg(recap, { animate: true }) },

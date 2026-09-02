@@ -42,8 +42,10 @@ Redo makes network requests to exactly these places:
    GeeksforGeeks, CSES) — to read the problem's own details and your own submission's source. These
    are the same requests the page itself makes, and they carry only your existing session with
    that site.
-2. **api.github.com** — only if you turn GitHub sync on, and only to the repository you name.
-   It receives your solution, your notes, and the problem metadata listed above.
+2. **api.github.com** — only if you turn GitHub sync on, and only to the repository you name, or
+   to the repositories you name if you give some judges their own. It receives your solution, your
+   notes, and the problem metadata listed above. A repository only ever receives the problems that
+   belong in it.
 3. **Your Parikshaa project's API** — only if you turn Parikshaa sync on. It receives your
    solution and a record that you solved the problem, written to your own account.
 4. **Contest listings** — `codeforces.com`, `leetcode.com`, `codechef.com` and `atcoder.jp`
