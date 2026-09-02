@@ -1777,6 +1777,11 @@ export function App() {
               ['timer', 'Solve clock', 'How long this attempt has taken so far.'],
               ['listings', 'Marks on listing pages', 'Rating and a tick beside every problem link.'],
               ['profile', 'Card on your profile', "Streaks and today's picks, on your own Codeforces profile."],
+              [
+                'daily',
+                'Problem of the day on the problemset',
+                'Two rows pinned above the list — a global one and one at your level — and your streak calendar in the sidebar. Only on /problemset, where you are already choosing what to solve.',
+              ],
               ['hovercards', 'Preview on hover', 'Rank and rating when you hover any handle.'],
               ['friends', "Friends' submissions", 'Which of your saved handles solved the problem you are on.'],
               ['standings', 'Your place in the standings', 'College and country rank, from the page itself.'],

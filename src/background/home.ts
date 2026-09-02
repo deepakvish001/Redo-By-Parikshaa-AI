@@ -3,6 +3,7 @@ import {
   calendar,
   chooseDaily,
   dailyStreak,
+  pickGlobal,
   dayKey as utcDay,
   problemUrl,
   type DailyPick,
@@ -80,6 +81,7 @@ export async function buildHome(now = Date.now()): Promise<HomeData> {
 
   const { solved, problemset, candidates, band, handle } = state;
   const daily = chooseDaily(candidates, band, solved, today, handle.toLowerCase());
+  const global = pickGlobal(candidates, today);
 
   // The pick is recorded the first time it is seen, which is what makes a past
   // day's streak answerable at all — the exclusion set moves as you solve.
@@ -127,6 +129,8 @@ export async function buildHome(now = Date.now()): Promise<HomeData> {
     reason: daily.main
       ? undefined
       : 'Everything within six hundred points of your level is solved. Nothing left to offer — which is a good problem to have.',
+    global,
+    globalSolved: global ? solved.has(global.key) : false,
     streak: dailyStreak(log, solved, today),
     calendar: calendar(log, solved, today),
     backlog,

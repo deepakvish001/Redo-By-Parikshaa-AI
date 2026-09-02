@@ -202,6 +202,12 @@ export interface HomeData {
   daily?: DailySet;
   /** Set when today's pick has been solved, skipped or is still open. */
   dailyState: 'done' | 'skipped' | 'open' | 'unavailable';
+  /**
+   * The same problem for everybody, derived from the date rather than handed
+   * out by a server — because there is no server.
+   */
+  global?: DailyPick;
+  globalSolved?: boolean;
   streak: Streak;
   /** Days solved in a row overall, which Redo has always tracked. */
   solveStreak: number;

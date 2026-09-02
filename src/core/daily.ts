@@ -191,6 +191,32 @@ export function chooseDaily(
   return { main: medium, easy, medium, hard, band };
 }
 
+/**
+ * One problem a day, the same one for everybody, with no server.
+ *
+ * The reference extension puts a "Global" problem of the day above your
+ * personal one, and the obvious way to do that is a backend that picks one and
+ * hands it out. There is no backend here and there is not going to be one — so
+ * it is derived instead: the day seeds a rotation over the whole problemset,
+ * and every copy of the extension walks to the same entry. Two people comparing
+ * notes see the same problem because the arithmetic is the same, not because a
+ * server told them.
+ *
+ * Unlike the personal pick this ignores what you have solved. That is the
+ * point of a global one — it is the same problem whether or not you have done
+ * it, and the UI says "solved" rather than quietly moving on.
+ */
+export function pickGlobal(candidates: DailyCandidate[], day: string): DailyPick | undefined {
+  // Rated problems only. An unrated one is usually an April Fools' entry or a
+  // gym leftover, and "today's problem" landing on one of those is a bad day
+  // for everybody at once.
+  const rated = candidates.filter((candidate) => candidate.rating > 0);
+  if (rated.length === 0) return undefined;
+
+  const ordered = [...rated].sort((a, b) => a.key.localeCompare(b.key));
+  return toPick(ordered[hashString(`global:${day}`) % ordered.length]!);
+}
+
 /* ---------------------------------------------------------------- streaks */
 
 /** What was picked on a given day, and what became of it. */

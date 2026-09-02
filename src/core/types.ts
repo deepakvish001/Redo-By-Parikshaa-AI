@@ -293,6 +293,14 @@ export interface Settings {
     listings: boolean;
     /** Streak and today's picks on your own Codeforces profile. */
     profile: boolean;
+    /**
+     * Today's problem and the streak calendar on the problemset page.
+     *
+     * Two pinned rows at the top of the list and a box in the sidebar. On the
+     * problemset page only, because that is the page where you are already
+     * choosing what to solve — anywhere else it would be an interruption.
+     */
+    daily: boolean;
     /** A preview card when you hover a Codeforces handle. */
     hovercards: boolean;
     /** Which of your saved handles has solved the problem you are on. */

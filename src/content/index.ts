@@ -5,6 +5,7 @@ import { send, type DiagnosticEntry } from '../core/messages.ts';
 import { formatDueIn } from '../core/srs.ts';
 import type { AttemptEvent, Settings, SolvedProblem } from '../core/types.ts';
 import { MountRunner } from './inject/registry.ts';
+import { codeforcesDaily } from './mounts/cf-daily.ts';
 import { codeforcesListing } from './mounts/cf-listing.ts';
 import { codeforcesHoverCard } from './mounts/cf-hovercard.ts';
 import { codeforcesProfile } from './mounts/cf-profile.ts';
@@ -136,6 +137,7 @@ function main(): void {
   const mounts = new MountRunner([
     codeforcesRail,
     codeforcesListing,
+    codeforcesDaily,
     codeforcesProfile,
     codeforcesStandings,
     codeforcesHoverCard,

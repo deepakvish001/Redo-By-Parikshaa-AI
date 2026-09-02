@@ -73,6 +73,12 @@ Solving is the easy part. Remembering three months later is the part nothing els
   five-week calendar. Too busy? **Keep for later** puts it in a backlog and the day stays open;
   **Skip** is the deliberate version and ends the run. One quiet nudge in the evening, only when a
   run of three or more is genuinely about to be lost.
+- **Today's problem, on the problemset page.** Two rows pinned above the list — a **Global** one
+  and a **For You** one at your own level — in Codeforces' own row markup, with the rating shown
+  and the tags behind a click. Your streak calendar sits in the sidebar beside them. The global
+  pick is derived from the date rather than handed out by a server, so everyone running the
+  extension gets the same problem without there being a backend to get it from. Only on
+  `/problemset`, because that is the page where you are already choosing what to solve.
 - **Puts itself on the Codeforces page.** A card in the sidebar of every problem: the rating
   (shown even with the site's own tags switched off), a **Reveal tags** button for when you give
   up, a clock running since you opened it, your attempts on this problem, your note, and — when it

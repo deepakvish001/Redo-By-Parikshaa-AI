@@ -12,6 +12,7 @@ import {
   pickNear,
   previousDay,
   problemUrl,
+  pickGlobal,
 } from '../src/core/daily.ts';
 
 // Keys must be unique across bands — an earlier version reused them, which
@@ -285,4 +286,54 @@ test('today’s problem is the one at your level, not a fourth pick', () => {
 test('the set reports the band it aimed at, so a pick can be labelled honestly', () => {
   const set = chooseDaily(POOL, 1437, new Set(), '2026-03-01');
   assert.equal(set.band, 1400);
+});
+
+/* ---------------------------------------------------- the global problem */
+
+test('the global problem is the same for everybody on a given day', () => {
+  // No server picks it: the day seeds a rotation over the whole problemset and
+  // every copy of the extension walks to the same entry. Two people comparing
+  // notes agree because the arithmetic agrees, not because they were told.
+  const pool = [
+    { key: '1000A', name: 'A', rating: 800, tags: [] },
+    { key: '1000B', name: 'B', rating: 1200, tags: [] },
+    { key: '1000C', name: 'C', rating: 1600, tags: [] },
+    { key: '1000D', name: 'D', rating: 2000, tags: [] },
+  ];
+
+  const mine = pickGlobal(pool, '2026-09-02');
+  const yours = pickGlobal([...pool].reverse(), '2026-09-02');
+  assert.equal(mine.key, yours.key, 'and not on the order the API happened to return');
+});
+
+test('the global problem changes with the day', () => {
+  const pool = Array.from({ length: 40 }, (_, index) => ({
+    key: `10${String(index).padStart(2, '0')}A`,
+    name: `P${index}`,
+    rating: 1200,
+    tags: [],
+  }));
+
+  const days = new Set(
+    ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04'].map((day) => pickGlobal(pool, day).key),
+  );
+  assert.ok(days.size >= 3, `expected mostly different picks, got ${days.size}`);
+});
+
+test('the global problem ignores what you have solved', () => {
+  // That is the point of a global one — it is the same problem whether or not
+  // you have done it, and the row says "solved" rather than quietly moving on.
+  const pool = [{ key: '1000A', name: 'A', rating: 800, tags: [] }];
+  assert.equal(pickGlobal(pool, '2026-09-02').key, '1000A');
+});
+
+test('unrated problems are never the global pick', () => {
+  // An unrated entry is usually an April Fools' problem or a gym leftover, and
+  // "today's problem" landing on one is a bad day for everybody at once.
+  const pool = [
+    { key: '1000A', name: 'April Fools', rating: 0, tags: [] },
+    { key: '1000B', name: 'Real', rating: 1400, tags: [] },
+  ];
+  assert.equal(pickGlobal(pool, '2026-09-02').key, '1000B');
+  assert.equal(pickGlobal([pool[0]], '2026-09-02'), undefined);
 });

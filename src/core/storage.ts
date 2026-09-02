@@ -61,6 +61,7 @@ export const DEFAULT_SETTINGS: Settings = {
     timer: true,
     listings: true,
     profile: true,
+    daily: true,
     hovercards: true,
     friends: true,
     standings: true,
