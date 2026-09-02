@@ -59,8 +59,7 @@ const SOURCES: Array<{ platform: Platform; fetch: () => Promise<Contest[]> }> = 
     fetch: async () => {
       const response = await fetch('https://atcoder.jp/contests/');
       if (!response.ok) throw new Error(`AtCoder returned ${response.status}`);
-      const document_ = new DOMParser().parseFromString(await response.text(), 'text/html');
-      return parseAtCoder(document_);
+      return parseAtCoder(await response.text());
     },
   },
 ];

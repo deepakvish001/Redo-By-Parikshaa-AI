@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseHTML } from 'linkedom';
 import {
   calendarUrl,
   dueReminders,
@@ -110,8 +109,7 @@ const ATCODER_HTML = `
 </tbody></table></div>`;
 
 test('AtCoder: the upcoming table yields contests with an absolute start time', () => {
-  const { document } = parseHTML(ATCODER_HTML);
-  const contests = parseAtCoder(document);
+  const contests = parseAtCoder(ATCODER_HTML);
 
   assert.equal(contests.length, 1);
   assert.equal(contests[0].id, 'atcoder:abc390');
@@ -123,7 +121,37 @@ test('AtCoder: the upcoming table yields contests with an absolute start time', 
 });
 
 test('AtCoder: a page without the table yields nothing', () => {
-  assert.deepEqual(parseAtCoder(parseHTML('<p>maintenance</p>').document), []);
+  assert.deepEqual(parseAtCoder('<p>maintenance</p>'), []);
+});
+
+test('AtCoder: only the upcoming table counts', () => {
+  // The same page lists finished and running contests in tables of exactly the
+  // same shape, and reading those would fill the radar with contests that are
+  // over.
+  const contests = parseAtCoder(`
+    <div id="contest-table-upcoming"><table><tbody>
+      <tr><td><time class="fixtime">2026-01-17 21:00:00+0900</time></td>
+      <td><a href="/contests/abc390">ABC 390</a></td><td>01:40</td></tr>
+    </tbody></table></div>
+    <div id="contest-table-recent"><table><tbody>
+      <tr><td><time class="fixtime">2025-01-17 21:00:00+0900</time></td>
+      <td><a href="/contests/abc001">ABC 1</a></td><td>01:40</td></tr>
+    </tbody></table></div>`);
+
+  assert.deepEqual(contests.map((contest) => contest.id), ['atcoder:abc390']);
+});
+
+test('AtCoder: the rated-range badge inside the link is not part of the name', () => {
+  const [contest] = parseAtCoder(`
+    <div id="contest-table-upcoming"><table><tbody>
+      <tr><td><time class="fixtime">2026-01-17 21:00:00+0900</time></td>
+      <td><a href="/contests/abc390"><span class="user-blue">\u25c9</span> ABC 390</a></td>
+      <td class="text-center">01:40</td></tr>
+    </tbody></table></div>`);
+
+  assert.equal(contest.name, '\u25c9 ABC 390', 'the badge is unwrapped, and its markup is gone');
+  assert.doesNotMatch(contest.name, /</, 'no tags survive into the name');
+  assert.equal(contest.durationMs, 100 * 60_000, 'the start time is not read as the duration');
 });
 
 /* ---------------------------------------------------------------- shared */
