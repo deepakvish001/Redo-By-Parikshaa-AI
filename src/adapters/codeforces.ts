@@ -1,3 +1,4 @@
+import { isHost } from '../core/hosts.ts';
 import type { AcceptedSubmission, Difficulty } from '../core/types.ts';
 import { parseHtml, type AdapterContext, type PlatformAdapter } from './types.ts';
 
@@ -154,7 +155,7 @@ export class CodeforcesAdapter implements PlatformAdapter {
   private announced = false;
 
   matches(url: URL): boolean {
-    return url.hostname.endsWith('codeforces.com');
+    return isHost(url.hostname, 'codeforces.com');
   }
 
   currentSlug(url: URL): string | null {

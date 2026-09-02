@@ -1,3 +1,4 @@
+import { isHost } from '../../core/hosts.ts';
 import { heatmapGrid } from '../../core/insights.ts';
 import { send } from '../../core/messages.ts';
 import { h } from '../inject/dom.ts';
@@ -193,7 +194,7 @@ async function render(context: MountContext): Promise<void> {
 export const codeforcesProfile: Mount = {
   id: 'cf-profile',
   matches: (url) =>
-    url.hostname.endsWith('codeforces.com') && isOwnProfile(url.pathname, signedInHandle()),
+    isHost(url.hostname, 'codeforces.com') && isOwnProfile(url.pathname, signedInHandle()),
   enabled: (settings) => settings.page.profile,
   anchor: () => {
     const sidebar = document.querySelector('#sidebar');

@@ -1,3 +1,4 @@
+import { isHost } from '../../core/hosts.ts';
 import type { Mount, MountContext } from '../inject/registry.ts';
 
 /**
@@ -135,7 +136,7 @@ function render(context: MountContext): void {
 
 export const codeforcesSkin: Mount = {
   id: 'cf-skin',
-  matches: (url) => url.hostname.endsWith('codeforces.com'),
+  matches: (url) => isHost(url.hostname, 'codeforces.com'),
   enabled: (settings) => settings.page.skin,
   anchor: () => (document.body ? { parent: document.body, position: 'beforeend' } : null),
   render,

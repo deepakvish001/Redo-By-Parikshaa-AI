@@ -1,3 +1,4 @@
+import { isHost } from '../core/hosts.ts';
 import type { AcceptedSubmission, Difficulty } from '../core/types.ts';
 import { firstString, onExchange, parseJson, pick } from './exchange.ts';
 import type { AdapterContext, PlatformAdapter } from './types.ts';
@@ -105,7 +106,7 @@ export class GeeksforGeeksAdapter implements PlatformAdapter {
 
   matches(url: URL): boolean {
     return (
-      url.hostname.endsWith('geeksforgeeks.org') && PROBLEM_HREF.test(url.pathname)
+      isHost(url.hostname, 'geeksforgeeks.org') && PROBLEM_HREF.test(url.pathname)
     );
   }
 

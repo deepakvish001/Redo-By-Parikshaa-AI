@@ -1,3 +1,4 @@
+import { isHost } from '../core/hosts.ts';
 import type { AcceptedSubmission } from '../core/types.ts';
 import { firstString, onExchange, parseJson, pick } from './exchange.ts';
 import type { AdapterContext, PlatformAdapter } from './types.ts';
@@ -83,7 +84,7 @@ export class CodeChefAdapter implements PlatformAdapter {
   private lastSubmitted: { code?: string; language?: string; problemCode?: string } = {};
 
   matches(url: URL): boolean {
-    return url.hostname.endsWith('codechef.com');
+    return isHost(url.hostname, 'codechef.com');
   }
 
   currentSlug(url: URL): string | null {

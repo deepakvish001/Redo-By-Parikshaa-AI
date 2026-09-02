@@ -1,3 +1,4 @@
+import { isHost } from '../core/hosts.ts';
 import type { AcceptedSubmission } from '../core/types.ts';
 import { firstString, onExchange, parseJson, pick } from './exchange.ts';
 import type { AdapterContext, PlatformAdapter } from './types.ts';
@@ -101,7 +102,7 @@ export class HackerRankAdapter implements PlatformAdapter {
   private readonly submitted = new Map<string, { code?: string; language?: string }>();
 
   matches(url: URL): boolean {
-    return url.hostname.endsWith('hackerrank.com');
+    return isHost(url.hostname, 'hackerrank.com');
   }
 
   currentSlug(url: URL): string | null {

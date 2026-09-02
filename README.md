@@ -113,6 +113,11 @@ Solving is the easy part. Remembering three months later is the part nothing els
   pick is derived from the date rather than handed out by a server, so everyone running the
   extension gets the same problem without there being a backend to get it from. Only on
   `/problemset`, because that is the page where you are already choosing what to solve.
+- **And on the LeetCode page.** The same card, in the corner of a LeetCode problem: the
+  difficulty, tags behind a press, what the problem cost you, your note, a solve clock, and — when
+  it is due — the revision prompt with the hint ladder and the recall check. Redo has always
+  *watched* LeetCode and never had anything to say on it. The blocks are shared with the
+  Codeforces rail rather than copied, so the two cannot drift into two different products.
 - **Puts itself on the Codeforces page.** A card in the sidebar of every problem: the rating
   (shown even with the site's own tags switched off), a **Reveal tags** button for when you give
   up, a clock running since you opened it, your attempts on this problem, your note, and — when it

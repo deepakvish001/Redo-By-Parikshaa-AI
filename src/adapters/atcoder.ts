@@ -1,3 +1,4 @@
+import { isHost } from '../core/hosts.ts';
 import type { AcceptedSubmission } from '../core/types.ts';
 import { parseHtml, type AdapterContext, type PlatformAdapter } from './types.ts';
 
@@ -82,7 +83,7 @@ export class AtCoderAdapter implements PlatformAdapter {
   private announced = false;
 
   matches(url: URL): boolean {
-    return url.hostname === 'atcoder.jp' || url.hostname.endsWith('.atcoder.jp');
+    return isHost(url.hostname, 'atcoder.jp');
   }
 
   currentSlug(url: URL): string | null {

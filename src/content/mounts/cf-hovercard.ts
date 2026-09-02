@@ -1,3 +1,4 @@
+import { isHost } from '../../core/hosts.ts';
 import type { CfHandleCard } from '../../background/cf-mirror.ts';
 import { send } from '../../core/messages.ts';
 import { h } from '../inject/dom.ts';
@@ -145,7 +146,7 @@ function render(context: MountContext): void {
 
 export const codeforcesHoverCard: Mount = {
   id: 'cf-hovercard',
-  matches: (url) => url.hostname.endsWith('codeforces.com'),
+  matches: (url) => isHost(url.hostname, 'codeforces.com'),
   enabled: (settings) => settings.page.hovercards,
   anchor: () => (document.body ? { parent: document.body, position: 'beforeend' } : null),
   render,

@@ -7,6 +7,7 @@ import type { AttemptEvent, Settings, SolvedProblem } from '../core/types.ts';
 import { MountRunner } from './inject/registry.ts';
 import { codeforcesDaily } from './mounts/cf-daily.ts';
 import { codeforcesListing } from './mounts/cf-listing.ts';
+import { leetcodeRail } from './mounts/lc-rail.ts';
 import { codeforcesHoverCard } from './mounts/cf-hovercard.ts';
 import { codeforcesProfile } from './mounts/cf-profile.ts';
 import { codeforcesRail } from './mounts/cf-rail.ts';
@@ -138,6 +139,7 @@ function main(): void {
     codeforcesRail,
     codeforcesListing,
     codeforcesDaily,
+    leetcodeRail,
     codeforcesProfile,
     codeforcesStandings,
     codeforcesHoverCard,

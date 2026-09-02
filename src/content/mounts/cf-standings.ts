@@ -1,3 +1,4 @@
+import { isHost } from '../../core/hosts.ts';
 import { send } from '../../core/messages.ts';
 import { button, h } from '../inject/dom.ts';
 import type { Mount, MountContext } from '../inject/registry.ts';
@@ -168,7 +169,7 @@ async function render(context: MountContext): Promise<void> {
 
 export const codeforcesStandings: Mount = {
   id: 'cf-standings',
-  matches: (url) => url.hostname.endsWith('codeforces.com') && isStandings(url.pathname),
+  matches: (url) => isHost(url.hostname, 'codeforces.com') && isStandings(url.pathname),
   enabled: (settings) => settings.page.standings,
   anchor: () => {
     const sidebar = document.querySelector('#sidebar');

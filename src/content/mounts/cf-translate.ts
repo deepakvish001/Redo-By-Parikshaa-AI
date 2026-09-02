@@ -1,3 +1,4 @@
+import { isHost } from '../../core/hosts.ts';
 import { parseProblem } from '../../core/cf-url.ts';
 import { send } from '../../core/messages.ts';
 import { FROZEN, freeze, labelFor, thaw } from '../../core/translate.ts';
@@ -150,7 +151,7 @@ function render(context: MountContext): void {
 export const codeforcesTranslate: Mount = {
   id: 'cf-translate',
   matches: (url) =>
-    url.hostname.endsWith('codeforces.com') && parseProblem(url.pathname) !== null,
+    isHost(url.hostname, 'codeforces.com') && parseProblem(url.pathname) !== null,
   // Both switches: the feature, and a key to use it with. Without a key the
   // button would only ever produce an error, and a button that cannot work is
   // worse than no button.

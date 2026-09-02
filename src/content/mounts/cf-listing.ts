@@ -1,3 +1,4 @@
+import { isHost } from '../../core/hosts.ts';
 import { send } from '../../core/messages.ts';
 import type { Mount, MountContext } from '../inject/registry.ts';
 import { ratingColour } from './cf-rail.ts';
@@ -111,7 +112,7 @@ async function render(context: MountContext): Promise<void> {
 export const codeforcesListing: Mount = {
   id: 'cf-listing',
   matches: (url) =>
-    url.hostname.endsWith('codeforces.com') &&
+    isHost(url.hostname, 'codeforces.com') &&
     /\/(problemset|contests?|gym|group|submissions|profile)/.test(url.pathname),
   enabled: (settings) => settings.page.listings,
   // No card of its own: it attaches to `body` purely so the runner has

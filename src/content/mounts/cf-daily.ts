@@ -1,3 +1,4 @@
+import { isHost } from '../../core/hosts.ts';
 import { send, type HomeData } from '../../core/messages.ts';
 import type { DailyPick } from '../../core/daily.ts';
 import { button, h } from '../inject/dom.ts';
@@ -364,7 +365,7 @@ export const codeforcesDaily: Mount = {
   // The problemset listing only. This is the page where you are already
   // choosing what to solve; anywhere else it would be an interruption.
   matches: (url) =>
-    url.hostname.endsWith('codeforces.com') && /^\/problemset(\/page\/\d+)?\/?$/.test(url.pathname),
+    isHost(url.hostname, 'codeforces.com') && /^\/problemset(\/page\/\d+)?\/?$/.test(url.pathname),
   enabled: (settings) => settings.page.daily,
   anchor: () => {
     const parent = sidebar();

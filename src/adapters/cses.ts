@@ -1,3 +1,4 @@
+import { isHost } from '../core/hosts.ts';
 import type { AcceptedSubmission } from '../core/types.ts';
 import type { AdapterContext, PlatformAdapter } from './types.ts';
 
@@ -144,7 +145,7 @@ export class CsesAdapter implements PlatformAdapter {
   private announced = false;
 
   matches(url: URL): boolean {
-    return url.hostname === 'cses.fi' || url.hostname.endsWith('.cses.fi');
+    return isHost(url.hostname, 'cses.fi');
   }
 
   currentSlug(url: URL): string | null {
