@@ -45,6 +45,15 @@ import type { LeetCodeProfile } from '../background/rating.ts';
 import { problemUrl } from '../core/daily.ts';
 import { collectNotes, excerpt, noteMatches, type Note } from '../core/notes.ts';
 import {
+  describeProgress,
+  isStale,
+  progress as sessionProgress,
+  startSession,
+  markDone,
+  SESSION_CAP,
+  type Session,
+} from '../core/session.ts';
+import {
   collapse as collapseDiff,
   describe as describeResolve,
   diffLines,
@@ -399,6 +408,39 @@ function ResolveDiff({ problem }: { problem: SolvedProblem }) {
       )}
     </div>
   );
+}
+
+const SESSION_KEY = 'revisionSession';
+
+/**
+ * The Due list, one problem at a time.
+ *
+ * Stored rather than held in state: the side panel closes every time somebody
+ * clicks on the page behind it, and a session that forgot where it was each
+ * time would be worse than no session.
+ */
+function useSession() {
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => {
+    void chrome.storage.local
+      .get(SESSION_KEY)
+      .then((stored) => {
+        const found = stored[SESSION_KEY] as Session | undefined;
+        // Yesterday's half-finished session is not today's work.
+        setSession(found && !isStale(found, Date.now()) ? found : null);
+      })
+      .catch(() => setSession(null));
+  }, []);
+
+  const write = useCallback((next: Session | null) => {
+    setSession(next);
+    void (next
+      ? chrome.storage.local.set({ [SESSION_KEY]: next })
+      : chrome.storage.local.remove(SESSION_KEY));
+  }, []);
+
+  return { session, write };
 }
 
 function ProblemCard({
@@ -2460,12 +2502,24 @@ export function App() {
       .catch(() => setContests({ contests: [], fetchedAt: 0, failed: [], now: Date.now() }));
   }, [tab, contests]);
 
+  const { session, write: setSession } = useSession();
+
   const handleReview = useCallback(
     async (id: string, recall: Recall) => {
       await send({ type: 'problem:review', id, recall });
       await load();
     },
     [load],
+  );
+
+  /** Rating from inside a session marks it off and moves to the next. */
+  const handleSessionReview = useCallback(
+    async (id: string, recall: Recall) => {
+      await send({ type: 'problem:review', id, recall });
+      setSession(session ? markDone(session, id) : null);
+      await load();
+    },
+    [load, session, setSession],
   );
 
   const handleResync = useCallback(
@@ -2588,6 +2642,15 @@ export function App() {
   const due = useMemo(
     () => (data ? dueProblems(data.problems, data.now) : []),
     [data],
+  );
+
+  const byId = useMemo(
+    () => new Map((data?.problems ?? []).map((problem) => [problem.id, problem])),
+    [data],
+  );
+  const run = useMemo(
+    () => (session && data ? sessionProgress(session, byId, data.now) : undefined),
+    [session, byId, data],
   );
   /** Due yesterday or earlier — the ones actually slipping, not today's queue. */
   const overdueCount = useMemo(
@@ -2727,8 +2790,71 @@ export function App() {
                     Re-solve each one on the site first, then rate how it went — the rating decides
                     when you see it again.
                   </p>
+                  {!session && (
+                    <button
+                      type="button"
+                      className="primary sessionstart"
+                      onClick={() => setSession(startSession(due, data.now))}
+                    >
+                      Start a session
+                      {due.length > SESSION_CAP ? ` — ${SESSION_CAP} of ${due.length}` : ''}
+                    </button>
+                  )}
                 </div>
-                {due.map((problem) => (
+
+                {session && run && (
+                  <div className="session">
+                    <div className="session__head">
+                      <span className="session__count">{describeProgress(run)}</span>
+                      <div className="session__bar" aria-hidden="true">
+                        <span style={{ width: `${(run.done / Math.max(1, run.total)) * 100}%` }} />
+                      </div>
+                      <button type="button" className="ghost" onClick={() => setSession(null)}>
+                        {run.current ? 'End' : 'Done'}
+                      </button>
+                    </div>
+
+                    {run.current ? (
+                      <>
+                        <ProblemCard
+                          key={run.current.id}
+                          problem={run.current}
+                          now={data.now}
+                          onReview={(id, recall) => void handleSessionReview(id, recall)}
+                          onResync={(id) => void handleResync(id)}
+                          onResyncParikshaa={(id) => void handleResyncParikshaa(id)}
+                          onDelete={(id) => void handleDelete(id)}
+                          onSaveDetails={handleSaveDetails}
+                          onSaveLabels={(id, next) => void handleSaveLabels(id, next)}
+                          labelSuggestions={suggestionsFor(run.current.labels, labels)}
+                          showRecall
+                          defaultOpen
+                        />
+                        {/* Not a rating. Some days a problem is not going to
+                            happen, and forcing a "forgot" onto it would put a
+                            lie into the schedule. */}
+                        <button
+                          type="button"
+                          className="ghost session__skip"
+                          onClick={() => setSession(markDone(session, run.current!.id))}
+                        >
+                          Not this one — next
+                        </button>
+                      </>
+                    ) : (
+                      <div className="session__done">
+                        <strong>Session finished.</strong>
+                        <span>
+                          {due.length > 0
+                            ? `${due.length} still due — start another when you are ready.`
+                            : 'Nothing left due today.'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!session && due.map((problem) => (
                   <ProblemCard
                     key={problem.id}
                     problem={problem}

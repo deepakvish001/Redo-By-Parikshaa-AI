@@ -47,6 +47,12 @@ Solving is the easy part. Remembering three months later is the part nothing els
 - **Publishes an animated coding profile.** `PROFILE.md` and `assets/profile.svg` are rebuilt
   on every sync: totals, streak, difficulty and platform breakdowns, topic mastery, the
   problems you fought hardest for, and the revision queue.
+- **Revision as a session, not a list.** Nineteen problems due is a decision to make nineteen
+  times before any work happens. **Start a session** makes it one decision and then hands you one
+  problem at a time, with a bar that fills. The set is fixed when it starts, so rating something
+  cannot reshuffle a list you are halfway through, and a problem rated anywhere else — the judge's
+  page, another machine — counts as done. **Not this one** moves past a problem without rating it,
+  because forcing a "forgot" onto a day you did not have would put a lie into the schedule.
 - **This time against last time.** Re-solve something you first solved in December and the card
   shows what changed — lines in and out, whether you wrote it again from scratch or edited it,
   how much quicker it went, and the diff itself. It never claims your complexity improved: it

@@ -2916,3 +2916,65 @@ details.field > summary {
 .rediff__removed { color: var(--danger, hsl(0 72% 55%)); }
 .rediff__same { color: var(--text-muted); }
 .rediff__gap { color: var(--text-faint); font-style: italic; }
+
+/* -------------------------------------------------------- revision session */
+
+.sessionstart {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.session {
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.session__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.session__count {
+  flex: none;
+  font-weight: 750;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A bar rather than only "3 of 8": the point of a session is that it ends, and
+   a shape that visibly fills says that better than a fraction does. */
+.session__bar {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.2));
+  overflow: hidden;
+}
+
+.session__bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 220ms ease;
+}
+
+.session__skip {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.session__done {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 4px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
