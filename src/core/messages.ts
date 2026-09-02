@@ -21,6 +21,7 @@ import type { SyncState } from '../background/backup.ts';
 import type { PollResult, StartResult } from '../background/device-flow.ts';
 import type { RepoChoice } from './github.ts';
 import type { CfConnection } from './cf-auth.ts';
+import type { ReviewMode } from './recall-mode.ts';
 import type { Material, Similar } from './cf-materials.ts';
 import type {
   AcceptedSubmission,
@@ -51,7 +52,7 @@ export type Request =
   | { type: 'submission:accepted'; submission: AcceptedSubmission }
   | { type: 'page:context'; platform: string; slug: string }
   | { type: 'dashboard:get' }
-  | { type: 'problem:review'; id: string; recall: Recall }
+  | { type: 'problem:review'; id: string; recall: Recall; mode?: ReviewMode }
   | {
       type: 'problem:details';
       id: string;

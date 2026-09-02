@@ -52,6 +52,15 @@ Solving is the easy part. Remembering three months later is the part nothing els
   problems sharing a tag and a rating band with this one, ranked by shared tags first. On a
   problem you have not solved the editorial stays behind a press: a link marked *Editorial* in the
   corner of a problem you are still thinking about is not an offer, it is a temptation.
+- **Thirty seconds instead of thirty minutes.** A revision has always meant re-solving the
+  problem, and nineteen due is ten hours — so the queue grows, the schedule stops meaning
+  anything, and the feature the whole extension is built on quietly goes unused. Beside the
+  re-solve there is now a **recall check**: write the approach from memory, then look at your own
+  note and your own solution and rate what you find. It says on the card that it is worth less,
+  and it is — a recall can carry a problem up to a three-week interval and no further, because
+  holding "sort it, then two pointers" is not evidence you could write the loop today. Finding
+  out you have *forgotten* something is never capped: that is exactly as good evidence however
+  you found out.
 - **Revision as a session, not a list.** Nineteen problems due is a decision to make nineteen
   times before any work happens. **Start a session** makes it one decision and then hands you one
   problem at a time, with a bar that fills. The set is fixed when it starts, so rating something

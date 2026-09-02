@@ -2978,3 +2978,75 @@ details.field > summary {
   font-size: 12.5px;
   color: var(--text-muted);
 }
+
+/* --------------------------------------------------------- the recall check */
+
+.recall__open {
+  width: 100%;
+  margin-top: 6px;
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.recall__open:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.recall {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.recall__q {
+  margin-bottom: 7px;
+  font-weight: 700;
+  font-size: 12.5px;
+}
+
+.recall__input {
+  width: 100%;
+  resize: vertical;
+}
+
+/* Read-only once the answer is out: answering before looking is the whole
+   mechanism, so there must be nothing to quietly improve afterwards. */
+.recall__input[readonly] {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.recall__label {
+  margin: 10px 0 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.recall__note {
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.recall__note.faint {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.recall__code {
+  max-height: 240px;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2, rgba(127, 127, 127, 0.08));
+  font-size: 11.5px;
+  line-height: 1.45;
+}

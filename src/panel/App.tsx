@@ -45,6 +45,12 @@ import type { LeetCodeProfile } from '../background/rating.ts';
 import { problemUrl } from '../core/daily.ts';
 import { collectNotes, excerpt, noteMatches, type Note } from '../core/notes.ts';
 import {
+  RECALL_PROMPT,
+  describeMode,
+  needsFullResolve,
+  type ReviewMode,
+} from '../core/recall-mode.ts';
+import {
   describeProgress,
   isStale,
   progress as sessionProgress,
@@ -410,6 +416,121 @@ function ResolveDiff({ problem }: { problem: SolvedProblem }) {
   );
 }
 
+/**
+ * The two ways to revise, side by side.
+ *
+ * Re-solving is the honest review and it costs half an hour. Nineteen due is
+ * ten hours, so the queue grows, the schedule stops meaning anything, and the
+ * feature the whole extension is built around goes unused — which is a worse
+ * outcome than a weaker review that actually happens.
+ *
+ * So the quick check is offered next to it: write the approach from memory,
+ * then look at your own note and your own solution and rate what you find.
+ * Thirty seconds. It says on the buttons that it is worth less, and it is.
+ */
+function RecallCheck({
+  problem,
+  onReview,
+}: {
+  problem: SolvedProblem;
+  onReview: (recall: Recall, mode: ReviewMode) => void;
+}) {
+  const [stage, setStage] = useState<'closed' | 'asking' | 'revealed'>('closed');
+  const [guess, setGuess] = useState('');
+  const [showCode, setShowCode] = useState(false);
+
+  const held = needsFullResolve(problem.revision);
+
+  if (stage === 'closed') {
+    return (
+      <>
+        <div className="card__ratings">
+          {RECALLS.map(({ recall, label, primary }) => (
+            <button
+              key={recall}
+              type="button"
+              className={primary ? 'primary' : undefined}
+              onClick={() => onReview(recall, 'resolve')}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <button type="button" className="recall__open" onClick={() => setStage('asking')}>
+          No time to re-solve? 30-second recall check
+        </button>
+      </>
+    );
+  }
+
+  return (
+    <div className="recall">
+      <div className="recall__q">{RECALL_PROMPT}</div>
+
+      <textarea
+        className="recall__input"
+        rows={2}
+        value={guess}
+        placeholder="sort, then two pointers from both ends…"
+        autoFocus
+        onChange={(event) => setGuess(event.target.value)}
+        // Answering before looking is the entire mechanism. Once it is
+        // revealed the box is read-only, so there is nothing to quietly
+        // improve after seeing the answer.
+        readOnly={stage === 'revealed'}
+      />
+
+      {stage === 'asking' ? (
+        <div className="card__ratings">
+          <button type="button" className="primary" onClick={() => setStage('revealed')}>
+            Show me
+          </button>
+          <button type="button" onClick={() => setStage('closed')}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="recall__label">YOUR NOTE</div>
+          <div className="recall__note">
+            {problem.note?.trim() || <em>You did not write one. Worth adding after this.</em>}
+          </div>
+
+          {problem.complexity?.time && (
+            <div className="recall__note faint">
+              {problem.complexity.time}
+              {problem.complexity.space ? ` time, ${problem.complexity.space} space` : ' time'}
+            </div>
+          )}
+
+          {showCode ? (
+            <pre className="recall__code">{problem.code}</pre>
+          ) : (
+            <button type="button" className="recall__open" onClick={() => setShowCode(true)}>
+              Show my solution
+            </button>
+          )}
+
+          <div className="recall__label">HOW CLOSE WERE YOU?</div>
+          <div className="card__ratings">
+            {RECALLS.map(({ recall, label, primary }) => (
+              <button
+                key={recall}
+                type="button"
+                className={primary ? 'primary' : undefined}
+                onClick={() => onReview(recall, 'recall')}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="card__hint">{describeMode('recall', held)}</div>
+        </>
+      )}
+    </div>
+  );
+}
+
 const SESSION_KEY = 'revisionSession';
 
 /**
@@ -459,7 +580,7 @@ function ProblemCard({
 }: {
   problem: SolvedProblem;
   now: number;
-  onReview: (id: string, recall: Recall) => void;
+  onReview: (id: string, recall: Recall, mode: ReviewMode) => void;
   onResync: (id: string) => void;
   onResyncParikshaa: (id: string) => void;
   onDelete: (id: string) => void;
@@ -646,18 +767,10 @@ function ProblemCard({
         )}
 
       {showRecall && (
-        <div className="card__ratings">
-          {RECALLS.map(({ recall, label, primary }) => (
-            <button
-              key={recall}
-              type="button"
-              className={primary ? 'primary' : undefined}
-              onClick={() => onReview(problem.id, recall)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <RecallCheck
+          problem={problem}
+          onReview={(recall, mode) => onReview(problem.id, recall, mode)}
+        />
       )}
 
       <div className="card__actions">
@@ -2505,8 +2618,8 @@ export function App() {
   const { session, write: setSession } = useSession();
 
   const handleReview = useCallback(
-    async (id: string, recall: Recall) => {
-      await send({ type: 'problem:review', id, recall });
+    async (id: string, recall: Recall, mode: ReviewMode = 'resolve') => {
+      await send({ type: 'problem:review', id, recall, mode });
       await load();
     },
     [load],
@@ -2514,8 +2627,8 @@ export function App() {
 
   /** Rating from inside a session marks it off and moves to the next. */
   const handleSessionReview = useCallback(
-    async (id: string, recall: Recall) => {
-      await send({ type: 'problem:review', id, recall });
+    async (id: string, recall: Recall, mode: ReviewMode = 'resolve') => {
+      await send({ type: 'problem:review', id, recall, mode });
       setSession(session ? markDone(session, id) : null);
       await load();
     },
@@ -2820,7 +2933,7 @@ export function App() {
                           key={run.current.id}
                           problem={run.current}
                           now={data.now}
-                          onReview={(id, recall) => void handleSessionReview(id, recall)}
+                          onReview={(id, recall, mode) => void handleSessionReview(id, recall, mode)}
                           onResync={(id) => void handleResync(id)}
                           onResyncParikshaa={(id) => void handleResyncParikshaa(id)}
                           onDelete={(id) => void handleDelete(id)}
@@ -2859,7 +2972,7 @@ export function App() {
                     key={problem.id}
                     problem={problem}
                     now={data.now}
-                    onReview={(id, recall) => void handleReview(id, recall)}
+                    onReview={(id, recall, mode) => void handleReview(id, recall, mode)}
                     onResync={(id) => void handleResync(id)}
                     onResyncParikshaa={(id) => void handleResyncParikshaa(id)}
                     onDelete={(id) => void handleDelete(id)}
@@ -3007,7 +3120,7 @@ export function App() {
                           key={problem.id}
                           problem={problem}
                           now={data.now}
-                          onReview={(id, recall) => void handleReview(id, recall)}
+                          onReview={(id, recall, mode) => void handleReview(id, recall, mode)}
                           onResync={(id) => void handleResync(id)}
                           onResyncParikshaa={(id) => void handleResyncParikshaa(id)}
                           onDelete={(id) => void handleDelete(id)}

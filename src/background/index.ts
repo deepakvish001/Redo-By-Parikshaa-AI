@@ -29,7 +29,7 @@ import {
   saveUpsolve,
   updateProblem,
 } from '../core/storage.ts';
-import { applyRecall, dueProblems, initialRevision, isDue } from '../core/srs.ts';
+import { dueProblems, initialRevision, isDue } from '../core/srs.ts';
 import type {
   AcceptedSubmission,
   ActivityEvent,
@@ -60,6 +60,7 @@ import { pushToEditor, testBridge } from './bridge.ts';
 import { pollDeviceFlow, startDeviceFlow } from './device-flow.ts';
 import { connectCodeforces } from './cf-connect.ts';
 import { editorialFor, similarTo } from './cf-next.ts';
+import { applyReview, type ReviewMode } from '../core/recall-mode.ts';
 import type { Material, Similar } from '../core/cf-materials.ts';
 import { codeforcesProfile, fetchUpsolve, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
@@ -308,6 +309,7 @@ async function recordSubmission(
 async function reviewProblem(
   id: string,
   recall: Recall,
+  mode: ReviewMode = 'resolve',
 ): Promise<ResponseMap['problem:review']> {
   const settings = await getSettings();
   const now = Date.now();
@@ -316,8 +318,12 @@ async function reviewProblem(
   // the schedule, which is the thing worth having in two places at all.
   syncSoon();
 
+  let held = false;
   const problem = await updateProblem(id, (current) => {
-    const revision = applyRecall(current.revision, recall, settings.revision.intervals, now);
+    const outcome = applyReview(current.revision, recall, mode, settings.revision.intervals, now);
+    const revision = outcome.revision;
+    held = outcome.held;
+
     return {
       ...current,
       revision,
@@ -325,7 +331,11 @@ async function reviewProblem(
         at: now,
         kind: 'review',
         outcome: recall,
-        reason: `stage ${current.revision.stage + 1} → ${revision.stage + 1}, next in ${Math.round(
+        // The mode is on the record, so a schedule that moved slowly can be
+        // explained months later rather than looking like a bug.
+        reason: `${mode === 'recall' ? 'recall' : 're-solve'} · stage ${
+          current.revision.stage + 1
+        } → ${revision.stage + 1}${held ? ' (held — recall only)' : ''}, next in ${Math.round(
           (revision.dueAt - now) / 86_400_000,
         )}d`,
       }),
@@ -421,7 +431,7 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
     }
 
     case 'problem:review':
-      return reviewProblem(request.id, request.recall);
+      return reviewProblem(request.id, request.recall, request.mode);
 
     case 'problem:details': {
       const problem = await updateProblem(request.id, (current) => ({
