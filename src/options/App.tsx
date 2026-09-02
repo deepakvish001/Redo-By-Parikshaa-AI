@@ -22,6 +22,8 @@ import { GITHUB_CLIENT_ID } from '../core/brand.ts';
 import { GITHUB_ORIGIN, formatUserCode, type DeviceCode } from '../core/device-flow.ts';
 import { LANGUAGES } from '../core/translate.ts';
 import { PLATFORMS, PLATFORM_LABELS, type Platform, type Settings } from '../core/types.ts';
+import type { CfConnection } from '../core/cf-auth.ts';
+import type { RepoChoice } from '../core/github.ts';
 import { downloadBlob } from '../panel/share.ts';
 
 type Status = { tone: 'ok' | 'error'; message: string } | null;
@@ -157,7 +159,15 @@ function WorkspaceDrafts() {
  * kill a fifteen-minute loop there anyway, and this page is open — the user is
  * looking at it.
  */
-function DeviceSignIn({ onToken }: { onToken: (token: string) => void }) {
+function DeviceSignIn({
+  clientId,
+  includePrivate,
+  onToken,
+}: {
+  clientId: string;
+  includePrivate: boolean;
+  onToken: (token: string) => void;
+}) {
   const [code, setCode] = useState<DeviceCode | null>(null);
   const [status, setStatus] = useState<Status>(null);
   const [busy, setBusy] = useState(false);
@@ -188,7 +198,11 @@ function DeviceSignIn({ onToken }: { onToken: (token: string) => void }) {
     const tick = async () => {
       if (cancelled) return;
       try {
-        const result = await send({ type: 'github:device-poll', deviceCode: code.deviceCode });
+        const result = await send({
+          type: 'github:device-poll',
+          deviceCode: code.deviceCode,
+          clientId,
+        });
         if (cancelled) return;
 
         if (result.token) {
@@ -220,12 +234,12 @@ function DeviceSignIn({ onToken }: { onToken: (token: string) => void }) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [code]);
+  }, [code, clientId]);
 
   // A build with no client id cannot do this at all, and a button that can only
   // ever fail is worse than no button. The id is a build constant, so this is
   // answered here rather than by asking the service worker.
-  if (!GITHUB_CLIENT_ID.trim()) return null;
+  if (!clientId.trim() && !GITHUB_CLIENT_ID.trim()) return null;
 
   return (
     <div className="field">
@@ -275,7 +289,11 @@ function DeviceSignIn({ onToken }: { onToken: (token: string) => void }) {
                 return;
               }
 
-              const result = await send({ type: 'github:device-start', includePrivate: false });
+              const result = await send({
+                type: 'github:device-start',
+                includePrivate,
+                clientId,
+              });
               if (result.code) setCode(result.code);
               else setStatus({ tone: 'error', message: result.error ?? 'GitHub sent no code.' });
             } finally {
@@ -292,9 +310,280 @@ function DeviceSignIn({ onToken }: { onToken: (token: string) => void }) {
 
       <span className="field__hint">
         Signing in is quicker; a token is <strong>safer</strong>. A signed-in token can read and
-        write every repository you have access to, and a fine-grained token can be limited to the
-        one you sync to, with <code>Contents</code> and nothing else.
+        write {includePrivate ? 'every repository you have access to' : 'your public repositories'},
+        and a fine-grained token can be limited to the one you sync to, with <code>Contents</code>{' '}
+        and nothing else.
       </span>
+    </div>
+  );
+}
+
+/**
+ * Choosing a repository instead of typing one.
+ *
+ * Owner, repo and branch typed by hand is three chances to make a typo that
+ * only shows up as a 404 much later, and it asks you to remember the exact
+ * spelling of something GitHub already knows. This asks GitHub.
+ *
+ * It works with whatever token is in the box, pasted or signed-in, and with the
+ * token as it is *typed* rather than as it was last saved — you should not have
+ * to save a half-filled form before the picker will talk to you.
+ *
+ * Repositories the token cannot write to are listed and marked rather than
+ * hidden: "my repository is missing" is a worse puzzle than "my repository is
+ * there but says read-only".
+ */
+function RepoPicker({
+  token,
+  selected,
+  onPick,
+  onBranches,
+}: {
+  token: string;
+  selected: string;
+  onPick: (repo: RepoChoice) => void;
+  onBranches: (branches: string[]) => void;
+}) {
+  const [repos, setRepos] = useState<RepoChoice[] | null>(null);
+  const [filter, setFilter] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<Status>(null);
+
+  const load = async () => {
+    setBusy(true);
+    setStatus(null);
+    try {
+      const result = await send({ type: 'github:repos', token });
+      setRepos(result.repos);
+      if (result.repos.length === 0) {
+        setStatus({
+          tone: 'error',
+          message:
+            'This token can see no repositories. A fine-grained token lists them one by one under "Repository access".',
+        });
+      }
+    } catch (error) {
+      setStatus({ tone: 'error', message: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pick = async (repo: RepoChoice) => {
+    onPick(repo);
+    onBranches([]);
+    try {
+      const result = await send({
+        type: 'github:branches',
+        token,
+        owner: repo.owner,
+        repo: repo.name,
+        defaultBranch: repo.defaultBranch,
+      });
+      onBranches(result.branches);
+    } catch {
+      // Not worth a message: the branch box still takes a typed name, and the
+      // repository — the part that was actually being chosen — is already set.
+    }
+  };
+
+  const needle = filter.trim().toLowerCase();
+  const shown = (repos ?? []).filter((repo) => repo.fullName.toLowerCase().includes(needle));
+
+  return (
+    <div className="field">
+      {repos === null ? (
+        <>
+          <button type="button" onClick={() => void load()} disabled={busy || !token.trim()}>
+            {busy ? 'Asking GitHub…' : 'Choose from my repositories'}
+          </button>
+          <span className="field__hint">
+            {token.trim()
+              ? 'Lists everything this token can reach, so you can pick one instead of typing it.'
+              : 'Paste a token or sign in above, then pick a repository from a list.'}
+          </span>
+        </>
+      ) : (
+        <>
+          <div className="repopick">
+            <input
+              type="search"
+              value={filter}
+              placeholder={`Filter ${repos.length} repositor${repos.length === 1 ? 'y' : 'ies'}…`}
+              onChange={(event) => setFilter(event.target.value)}
+            />
+            <div className="repopick__list" role="listbox">
+              {shown.map((repo) => (
+                <button
+                  type="button"
+                  key={repo.fullName}
+                  role="option"
+                  aria-selected={repo.fullName === selected}
+                  className={`repopick__row${repo.fullName === selected ? ' is-on' : ''}`}
+                  onClick={() => void pick(repo)}
+                >
+                  <span className="repopick__name">{repo.fullName}</span>
+                  {repo.private && <span className="repopick__tag">private</span>}
+                  {!repo.canPush && <span className="repopick__tag is-warn">read-only</span>}
+                </button>
+              ))}
+              {shown.length === 0 && <div className="repopick__empty">Nothing matches “{filter}”.</div>}
+            </div>
+          </div>
+          <span className="field__hint">
+            Picking one fills in owner, repository and its default branch below.{' '}
+            <button type="button" className="linkish" onClick={() => void load()}>
+              Reload the list
+            </button>
+          </span>
+        </>
+      )}
+
+      {status && <div className={`status status--${status.tone}`}>{status.message}</div>}
+    </div>
+  );
+}
+
+/**
+ * Connecting Codeforces — three things, reported one by one.
+ *
+ * **Codeforces has no OAuth.** There is no "Sign in with Codeforces" to build,
+ * and a password box on a page that is not codeforces.com would be a phishing
+ * pattern whatever the intent — so this does not ask for a password, and says
+ * why rather than leaving a gap where a button ought to be.
+ *
+ * What it can do is confirm all three of the things "connected" could mean: the
+ * handle (public, needs nothing), an API key and secret (optional, yours to
+ * generate and revoke), and whether this browser is signed in — which is the
+ * one Run and Submit in the workspace actually depend on. Each is shown
+ * separately, because a single green tick hiding which of them is working is
+ * worse than no tick at all.
+ */
+function CodeforcesConnect({
+  handles,
+  onChange,
+}: {
+  handles: Settings['handles'];
+  onChange: (patch: Partial<Settings['handles']>) => void;
+}) {
+  const [result, setResult] = useState<CfConnection | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const connect = async () => {
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      setResult(
+        await send({
+          type: 'cf:connect',
+          handle: handles.codeforces,
+          key: handles.cfApiKey,
+          secret: handles.cfApiSecret,
+        }),
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="field">
+      <div className="actions">
+        <button type="button" onClick={() => void connect()} disabled={busy}>
+          {busy ? 'Checking…' : 'Connect Codeforces'}
+        </button>
+        {error && <span className="status status--error">{error}</span>}
+      </div>
+
+      {result && (
+        <ul className="checks">
+          <li className={result.handle ? 'is-ok' : 'is-bad'}>
+            {result.handle ? (
+              <>
+                <b>{result.handle}</b>
+                {result.rank ? ` — ${result.rank}` : ''}
+                {result.rating ? `, rated ${result.rating}` : ''}
+              </>
+            ) : (
+              result.handleError ?? 'No handle given, so nothing to confirm.'
+            )}
+          </li>
+
+          {result.authorized !== undefined && (
+            <li className={result.authorized ? 'is-ok' : 'is-bad'}>
+              {result.authorized
+                ? 'API key and secret accepted — friends and private submissions are readable.'
+                : result.authorizedError}
+            </li>
+          )}
+
+          <li className={result.signedIn ? 'is-ok' : 'is-bad'}>
+            {result.signedIn ? (
+              <>
+                Signed in to codeforces.com in this browser
+                {result.signedInAs ? ` as ${result.signedInAs}` : ''} — Run and Submit will work.
+              </>
+            ) : (
+              <>
+                Not signed in to codeforces.com in this browser. The rating and problem data still
+                work; <b>Run and Submit in the workspace will not</b>, because they post through the
+                site's own form.{' '}
+                <a href="https://codeforces.com/enter" target="_blank" rel="noreferrer">
+                  Sign in
+                </a>
+                , then check again.
+              </>
+            )}
+          </li>
+        </ul>
+      )}
+
+      <details className="field">
+        <summary>Optional: an API key, for friends and private submissions</summary>
+        <p className="field__hint">
+          Codeforces does not offer OAuth, so there is no button that signs you in — but you can
+          generate a key and secret yourself at{' '}
+          <a href="https://codeforces.com/settings/api" target="_blank" rel="noreferrer">
+            codeforces.com/settings/api
+          </a>
+          , and revoke them there whenever you like. They sign requests so the API answers as you.
+          Everything public — rating, contest history, solved problems — works without them.
+        </p>
+        <div className="field field-row">
+          <div>
+            <label className="field__label" htmlFor="cf-key">
+              API key
+            </label>
+            <input
+              id="cf-key"
+              type="text"
+              autoComplete="off"
+              value={handles.cfApiKey}
+              onChange={(event) => onChange({ cfApiKey: event.target.value.trim() })}
+            />
+          </div>
+          <div>
+            <label className="field__label" htmlFor="cf-secret">
+              API secret
+            </label>
+            <input
+              id="cf-secret"
+              type="password"
+              autoComplete="off"
+              value={handles.cfApiSecret}
+              onChange={(event) => onChange({ cfApiSecret: event.target.value.trim() })}
+            />
+          </div>
+        </div>
+        <span className="field__hint">
+          Stored unencrypted, like every credential a browser extension holds. If that is not a
+          trade you want for reading your friends list, leave both empty — nothing else needs them.
+        </span>
+      </details>
     </div>
   );
 }
@@ -534,6 +823,8 @@ export function App() {
   const [verifyStatus, setVerifyStatus] = useState<Status>(null);
   const [parikshaaStatus, setParikshaaStatus] = useState<Status>(null);
   const [verifying, setVerifying] = useState(false);
+  /** Branch names for the chosen repository, once the picker has fetched them. */
+  const [branches, setBranches] = useState<string[]>([]);
   const [log, setLog] = useState<DiagnosticEntry[]>([]);
   const [goalText, setGoalText] = useState('');
   const [pauseText, setPauseText] = useState('');
@@ -783,7 +1074,64 @@ export function App() {
           hint="Off means solutions stay in this browser only."
         />
 
-        <DeviceSignIn onToken={(token) => patchGithub({ token })} />
+        <DeviceSignIn
+          clientId={settings.github.clientId}
+          includePrivate={settings.github.signInPrivate}
+          onToken={(token) => patchGithub({ token })}
+        />
+
+        {/* Outside DeviceSignIn on purpose: that component hides itself when
+            there is no client id, and this is the field that supplies one. */}
+        <details className="field" open={!settings.github.clientId && !GITHUB_CLIENT_ID}>
+          <summary>Set up “Sign in with GitHub”</summary>
+          <p className="field__hint">
+            GitHub only issues tokens to a registered OAuth App, and an app belongs to an account —
+            there is no shared one this extension could ship. Registering your own takes a minute
+            and is a one-off:
+          </p>
+          <ol className="field__hint steps">
+            <li>
+              Open{' '}
+              <a
+                href="https://github.com/settings/applications/new"
+                target="_blank"
+                rel="noreferrer"
+              >
+                github.com/settings/applications/new
+              </a>
+              .
+            </li>
+            <li>
+              Any name and homepage will do — <code>http://localhost</code> is fine for the URL,
+              since the device flow never redirects anywhere.
+            </li>
+            <li>
+              Register it, then on the app’s page tick <b>Enable Device Flow</b> and save.
+            </li>
+            <li>Copy the Client ID and paste it here.</li>
+          </ol>
+          <label className="field__label" htmlFor="client-id">
+            OAuth App Client ID
+          </label>
+          <input
+            id="client-id"
+            type="text"
+            value={settings.github.clientId}
+            placeholder={GITHUB_CLIENT_ID || 'Ov23li…'}
+            autoComplete="off"
+            onChange={(event) => patchGithub({ clientId: event.target.value.trim() })}
+          />
+          <span className="field__hint">
+            Not a secret — the device flow has no client secret, which is exactly why it is the only
+            OAuth flow an extension can run honestly.
+          </span>
+          <Toggle
+            checked={settings.github.signInPrivate}
+            onChange={(value) => patchGithub({ signInPrivate: value })}
+            label="Include my private repositories"
+            hint="On, so you can pick any repository after connecting. Off asks only for public ones, which is a narrower token."
+          />
+        </details>
 
         <div className="field">
           <label className="field__label" htmlFor="token">
@@ -798,6 +1146,15 @@ export function App() {
             onChange={(event) => patchGithub({ token: event.target.value })}
           />
         </div>
+
+        <RepoPicker
+          token={settings.github.token}
+          selected={`${settings.github.owner}/${settings.github.repo}`}
+          onPick={(repo) =>
+            patchGithub({ owner: repo.owner, repo: repo.name, branch: repo.defaultBranch })
+          }
+          onBranches={setBranches}
+        />
 
         <div className="field field-row">
           <div>
@@ -831,13 +1188,30 @@ export function App() {
             <label className="field__label" htmlFor="branch">
               Branch
             </label>
-            <input
-              id="branch"
-              type="text"
-              value={settings.github.branch}
-              placeholder="main"
-              onChange={(event) => patchGithub({ branch: event.target.value.trim() })}
-            />
+            {/* A list once the repository's branches are known, and a text box
+                until then — a dropdown that cannot offer anything is worse than
+                a box you can type into. */}
+            {branches.length > 0 ? (
+              <select
+                id="branch"
+                value={settings.github.branch}
+                onChange={(event) => patchGithub({ branch: event.target.value })}
+              >
+                {branches.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                id="branch"
+                type="text"
+                value={settings.github.branch}
+                placeholder="main"
+                onChange={(event) => patchGithub({ branch: event.target.value.trim() })}
+              />
+            )}
           </div>
           <div>
             <label className="field__label" htmlFor="commit-message">
@@ -1135,6 +1509,11 @@ export function App() {
             />
           </div>
         </div>
+        <CodeforcesConnect
+          handles={settings.handles}
+          onChange={(patch) => setSettings({ ...settings, handles: { ...settings.handles, ...patch } })}
+        />
+
         <div className="field">
           <label className="field__label" htmlFor="rating-goal">
             Rating you are aiming for

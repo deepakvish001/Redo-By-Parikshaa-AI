@@ -1,6 +1,6 @@
 import { computeStats, dayKey } from '../core/analytics.ts';
 import { backupFilename, readBackup } from '../core/backup.ts';
-import { verifyAccess } from '../core/github.ts';
+import { listBranches, listRepos, verifyAccess } from '../core/github.ts';
 import { MAX_LABELS, normalise } from '../core/labels.ts';
 import { mergeUpsolve, reconcile, summariseUpsolve } from '../core/upsolve.ts';
 import type { DiagnosticEntry, Request, Response, ResponseMap } from '../core/messages.ts';
@@ -58,6 +58,7 @@ import { translateStrings } from './translate.ts';
 import { postSolution, readThreads } from './community.ts';
 import { pushToEditor, testBridge } from './bridge.ts';
 import { pollDeviceFlow, startDeviceFlow } from './device-flow.ts';
+import { connectCodeforces } from './cf-connect.ts';
 import { codeforcesProfile, fetchUpsolve, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
@@ -747,12 +748,12 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
       return testBridge(request.port);
 
     case 'github:device-start':
-      return startDeviceFlow(request.includePrivate);
+      return startDeviceFlow(request.includePrivate, request.clientId);
 
     // One poll per call: a fifteen-minute loop in the service worker would be
     // killed by MV3 anyway, so the page that is open holds the timer.
     case 'github:device-poll':
-      return pollDeviceFlow(request.deviceCode);
+      return pollDeviceFlow(request.deviceCode, request.clientId);
 
     // One contest at a time, because the breakdown costs a request each and
     // the rate limit is one every two seconds.
@@ -850,6 +851,25 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
 
     case 'github:verify':
       return verifyAccess(request.config);
+
+    // The picker asks for these with whatever token is in the box, which may be
+    // one the user has typed but not yet saved — so the token comes with the
+    // request rather than being read from settings.
+    case 'cf:connect':
+      return connectCodeforces(request.handle, { key: request.key, secret: request.secret });
+
+    case 'github:repos':
+      return { repos: await listRepos(request.token) };
+
+    case 'github:branches':
+      return {
+        branches: await listBranches(
+          request.token,
+          request.owner,
+          request.repo,
+          request.defaultBranch,
+        ),
+      };
 
     default: {
       const exhaustive: never = request;

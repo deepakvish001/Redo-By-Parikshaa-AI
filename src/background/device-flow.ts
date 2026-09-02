@@ -13,12 +13,13 @@ import { GITHUB_CLIENT_ID } from '../core/brand.ts';
  *
  * Two things about this file are worth reading before changing it.
  *
- * **The client id is a build constant, and it is empty by default.** A GitHub
- * OAuth App is registered by whoever publishes a build, not by this code, so a
- * fork or a local install has no id until somebody puts one in
- * `src/core/brand.ts`. Rather than failing with GitHub's unreadable
- * `unauthorized_client`, the UI is hidden entirely when there is no id and says
- * why — a sign-in button that cannot possibly work is worse than no button.
+ * **The client id comes from the caller, falling back to a build constant that
+ * is empty here.** A GitHub OAuth App is registered by whoever publishes a
+ * build, not by this code, so a fork or a local install inherits none — which
+ * is why Settings also takes one. Rather than failing with GitHub's unreadable
+ * `unauthorized_client`, the button is hidden when there is no id at all and
+ * Settings says how to get one; a sign-in button that cannot possibly work is
+ * worse than no button.
  *
  * **A device-flow token is broader than a fine-grained one.** That is a
  * property of OAuth, not a shortcoming here, and it is why this is offered
@@ -30,15 +31,24 @@ export interface StartResult {
   error?: string;
 }
 
-export function isAvailable(): boolean {
-  return GITHUB_CLIENT_ID.trim() !== '';
+/** The pasted id wins; the build constant is the fallback for a published build. */
+export function clientIdFor(fromSettings?: string): string {
+  return (fromSettings ?? '').trim() || GITHUB_CLIENT_ID.trim();
 }
 
-export async function startDeviceFlow(includePrivate: boolean): Promise<StartResult> {
-  if (!isAvailable()) {
+export function isAvailable(fromSettings?: string): boolean {
+  return clientIdFor(fromSettings) !== '';
+}
+
+export async function startDeviceFlow(
+  includePrivate: boolean,
+  settingsClientId?: string,
+): Promise<StartResult> {
+  const clientId = clientIdFor(settingsClientId);
+  if (!clientId) {
     return {
       error:
-        'This build has no GitHub OAuth client id, so device sign-in is unavailable. Paste a fine-grained token instead — it is the more precise option anyway.',
+        'There is no GitHub OAuth client id, so sign-in cannot run. Paste one in Settings, or paste a fine-grained token instead — it is the more precise option anyway.',
     };
   }
 
@@ -47,7 +57,7 @@ export async function startDeviceFlow(includePrivate: boolean): Promise<StartRes
       method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        client_id: GITHUB_CLIENT_ID,
+        client_id: clientId,
         scope: includePrivate ? SCOPES.private : SCOPES.public,
       }),
     });
@@ -81,15 +91,19 @@ export interface PollResult {
  * MV3 will kill it anyway. The Settings page — which is open, because the user
  * is looking at it — is the right place to hold the timer.
  */
-export async function pollDeviceFlow(deviceCode: string): Promise<PollResult> {
-  if (!isAvailable()) return { error: 'This build has no GitHub OAuth client id.' };
+export async function pollDeviceFlow(
+  deviceCode: string,
+  settingsClientId?: string,
+): Promise<PollResult> {
+  const clientId = clientIdFor(settingsClientId);
+  if (!clientId) return { error: 'There is no GitHub OAuth client id to sign in with.' };
 
   try {
     const response = await fetch(ACCESS_TOKEN_URL, {
       method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        client_id: GITHUB_CLIENT_ID,
+        client_id: clientId,
         device_code: deviceCode,
         grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
       }),

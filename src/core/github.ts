@@ -14,7 +14,9 @@ export class GithubError extends Error {
   }
 }
 
-function headers(config: GithubConfig): HeadersInit {
+// Only the token is ever read, so anything carrying one will do — which is what
+// lets the repository picker call the API before an owner/repo is chosen.
+function headers(config: { token: string }): HeadersInit {
   return {
     Authorization: `Bearer ${config.token}`,
     Accept: 'application/vnd.github+json',
@@ -73,7 +75,7 @@ function describeFailure(response: Response, body: string): string {
   }
 }
 
-async function request(path: string, config: GithubConfig, init: RequestInit = {}) {
+async function request(path: string, config: { token: string }, init: RequestInit = {}) {
   const response = await fetch(`${API}${path}`, { ...init, headers: headers(config) });
   if (!response.ok) {
     const body = await response.text().catch(() => '');
@@ -114,6 +116,89 @@ export async function verifyAccess(config: GithubConfig): Promise<RepoInfo> {
     canPush: repo.permissions?.push ?? false,
     branchExists: branchResponse.ok,
   };
+}
+
+export interface RepoChoice {
+  owner: string;
+  name: string;
+  fullName: string;
+  defaultBranch: string;
+  private: boolean;
+  /** False for a repository you can read but not commit to. */
+  canPush: boolean;
+  /** Newest first, so the repository you are actually working in is at the top. */
+  pushedAt: number;
+}
+
+/** GitHub's `/user/repos` rows, kept to the fields the picker shows. */
+export function readRepos(rows: unknown): RepoChoice[] {
+  if (!Array.isArray(rows)) return [];
+  const repos: RepoChoice[] = [];
+
+  for (const row of rows as Array<Record<string, unknown>>) {
+    const fullName = typeof row.full_name === 'string' ? row.full_name : '';
+    const [owner, name] = fullName.split('/');
+    if (!owner || !name) continue;
+
+    const permissions = row.permissions as { push?: boolean } | undefined;
+    repos.push({
+      owner,
+      name,
+      fullName,
+      defaultBranch: typeof row.default_branch === 'string' ? row.default_branch : 'main',
+      private: row.private === true,
+      // A repository the token can only read is listed but marked, rather than
+      // hidden: "my repo is missing" is a worse puzzle than "my repo is greyed
+      // out because this token cannot write to it".
+      canPush: permissions?.push === true,
+      pushedAt: Date.parse(typeof row.pushed_at === 'string' ? row.pushed_at : '') || 0,
+    });
+  }
+
+  return repos.sort((a, b) => b.pushedAt - a.pushedAt);
+}
+
+/**
+ * Every repository this token can reach.
+ *
+ * Paged rather than one call: `per_page` tops out at 100, and somebody with a
+ * few hundred repositories would otherwise get a silently truncated list and no
+ * way to tell that the one they wanted was cut off. Capped all the same, since
+ * a picker is not a place to load two thousand rows.
+ */
+export async function listRepos(token: string): Promise<RepoChoice[]> {
+  const all: RepoChoice[] = [];
+
+  for (let page = 1; page <= 5; page += 1) {
+    const rows = (await request(
+      `/user/repos?per_page=100&page=${page}&sort=pushed&affiliation=owner,collaborator,organization_member`,
+      { token },
+    )) as unknown[];
+
+    all.push(...readRepos(rows));
+    if (!Array.isArray(rows) || rows.length < 100) break;
+  }
+
+  return all;
+}
+
+/** The branch names on one repository, default branch first. */
+export async function listBranches(
+  token: string,
+  owner: string,
+  repo: string,
+  defaultBranch?: string,
+): Promise<string[]> {
+  const rows = (await request(
+    `/repos/${owner}/${repo}/branches?per_page=100`,
+    { token },
+  )) as Array<{ name?: string }>;
+
+  const names = rows.map((row) => row.name).filter((name): name is string => Boolean(name));
+  if (!defaultBranch) return names;
+
+  // The default branch first, because it is what all but a few people want.
+  return [defaultBranch, ...names.filter((name) => name !== defaultBranch)];
 }
 
 /** UTF-8 safe base64 decode, for reading file contents back out of the API. */

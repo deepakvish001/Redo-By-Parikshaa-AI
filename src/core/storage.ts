@@ -39,6 +39,8 @@ export interface Meta {
 export const DEFAULT_SETTINGS: Settings = {
   github: {
     token: '',
+    clientId: '',
+    signInPrivate: true,
     owner: '',
     repo: '',
     branch: 'main',
@@ -91,7 +93,15 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   wrapped: { notify: true },
   focus: DEFAULT_FOCUS,
-  handles: { codeforces: '', leetcode: '', goal: 0, friends: [], organization: '' },
+  handles: {
+    codeforces: '',
+    cfApiKey: '',
+    cfApiSecret: '',
+    leetcode: '',
+    goal: 0,
+    friends: [],
+    organization: '',
+  },
   revision: {
     intervals: [1, 3, 7, 21, 45, 90],
     skipEasy: false,

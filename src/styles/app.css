@@ -2626,3 +2626,139 @@ body.gate {
   color: var(--accent);
   white-space: nowrap;
 }
+
+/* ------------------------------------------------------ repository picker */
+
+.repopick {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.repopick input[type='search'] {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  width: 100%;
+}
+
+/* Capped and scrolling: an account with two hundred repositories must not push
+   every other setting off the page. */
+.repopick__list {
+  max-height: 216px;
+  overflow: auto;
+}
+
+.repopick__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.repopick__row:hover {
+  background: var(--surface-hover, rgba(127, 127, 127, 0.12));
+}
+
+.repopick__row.is-on {
+  background: var(--accent-soft, rgba(127, 127, 127, 0.18));
+  font-weight: 700;
+}
+
+.repopick__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repopick__tag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.16));
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.repopick__tag.is-warn {
+  color: var(--warn, hsl(30 90% 45%));
+}
+
+.repopick__empty {
+  padding: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* A button that reads as part of the sentence around it. */
+.linkish {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Numbered set-up steps inside a settings disclosure. */
+.steps {
+  margin: 6px 0 10px;
+  padding-left: 20px;
+}
+
+.steps li {
+  margin: 3px 0;
+}
+
+details.field > summary {
+  cursor: pointer;
+  font-weight: 650;
+  font-size: 12.5px;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+/* ------------------------------------------------------- connection checks */
+
+/* One line per thing that could be connected, each with its own verdict —
+   a single tick that hides which of three checks passed is worse than none. */
+.checks {
+  margin: 10px 0 4px;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.checks li {
+  position: relative;
+  padding: 4px 0 4px 22px;
+  color: var(--text-muted);
+}
+
+.checks li::before {
+  position: absolute;
+  left: 2px;
+  font-weight: 800;
+}
+
+.checks li.is-ok::before {
+  content: '✓';
+  color: var(--ok, hsl(140 55% 40%));
+}
+
+.checks li.is-bad::before {
+  content: '!';
+  color: var(--warn, hsl(30 90% 45%));
+}

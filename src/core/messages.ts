@@ -18,6 +18,8 @@ import type { TranslateResult } from '../background/translate.ts';
 import type { CommunityData } from '../background/community.ts';
 import type { BridgeResult } from '../background/bridge.ts';
 import type { PollResult, StartResult } from '../background/device-flow.ts';
+import type { RepoChoice } from './github.ts';
+import type { CfConnection } from './cf-auth.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
@@ -108,8 +110,17 @@ export type Request =
   | { type: 'community:get'; problem: string }
   | { type: 'community:post'; id: string }
   | { type: 'bridge:test'; port: number }
-  | { type: 'github:device-start'; includePrivate: boolean }
-  | { type: 'github:device-poll'; deviceCode: string };
+  | { type: 'github:device-start'; includePrivate: boolean; clientId?: string }
+  | { type: 'github:device-poll'; deviceCode: string; clientId?: string }
+  | { type: 'cf:connect'; handle: string; key: string; secret: string }
+  | { type: 'github:repos'; token: string }
+  | {
+      type: 'github:branches';
+      token: string;
+      owner: string;
+      repo: string;
+      defaultBranch?: string;
+    };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -173,6 +184,9 @@ export interface ResponseMap {
   'bridge:test': BridgeResult;
   'github:device-start': StartResult;
   'github:device-poll': PollResult;
+  'cf:connect': CfConnection;
+  'github:repos': { repos: RepoChoice[] };
+  'github:branches': { branches: string[] };
 }
 
 /**

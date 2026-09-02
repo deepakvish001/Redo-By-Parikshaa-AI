@@ -30,6 +30,7 @@ All of the following lives in `chrome.storage.local`, on your device:
 | Labels you add to problems | To group and filter your own list |
 | Unsolved problems from your recent Codeforces contests | To build the upsolve queue |
 | Your Codeforces handle and LeetCode username | To read your public contest rating |
+| A Codeforces API key and secret, if you add them | To let the Codeforces API answer as you |
 | Your Google Gemini key, if you add one | To translate statements when you press Translate |
 | Unfinished code and test cases you type in the workspace | To give them back when you reopen the problem |
 
@@ -49,6 +50,8 @@ Redo makes network requests to exactly these places:
    public schedule endpoints. These requests contain no personal data.
 5. **Codeforces' and LeetCode's public rating APIs** — only if you enter a handle. Each receives
    only the handle you gave it, and only the one that belongs to it.
+6. **api.github.com's repository list** — only when you press *Choose from my repositories*, and
+   only so the picker has something to show. It receives your token and nothing else.
 
 ## Community threads
 
@@ -131,6 +134,14 @@ them. For that reason:
   why the fine-grained token is still the recommendation. The sign-in talks only to
   `github.com`, over a permission requested when you press the button and released when the
   sign-in ends; the code you type is shown to you and to nobody else.
+- A Codeforces API key and secret, if you choose to add them, are stored the same way. They are
+  optional, they are yours to revoke at codeforces.com/settings/api, and only the key and a
+  SHA-512 signature ever leave the browser — the secret itself is hashed, never sent. Redo does
+  not ask for, store, or transmit a Codeforces password; there is no OAuth for Codeforces and it
+  will not pretend otherwise.
+- Checking whether you are signed in to Codeforces fetches codeforces.com's own home page with
+  the cookies your browser already has, and reads nothing from it but whether a logout link is
+  present.
 - The Parikshaa session is read from the site's own storage — it is the session you are already
   signed in with, not a new credential — and Redo never refreshes or extends it.
 - Turn either integration off, and Redo stops using that credential.
