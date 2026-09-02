@@ -47,6 +47,12 @@ Solving is the easy part. Remembering three months later is the part nothing els
 - **Publishes an animated coding profile.** `PROFILE.md` and `assets/profile.svg` are rebuilt
   on every sync: totals, streak, difficulty and platform breakdowns, topic mastery, the
   problems you fought hardest for, and the revision queue.
+- **This time against last time.** Re-solve something you first solved in December and the card
+  shows what changed — lines in and out, whether you wrote it again from scratch or edited it,
+  how much quicker it went, and the diff itself. It never claims your complexity improved: it
+  cannot know that, and a confident wrong claim about your own algorithm is worse than none. If
+  you wrote the complexity down yourself both times, it quotes your two notes back. The sentence
+  goes into the problem's committed README as well.
 - **Two machines, one schedule.** Optional. Redo already committed a backup to your repository;
   with sync on it also *reads* it — pull, merge, push, on startup, every half hour, and a couple
   of minutes after you solve or revise. So a schedule built on the laptop is the same schedule on

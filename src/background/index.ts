@@ -231,11 +231,22 @@ async function recordSubmission(
     // a Python solve sits beside it rather than on top of it.
     solutions: {
       ...existing?.solutions,
-      [extensionForLanguage(submission.language)]: {
-        language: submission.language,
-        code: submission.code,
-        solvedAt: now,
-      },
+      [extensionForLanguage(submission.language)]: (() => {
+        const slot = existing?.solutions?.[extensionForLanguage(submission.language)];
+        return {
+          language: submission.language,
+          code: submission.code,
+          solvedAt: now,
+          // The version being replaced, so re-solving this in three months can
+          // be compared with what you wrote today. Only when the code actually
+          // differs — resubmitting the identical file is not a new attempt at
+          // the problem and should not overwrite the thing worth comparing to.
+          previous:
+            slot && slot.code !== submission.code
+              ? { code: slot.code, solvedAt: slot.solvedAt, solveTimeMs: existing?.solveTimeMs }
+              : slot?.previous,
+        };
+      })(),
     },
     solvedAt: now,
     attempts: submission.attempts ?? existing?.attempts ?? 1,

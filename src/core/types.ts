@@ -142,7 +142,24 @@ export interface SolvedProblem {
    * `language` above stay as the most recent, so nothing that reads one
    * solution has to learn about this.
    */
-  solutions?: Record<string, { language: string; code: string; solvedAt: number }>;
+  solutions?: Record<
+    string,
+    {
+      language: string;
+      code: string;
+      solvedAt: number;
+      /**
+       * The version this one replaced, kept so a re-solve can be compared with
+       * the last attempt at it.
+       *
+       * One back, not a full history: "what did I do differently this time" is
+       * the question people actually have, and every version of every solution
+       * would grow without bound in a store that also has to fit in a backup
+       * file somebody commits.
+       */
+      previous?: { code: string; solvedAt: number; solveTimeMs?: number };
+    }
+  >;
   /** ms since epoch of the most recent accepted submission. */
   solvedAt: number;
   /** How many times the user has submitted before getting it accepted. */
@@ -491,7 +508,24 @@ export interface AcceptedSubmission {
    * `language` above stay as the most recent, so nothing that reads one
    * solution has to learn about this.
    */
-  solutions?: Record<string, { language: string; code: string; solvedAt: number }>;
+  solutions?: Record<
+    string,
+    {
+      language: string;
+      code: string;
+      solvedAt: number;
+      /**
+       * The version this one replaced, kept so a re-solve can be compared with
+       * the last attempt at it.
+       *
+       * One back, not a full history: "what did I do differently this time" is
+       * the question people actually have, and every version of every solution
+       * would grow without bound in a store that also has to fit in a backup
+       * file somebody commits.
+       */
+      previous?: { code: string; solvedAt: number; solveTimeMs?: number };
+    }
+  >;
   runtimeNote?: string;
   memoryNote?: string;
   /** Submissions made for this problem in the current session, accepted one included. */

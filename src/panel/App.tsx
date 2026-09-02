@@ -44,6 +44,12 @@ import { bandFloor, type RatingGoal } from '../core/rating.ts';
 import type { LeetCodeProfile } from '../background/rating.ts';
 import { problemUrl } from '../core/daily.ts';
 import { collectNotes, excerpt, noteMatches, type Note } from '../core/notes.ts';
+import {
+  collapse as collapseDiff,
+  describe as describeResolve,
+  diffLines,
+  summarise as summariseResolve,
+} from '../core/resolve-diff.ts';
 import { WINDOWS, heatmapGrid, type Bin, type HeatDay, type TagCount, type Window } from '../core/insights.ts';
 import type { InsightsData } from '../background/insights.ts';
 import type { TrainData } from '../background/train.ts';
@@ -347,6 +353,54 @@ function LabelEditor({
   );
 }
 
+/**
+ * This time against last time.
+ *
+ * The reason to re-solve something in March that you solved in December is to
+ * find out whether you actually learned it, and the answer is in the two
+ * solutions side by side. Nothing here judges the code — it shows what moved
+ * and lets the person who wrote both read it.
+ */
+function ResolveDiff({ problem }: { problem: SolvedProblem }) {
+  const [open, setOpen] = useState(false);
+
+  // The language solved most recently, since that is the one just re-solved.
+  const slot = Object.values(problem.solutions ?? {})
+    .filter((entry) => entry.previous)
+    .sort((a, b) => b.solvedAt - a.solvedAt)[0];
+  if (!slot?.previous) return null;
+
+  const summary = summariseResolve(
+    { code: slot.previous.code, language: slot.language, solvedAt: slot.previous.solvedAt, solveTimeMs: slot.previous.solveTimeMs },
+    { code: slot.code, language: slot.language, solvedAt: slot.solvedAt, solveTimeMs: problem.solveTimeMs },
+  );
+  const sentence = describeResolve(summary);
+  if (!sentence) return null;
+
+  return (
+    <div className="rediff">
+      <button type="button" className="rediff__head" onClick={() => setOpen(!open)}>
+        <span className="rediff__tag">vs last time</span>
+        <span className="rediff__line">{sentence}</span>
+      </button>
+
+      {open && (
+        <pre className="rediff__body">
+          {collapseDiff(diffLines(slot.previous.code, slot.code)).map((line, index) =>
+            line.op === 'gap' ? (
+              <span key={index} className="rediff__gap">{`  ⋯ ${line.count} unchanged\n`}</span>
+            ) : (
+              <span key={index} className={`rediff__${line.op}`}>
+                {`${line.op === 'added' ? '+' : line.op === 'removed' ? '-' : ' '} ${line.text}\n`}
+              </span>
+            ),
+          )}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function ProblemCard({
   problem,
   now,
@@ -465,6 +519,8 @@ function ProblemCard({
           onSave={onSaveLabels}
         />
       )}
+
+      <ResolveDiff problem={problem} />
 
       {(events.length > 0 || struggle !== undefined) && (
         <button

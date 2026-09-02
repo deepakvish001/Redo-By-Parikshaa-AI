@@ -8,6 +8,7 @@ import {
   summarise,
 } from './journal.ts';
 import { normalizeProblemId, solutionFiles, solutionPath } from './paths.ts';
+import { describe as describeResolve, summarise as summariseResolve } from './resolve-diff.ts';
 import {
   PLATFORM_LABELS,
   type ActivityEvent,
@@ -32,6 +33,39 @@ function inlineCode(text: string): string {
  * This is the part that is worth re-reading months later: which verdict came
  * back, on which test, and how long the whole thing took.
  */
+/**
+ * How this attempt compared with the last one, when there was a last one.
+ *
+ * A sentence, not the diff itself: the two solutions are both in git, and git
+ * shows a diff better than a markdown file can. What the README adds is the
+ * summary you would otherwise have to reconstruct by finding the old commit.
+ */
+function resolveSection(problem: SolvedProblem): string[] {
+  const slot = Object.values(problem.solutions ?? {})
+    .filter((entry) => entry.previous)
+    .sort((a, b) => b.solvedAt - a.solvedAt)[0];
+  if (!slot?.previous) return [];
+
+  const sentence = describeResolve(
+    summariseResolve(
+      {
+        code: slot.previous.code,
+        language: slot.language,
+        solvedAt: slot.previous.solvedAt,
+        solveTimeMs: slot.previous.solveTimeMs,
+      },
+      {
+        code: slot.code,
+        language: slot.language,
+        solvedAt: slot.solvedAt,
+        solveTimeMs: problem.solveTimeMs,
+      },
+    ),
+  );
+
+  return sentence ? ['', '## Since last time', '', sentence] : [];
+}
+
 function attemptSection(events: AttemptEvent[]): string[] {
   if (events.length === 0) return [];
 
@@ -164,6 +198,7 @@ export function buildProblemReadme(problem: SolvedProblem): string {
     );
   }
 
+  lines.push(...resolveSection(problem));
   lines.push('', '## Approach', '', problem.note?.trim() || '_Add your notes here._');
   lines.push(...attemptSection(problem.events ?? []));
   lines.push(...historySection(problem.history ?? []));

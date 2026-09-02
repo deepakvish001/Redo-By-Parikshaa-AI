@@ -2858,3 +2858,61 @@ details.field > summary {
   line-height: 1.5;
   color: var(--text-muted);
 }
+
+/* ------------------------------------------------------------ re-solve diff */
+
+.rediff {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.rediff__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
+  text-align: left;
+  font-size: 12px;
+}
+
+.rediff__tag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-wash, rgba(255, 138, 0, 0.14));
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.rediff__line {
+  flex: 1;
+  color: var(--text-muted);
+}
+
+.rediff__body {
+  max-height: 320px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2, rgba(127, 127, 127, 0.06));
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre;
+}
+
+/* Colour and a sign, not colour alone — a diff read by somebody who cannot
+   distinguish red from green has to still be readable. */
+.rediff__added { color: var(--ok, hsl(152 60% 42%)); }
+.rediff__removed { color: var(--danger, hsl(0 72% 55%)); }
+.rediff__same { color: var(--text-muted); }
+.rediff__gap { color: var(--text-faint); font-style: italic; }
