@@ -29,6 +29,28 @@ import { downloadBlob } from '../panel/share.ts';
 
 type Status = { tone: 'ok' | 'error'; message: string } | null;
 
+/**
+ * Settings, in five groups instead of one scroll.
+ *
+ * Fifteen sections stacked flat came to eight and a half thousand pixels with a
+ * single Save at the bottom of it — long enough that finding a switch meant
+ * scrolling past everything you were not looking for, twice, and long enough
+ * that most of it was never found at all.
+ *
+ * The sections themselves are untouched. Each carries the group it belongs to
+ * and only its group is shown, which keeps a settings page a settings page
+ * rather than turning it into a wizard.
+ */
+const GROUPS = [
+  { id: 'sync', label: 'Sync', hint: 'GitHub, Parikshaa, backups' },
+  { id: 'revision', label: 'Revision', hint: 'Schedule and focus mode' },
+  { id: 'pages', label: 'Judge pages', hint: 'What Redo adds on the sites' },
+  { id: 'contests', label: 'Contests', hint: 'Handles, ratings, reminders' },
+  { id: 'advanced', label: 'Advanced', hint: 'Platforms, bridge, diagnostics' },
+] as const;
+
+type GroupId = (typeof GROUPS)[number]['id'];
+
 /** The judges that publish a contest schedule we can read. */
 const CONTEST_PLATFORMS: Platform[] = ['codeforces', 'leetcode', 'codechef', 'atcoder'];
 
@@ -785,7 +807,7 @@ function EditorBridge({
   };
 
   return (
-    <section className="section-card">
+    <section id="s-editor-bridge" data-group="advanced" className="section-card">
       <h2 className="section-card__title">
         <LayersIcon size={14} />
         Editor bridge
@@ -883,7 +905,7 @@ function BackupSection({ connected }: { connected: boolean }) {
   };
 
   return (
-    <section className="section-card">
+    <section id="s-backup-and-restore" data-group="sync" className="section-card">
       <h2 className="section-card__title">
         <ShieldIcon size={14} />
         Backup and restore
@@ -977,6 +999,10 @@ export function App() {
   const [verifying, setVerifying] = useState(false);
   /** Branch names for the chosen repository, once the picker has fetched them. */
   const [branches, setBranches] = useState<string[]>([]);
+  const [group, setGroup] = useState<GroupId>('sync');
+  const [filter, setFilter] = useState('');
+  /** What was loaded, so "unsaved changes" is a fact rather than a guess. */
+  const [saved, setSaved] = useState<Settings | null>(null);
   const [log, setLog] = useState<DiagnosticEntry[]>([]);
   const [goalText, setGoalText] = useState('');
   const [pauseText, setPauseText] = useState('');
@@ -999,6 +1025,7 @@ export function App() {
       setSettings(loaded);
       setIntervalsText(loaded.revision.intervals.join(', '));
       setLeadText(String(loaded.contests.leadMinutes));
+      setSaved(loaded);
       setGoalText(String(loaded.focus.dailyGoal));
       setRatingGoalText(loaded.handles.goal > 0 ? String(loaded.handles.goal) : '');
       setFriendsText(loaded.handles.friends.join(', '));
@@ -1008,9 +1035,29 @@ export function App() {
     })();
   }, []);
 
+  /**
+   * Searching hides the sections that do not match, in the DOM.
+   *
+   * Reading the rendered text rather than keeping a keyword list beside each
+   * section: a list would be one more thing to update whenever a setting is
+   * added, and the day it is forgotten the search quietly stops finding that
+   * setting. What is on screen is what is searched.
+   */
+  useEffect(() => {
+    const needle = filter.trim().toLowerCase();
+    for (const card of document.querySelectorAll<HTMLElement>('.settings__body .section-card')) {
+      card.hidden = needle !== '' && !(card.textContent ?? '').toLowerCase().includes(needle);
+    }
+  });
+
   if (!settings) {
     return <div className="page">Loading…</div>;
   }
+
+  // A deep compare of two small objects, once per render. Cheaper than
+  // threading a dirty flag through forty onChange handlers, and it cannot fall
+  // out of step with what is actually on screen.
+  const dirty = saved !== null && JSON.stringify(saved) !== JSON.stringify(settings);
 
   const patchGithub = (patch: Partial<Settings['github']>) =>
     setSettings({ ...settings, github: { ...settings.github, ...patch } });
@@ -1065,6 +1112,7 @@ export function App() {
         },
       });
       setSettings(saved);
+      setSaved(saved);
       setIntervalsText(saved.revision.intervals.join(', '));
       setLeadText(String(saved.contests.leadMinutes));
       setGoalText(String(saved.focus.dailyGoal));
@@ -1180,7 +1228,7 @@ export function App() {
         people conclude an extension does not work.
       */}
       {(!settings.github.enabled || !settings.github.repo) && (
-        <section className="section-card setup">
+        <section id="s-two-things-to-set-up" data-group="setup" className="section-card setup">
           <h2 className="section-card__title">
             <SparkIcon size={14} />
             Two things to set up
@@ -1204,7 +1252,37 @@ export function App() {
         </section>
       )}
 
-      <section className="section-card">
+      <div className="settings">
+        <nav className="settings__nav" aria-label="Settings sections">
+          <input
+            type="search"
+            className="settings__search"
+            value={filter}
+            placeholder="Search settings…"
+            onChange={(event) => setFilter(event.target.value)}
+          />
+          {GROUPS.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              className={`settings__tab${group === entry.id && !filter.trim() ? ' is-on' : ''}`}
+              onClick={() => {
+                setFilter('');
+                setGroup(entry.id);
+              }}
+            >
+              <span className="settings__tabname">{entry.label}</span>
+              <small>{entry.hint}</small>
+            </button>
+          ))}
+        </nav>
+
+        {/* One group at a time, or everything at once while searching — a
+            filtered view that hid matches in other groups would be worse than
+            no search. */}
+        <div className="settings__body" data-group={filter.trim() ? 'all' : group}>
+
+      <section id="s-github-sync" data-group="sync" className="section-card">
         <h2 className="section-card__title">
           <GithubIcon size={14} />
           GitHub sync
@@ -1234,7 +1312,10 @@ export function App() {
 
         {/* Outside DeviceSignIn on purpose: that component hides itself when
             there is no client id, and this is the field that supplies one. */}
-        <details className="field" open={!settings.github.clientId && !GITHUB_CLIENT_ID}>
+        {/* Closed by default. The fine-grained token is the recommended path
+            and this is the alternative — having the alternative's four setup
+            steps open on arrival pushed the token field below the fold. */}
+        <details className="field">
           <summary>Set up “Sign in with GitHub”</summary>
           <p className="field__hint">
             GitHub only issues tokens to a registered OAuth App, and an app belongs to an account —
@@ -1397,7 +1478,7 @@ export function App() {
         </div>
       </section>
 
-      <section className="section-card">
+      <section id="s-parikshaa-sync" data-group="sync" className="section-card">
         <h2 className="section-card__title">
           <SparkIcon size={14} />
           Parikshaa sync
@@ -1436,7 +1517,7 @@ export function App() {
         </div>
       </section>
 
-      <section className="section-card">
+      <section id="s-focus-mode" data-group="revision" className="section-card">
         <h2 className="section-card__title">
           <ShieldIcon size={14} />
           Focus mode
@@ -1529,7 +1610,7 @@ export function App() {
         </div>
       </section>
 
-      <section className="section-card">
+      <section id="s-revision-schedule" data-group="revision" className="section-card">
         <h2 className="section-card__title">
           <ClockIcon size={14} />
           Revision schedule
@@ -1571,7 +1652,7 @@ export function App() {
         />
       </section>
 
-      <section className="section-card">
+      <section id="s-diagnostics" data-group="advanced" className="section-card">
         <h2 className="section-card__title">
           <BugIcon size={14} />
           Diagnostics
@@ -1618,7 +1699,7 @@ export function App() {
         )}
       </section>
 
-      <section className="section-card">
+      <section id="s-contest-rating" data-group="contests" className="section-card">
         <h2 className="section-card__title">
           <TrophyIcon size={14} />
           Contest rating
@@ -1734,7 +1815,7 @@ export function App() {
 
       <BackupSection connected={settings.github.enabled} />
 
-      <section className="section-card">
+      <section id="s-automatic-backup" data-group="sync" className="section-card">
         <h2 className="section-card__title">
           <DownloadIcon size={14} />
           Automatic backup
@@ -1761,7 +1842,7 @@ export function App() {
         {settings.github.sync && <SyncStatus />}
       </section>
 
-      <section className="section-card">
+      <section id="s-contests" data-group="contests" className="section-card">
         <h2 className="section-card__title">
           <CalendarIcon size={14} />
           Contests
@@ -1811,7 +1892,7 @@ export function App() {
         ))}
       </section>
 
-      <section className="section-card">
+      <section id="s-on-the-judge-s-page" data-group="pages" className="section-card">
         <h2 className="section-card__title">
           <SparkIcon size={14} />
           On the judge's page
@@ -1898,7 +1979,7 @@ export function App() {
         onChange={(bridge) => setSettings({ ...settings, bridge })}
       />
 
-      <section className="section-card">
+      <section id="s-community-solutions" data-group="advanced" className="section-card">
         <h2 className="section-card__title">
           <GithubIcon size={14} />
           Community solutions
@@ -1965,7 +2046,7 @@ export function App() {
         </div>
       </section>
 
-      <section className="section-card">
+      <section id="s-translate-statements" data-group="pages" className="section-card">
         <h2 className="section-card__title">
           <SparkIcon size={14} />
           Translate statements
@@ -2032,7 +2113,7 @@ export function App() {
         </label>
       </section>
 
-      <section className="section-card">
+      <section id="s-platforms" data-group="advanced" className="section-card">
         <h2 className="section-card__title">
           <LayersIcon size={14} />
           Platforms
@@ -2053,11 +2134,20 @@ export function App() {
         ))}
       </section>
 
-      <div className="actions">
+        </div>
+      </div>
+
+      {/* Fixed, because the button used to sit at the bottom of eight thousand
+          pixels — far enough from the switch you just changed that "did that
+          save?" was a fair question. */}
+      <div className="savebar">
+        <span className="savebar__what">
+          {dirty ? 'Unsaved changes' : 'All changes saved'}
+        </span>
+        {saveStatus && <span className={`status status--${saveStatus.tone}`}>{saveStatus.message}</span>}
         <button type="button" className="primary" onClick={() => void save()}>
           Save settings
         </button>
-        {saveStatus && <span className={`status status--${saveStatus.tone}`}>{saveStatus.message}</span>}
       </div>
     </div>
   );

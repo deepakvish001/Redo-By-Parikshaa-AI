@@ -1031,8 +1031,13 @@ button:focus-visible {
 /* -------------------------------------------------------------- options page */
 
 .page {
-  max-width: 680px;
+  /* Wider than the old 680px because there are now two columns in it. A
+     settings page on a desktop window that uses a quarter of it is a settings
+     page that looks unfinished. */
+  max-width: 1060px;
   margin: 0 auto;
+  /* Room for the fixed save bar, so the last section is never under it. */
+  padding-bottom: 78px;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -1804,13 +1809,16 @@ body.gate {
   color: var(--text-faint);
 }
 
-/* Five weeks of the daily problem. Deliberately tiny — it is a texture you
-   glance at, not a chart you read. */
+/* Five weeks of the daily problem. A texture you glance at, not a chart you
+   read — which is what the code always said and not what it did: stretched
+   across the panel the cells came out 60px square, and five rows of those is a
+   third of the first screen given to a thing with almost nothing in it. */
 .cal {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, 14px);
+  justify-content: start;
   gap: 3px;
-  margin-bottom: 4px;
+  margin-bottom: 10px;
 }
 
 .cal__day {
@@ -3049,4 +3057,166 @@ details.field > summary {
   background: var(--surface-2, rgba(127, 127, 127, 0.08));
   font-size: 11.5px;
   line-height: 1.45;
+}
+
+/* ------------------------------------------------------- settings, grouped */
+
+.settings {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 26px;
+  align-items: start;
+}
+
+/* Follows you down a long section rather than scrolling away at the top. */
+.settings__nav {
+  position: sticky;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.settings__search {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.settings__search:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.settings__tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 8px 11px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  color: var(--text-muted);
+}
+
+.settings__tab:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.settings__tab.is-on {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+/* A bar down the left of the current group, so which one you are in is
+   readable without relying on a background two shades apart. */
+.settings__tab.is-on::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 3px;
+  height: 22px;
+  margin-top: 2px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+
+.settings__tab {
+  position: relative;
+}
+
+.settings__tabname {
+  font-weight: 650;
+  font-size: 13px;
+}
+
+.settings__tab small {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.settings__body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* One group at a time. `data-group="all"` is the searching state, where every
+   section is a candidate and the search itself does the hiding. */
+.settings__body[data-group='sync'] .section-card:not([data-group='sync']),
+.settings__body[data-group='revision'] .section-card:not([data-group='revision']),
+.settings__body[data-group='pages'] .section-card:not([data-group='pages']),
+.settings__body[data-group='contests'] .section-card:not([data-group='contests']),
+.settings__body[data-group='advanced'] .section-card:not([data-group='advanced']) {
+  display: none;
+}
+
+.section-card[hidden] {
+  display: none !important;
+}
+
+/* ------------------------------------------------------------- the save bar */
+
+.savebar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  backdrop-filter: blur(8px);
+}
+
+.savebar__what {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 760px) {
+  .settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* A sticky sidebar on a narrow window is a sticky wall. */
+  .settings__nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .settings__search {
+    flex: 1 1 100%;
+  }
+}
+
+/* A banner with the fix attached, rather than only the diagnosis. */
+.banner--action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.banner--action span {
+  flex: 1;
+}
+
+.banner--action button {
+  flex: none;
 }

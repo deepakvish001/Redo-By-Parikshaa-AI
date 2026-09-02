@@ -2383,7 +2383,10 @@ function HomeTab({ onOpenDue }: { onOpenDue: () => void }) {
         </div>
       </section>
 
-      {data.calendar.length > 0 && (
+      {/* Only once there is something in it. Thirty-five identical empty
+          squares is not a record of anything — it is a placeholder taking up
+          the top of the panel on the day somebody installs this. */}
+      {data.calendar.some((cell) => cell.state !== 'none') && (
         <div className="cal" role="img" aria-label="The last five weeks">
           {data.calendar.map((cell) => (
             <span key={cell.day} className={`cal__day cal__day--${cell.state}`} title={cell.day} />
@@ -2393,7 +2396,18 @@ function HomeTab({ onOpenDue }: { onOpenDue: () => void }) {
 
       <div className="section-title">Today&rsquo;s problem</div>
 
-      {data.reason && <div className="banner">{data.reason}</div>}
+      {/* A banner that says what is missing and does nothing about it is a
+          dead end. This one opens the page that fixes it. */}
+      {data.reason && (
+        <div className="banner banner--action">
+          <span>{data.reason}</span>
+          {/^add your codeforces handle/i.test(data.reason) && (
+            <button type="button" onClick={() => void chrome.runtime.openOptionsPage()}>
+              Open Settings
+            </button>
+          )}
+        </div>
+      )}
 
       {pick && (
         <div className={`daily ${dailyState === 'done' ? 'is-done' : ''}`}>
