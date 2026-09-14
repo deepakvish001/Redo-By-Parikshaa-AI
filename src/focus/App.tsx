@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FOCUS_MODE_LABELS } from '../core/focus.ts';
+import { FOCUS_MODE_LABELS, canPause } from '../core/focus.ts';
 import { send, type FocusStatus } from '../core/messages.ts';
 import { ClockIcon, FlameIcon, GearIcon } from '../panel/icons.tsx';
 
@@ -122,7 +122,13 @@ export function App() {
             <button
               type="button"
               className="ghost"
-              disabled={pausing || !pause || pause.day === new Date().toISOString().slice(0, 10)}
+              // `canPause` rather than a date comparison written out here. The
+              // version that was here compared against `toISOString()`, which
+              // is UTC, while the day a pause is *spent* on is the local one —
+              // so anywhere east of Greenwich the escape hatch sat disabled
+              // through the small hours of every morning, with a pause
+              // available and the button refusing to spend it.
+              disabled={pausing || !canPause(pause, Date.now())}
               onClick={async () => {
                 setPausing(true);
                 try {

@@ -8,6 +8,21 @@ import type {
 } from '../background/rating.ts';
 import type { ParikshaaCredentials, SessionDiagnostic } from './parikshaa.ts';
 import type { UpsolveItem, UpsolveSummary } from './upsolve.ts';
+import type { Claim } from './watermark.ts';
+import type { CfHandleCard, CfProblemView, FriendSolve } from '../background/cf-mirror.ts';
+import type { DailyPick, DailySet, Streak } from './daily.ts';
+import type { InsightsData } from '../background/insights.ts';
+import type { TrainData } from '../background/train.ts';
+import type { HistoryData } from '../background/history.ts';
+import type { TranslateResult } from '../background/translate.ts';
+import type { CommunityData } from '../background/community.ts';
+import type { BridgeResult } from '../background/bridge.ts';
+import type { SyncState } from '../background/backup.ts';
+import type { PollResult, StartResult } from '../background/device-flow.ts';
+import type { RepoChoice } from './github.ts';
+import type { CfConnection } from './cf-auth.ts';
+import type { ReviewMode } from './recall-mode.ts';
+import type { Material, Similar } from './cf-materials.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
@@ -43,7 +58,7 @@ export type Request =
   | { type: 'cses:result:claim'; result: CsesFinalResult }
   | { type: 'page:context'; platform: string; slug: string }
   | { type: 'dashboard:get' }
-  | { type: 'problem:review'; id: string; recall: Recall }
+  | { type: 'problem:review'; id: string; recall: Recall; mode?: ReviewMode }
   | {
       type: 'problem:details';
       id: string;
@@ -79,7 +94,44 @@ export type Request =
   | { type: 'backup:export' }
   | { type: 'backup:import'; text: string }
   | { type: 'backup:push' }
-  | { type: 'backup:pull' };
+  | { type: 'backup:pull' }
+  | { type: 'sync:now' }
+  | { type: 'sync:status' }
+  | { type: 'submissions:claim'; platform: string; ids: string[]; watched: string[] }
+  | { type: 'rail:get'; platform: string; slug: string }
+  | { type: 'cf:lookup'; keys: string[] }
+  | { type: 'cf:refresh' }
+  | { type: 'daily:get' }
+  | { type: 'daily:skip' }
+  | { type: 'backlog:add'; key: string }
+  | { type: 'backlog:remove'; key: string }
+  | { type: 'insights:get'; days?: number }
+  | { type: 'train:get' }
+  | { type: 'train:start'; ratings: number[]; minutes: number }
+  | { type: 'train:reroll'; index: number }
+  | { type: 'train:finish' }
+  | { type: 'history:get' }
+  | { type: 'history:round'; contestId: number }
+  | { type: 'cf:handles'; handles: string[] }
+  | { type: 'cf:friends'; problem: string }
+  | { type: 'workspace:open' }
+  | { type: 'workspace:drafts' }
+  | { type: 'workspace:forget-drafts' }
+  | { type: 'translate:strings'; problem: string; strings: string[] }
+  | { type: 'community:get'; problem: string }
+  | { type: 'community:post'; id: string }
+  | { type: 'bridge:test'; port: number }
+  | { type: 'github:device-start'; includePrivate: boolean; clientId?: string }
+  | { type: 'github:device-poll'; deviceCode: string; clientId?: string }
+  | { type: 'cf:connect'; handle: string; key: string; secret: string }
+  | { type: 'github:repos'; token: string }
+  | {
+      type: 'github:branches';
+      token: string;
+      owner: string;
+      repo: string;
+      defaultBranch?: string;
+    };
 
 export interface ResponseMap {
   'submission:accepted': { saved: boolean; problem?: SolvedProblem; reason?: string };
@@ -120,6 +172,103 @@ export interface ResponseMap {
   'backup:import': RestoreResult;
   'backup:push': { path: string; commitUrl?: string };
   'backup:pull': RestoreResult;
+  'sync:now': SyncState;
+  'sync:status': SyncState;
+  'submissions:claim': Claim;
+  'rail:get': RailData;
+  'cf:lookup': Record<string, CfProblemView>;
+  'cf:refresh': MirrorState;
+  'daily:get': HomeData;
+  'daily:skip': HomeData;
+  'backlog:add': HomeData;
+  'backlog:remove': HomeData;
+  'insights:get': InsightsData;
+  'train:get': TrainData;
+  'train:start': TrainData;
+  'train:reroll': TrainData;
+  'train:finish': TrainData;
+  'history:get': HistoryData;
+  'history:round': HistoryData;
+  'cf:handles': Record<string, CfHandleCard>;
+  'cf:friends': { solves: FriendSolve[]; watched: number };
+  'workspace:open': { ok: boolean; error?: string };
+  'workspace:drafts': { count: number };
+  'workspace:forget-drafts': { count: number };
+  'translate:strings': TranslateResult;
+  'community:get': CommunityData;
+  'community:post': CommunityData & { posted?: boolean };
+  'bridge:test': BridgeResult;
+  'github:device-start': StartResult;
+  'github:device-poll': PollResult;
+  'cf:connect': CfConnection;
+  'github:repos': { repos: RepoChoice[] };
+  'github:branches': { branches: string[] };
+}
+
+/**
+ * Everything the Home tab draws.
+ *
+ * Assembled in one place because the tab's whole job is answering "what should
+ * I do in the next hour" — and an answer that arrives in five pieces, each
+ * shifting the layout as it lands, is not an answer.
+ */
+export interface HomeData {
+  today: string;
+  /** Today's picks. Absent when there is no handle, or the mirror is cold. */
+  daily?: DailySet;
+  /** Set when today's pick has been solved, skipped or is still open. */
+  dailyState: 'done' | 'skipped' | 'open' | 'unavailable';
+  /**
+   * The same problem for everybody, derived from the date rather than handed
+   * out by a server — because there is no server.
+   */
+  global?: DailyPick;
+  globalSolved?: boolean;
+  streak: Streak;
+  /** Days solved in a row overall, which Redo has always tracked. */
+  solveStreak: number;
+  calendar: Array<{ day: string; state: 'done' | 'skipped' | 'missed' | 'future' | 'none' }>;
+  backlog: DailyPick[];
+  /** Problems due right now, newest first, capped for the preview. */
+  due: DueProblem[];
+  dueTotal: number;
+  solvedToday: number;
+  /** Why the daily problem cannot be offered, when it cannot. */
+  reason?: string;
+  now: number;
+}
+
+/**
+ * Everything the on-page rail draws, in one round trip.
+ *
+ * One message rather than five because the rail renders on every problem page
+ * load, and five awakenings of the service worker per page is five chances for
+ * the card to appear in pieces.
+ */
+export interface RailData {
+  /** The tracked record, when this problem has been solved before. */
+  problem?: SolvedProblem;
+  /** Attempts on a problem not yet solved; solved ones carry their own. */
+  journal: AttemptEvent[];
+  due: boolean;
+  /** When this page was first opened, so the rail can run a live clock. */
+  openedAt?: number;
+  /** Rating, tags and solved state from the Codeforces mirror. */
+  cf?: CfProblemView;
+  /** The round's editorial, when one has been published. */
+  editorial?: Material;
+  /** Three unsolved problems sharing a tag and a rating band with this one. */
+  similar?: Similar[];
+  page: Settings['page'];
+  now: number;
+}
+
+/** How full each half of the Codeforces mirror is, for Settings to report. */
+export interface MirrorState {
+  problems: number;
+  problemsAt: number;
+  solved: number;
+  statusAt: number;
 }
 
 export interface UpsolveResponse {

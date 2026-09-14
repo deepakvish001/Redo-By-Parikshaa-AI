@@ -2,6 +2,9 @@ import { DEFAULT_FOCUS } from './focus.ts';
 import { appendEvent } from './journal.ts';
 import type { ParikshaaCredentials } from './parikshaa.ts';
 import type { UpsolveItem } from './upsolve.ts';
+import { claimSubmissions, type Claim } from './watermark.ts';
+import type { DailyLog, DailyRecord } from './daily.ts';
+import type { TrainingContest } from './training.ts';
 import {
   PLATFORMS,
   type AttemptEvent,
@@ -23,6 +26,10 @@ const KEYS = {
   upsolve: 'upsolve',
   pendingCsesSubmissions: 'pendingCsesSubmissions',
   csesFinalResultState: 'csesFinalResultState',
+  watermarks: 'watermarks',
+  daily: 'daily',
+  backlog: 'backlog',
+  training: 'training',
 } as const;
 
 export const PENDING_CSES_SUBMISSION_TTL_MS = 15 * 60_000;
@@ -47,15 +54,53 @@ export interface Meta {
 export const DEFAULT_SETTINGS: Settings = {
   github: {
     token: '',
+    clientId: '',
+    signInPrivate: true,
+    perPlatform: {},
     owner: '',
     repo: '',
     branch: 'main',
     enabled: false,
     commitMessage: 'solve: {title} ({platform})',
     backup: true,
+    sync: false,
   },
   parikshaa: {
     enabled: false,
+  },
+  // Quiet additions default on; nothing here changes the page's own layout.
+  page: {
+    enabled: true,
+    rail: true,
+    rating: true,
+    tags: true,
+    timer: true,
+    listings: true,
+    profile: true,
+    daily: true,
+    next: true,
+    hovercards: true,
+    friends: true,
+    standings: true,
+    // The one exception to "quiet additions default on": the workspace takes
+    // the page over, so it waits to be asked. Twice, for opening by itself.
+    workspace: false,
+    workspaceAuto: false,
+    skin: false,
+  },
+  bridge: {
+    enabled: false,
+    port: 7777,
+  },
+  community: {
+    enabled: false,
+    owner: '',
+    repo: '',
+  },
+  translate: {
+    enabled: false,
+    apiKey: '',
+    language: 'hi',
   },
   diagnostics: {
     enabled: false,
@@ -67,7 +112,15 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   wrapped: { notify: true },
   focus: DEFAULT_FOCUS,
-  handles: { codeforces: '', leetcode: '', goal: 0 },
+  handles: {
+    codeforces: '',
+    cfApiKey: '',
+    cfApiSecret: '',
+    leetcode: '',
+    goal: 0,
+    friends: [],
+    organization: '',
+  },
   revision: {
     intervals: [1, 3, 7, 21, 45, 90],
     skipEasy: false,
@@ -274,6 +327,10 @@ export async function getSettings(): Promise<Settings> {
   return {
     github: { ...DEFAULT_SETTINGS.github, ...stored.github },
     parikshaa: { ...DEFAULT_SETTINGS.parikshaa, ...stored.parikshaa },
+    page: { ...DEFAULT_SETTINGS.page, ...stored.page },
+    bridge: { ...DEFAULT_SETTINGS.bridge, ...stored.bridge },
+    community: { ...DEFAULT_SETTINGS.community, ...stored.community },
+    translate: { ...DEFAULT_SETTINGS.translate, ...stored.translate },
     diagnostics: { ...DEFAULT_SETTINGS.diagnostics, ...stored.diagnostics },
     contests: {
       ...DEFAULT_SETTINGS.contests,
@@ -293,6 +350,10 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
   const next: Settings = {
     github: { ...current.github, ...patch.github },
     parikshaa: { ...current.parikshaa, ...patch.parikshaa },
+    page: { ...current.page, ...patch.page },
+    bridge: { ...current.bridge, ...patch.bridge },
+    community: { ...current.community, ...patch.community },
+    translate: { ...current.translate, ...patch.translate },
     diagnostics: { ...current.diagnostics, ...patch.diagnostics },
     contests: { ...current.contests, ...patch.contests },
     wrapped: { ...current.wrapped, ...patch.wrapped },
@@ -317,9 +378,21 @@ export async function getProblem(id: string): Promise<SolvedProblem | undefined>
   return (await getProblems())[id];
 }
 
+/**
+ * Stamps a record as changed.
+ *
+ * Every write goes through here so that two machines can be compared. Without
+ * it the only timestamp on a problem is `solvedAt`, which does not move when
+ * you *revise* — so a revision done on the laptop and one done on the desktop
+ * would tie, and the merge would keep whichever it happened to see last.
+ */
+function stamped(problem: SolvedProblem, at = Date.now()): SolvedProblem {
+  return { ...problem, updatedAt: at };
+}
+
 export async function putProblem(problem: SolvedProblem): Promise<void> {
   const problems = await getProblems();
-  problems[problem.id] = problem;
+  problems[problem.id] = stamped(problem);
   await chrome.storage.local.set({ [KEYS.problems]: problems });
 }
 
@@ -330,7 +403,7 @@ export async function updateProblem(
   const problems = await getProblems();
   const existing = problems[id];
   if (!existing) return undefined;
-  const updated = mutate(existing);
+  const updated = stamped(mutate(existing));
   problems[id] = updated;
   await chrome.storage.local.set({ [KEYS.problems]: problems });
   return updated;
@@ -445,6 +518,83 @@ export async function getUpsolve(): Promise<UpsolveItem[]> {
 export async function saveUpsolve(items: UpsolveItem[]): Promise<UpsolveItem[]> {
   await chrome.storage.local.set({ [KEYS.upsolve]: items });
   return items;
+}
+
+/* ------------------------------------------------------- the daily problem */
+
+export async function getDailyLog(): Promise<DailyLog> {
+  return readKey<DailyLog>(KEYS.daily, {});
+}
+
+export async function saveDailyRecord(day: string, record: DailyRecord): Promise<DailyLog> {
+  const log = await getDailyLog();
+  log[day] = record;
+  await chrome.storage.local.set({ [KEYS.daily]: pruneDailyLog(log, day) });
+  return log;
+}
+
+/**
+ * A year of picks is enough for any streak worth showing, and it keeps the log
+ * from growing without limit on an install that runs for years.
+ */
+export function pruneDailyLog(log: DailyLog, today: string, keepDays = 400): DailyLog {
+  const floor = new Date(Date.parse(`${today}T00:00:00Z`) - keepDays * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  return Object.fromEntries(Object.entries(log).filter(([day]) => day >= floor));
+}
+
+/** Problems kept for later, newest first. Deliberately a short list. */
+export async function getBacklog(): Promise<string[]> {
+  return readKey<string[]>(KEYS.backlog, []);
+}
+
+export async function saveBacklog(keys: string[]): Promise<string[]> {
+  const trimmed = [...new Set(keys)].slice(0, 50);
+  await chrome.storage.local.set({ [KEYS.backlog]: trimmed });
+  return trimmed;
+}
+
+/* ------------------------------------------------------ training contests */
+
+export interface TrainingStore {
+  active?: TrainingContest;
+  /** Finished rounds, newest first. Capped — this is a record, not an archive. */
+  history: TrainingContest[];
+}
+
+export async function getTraining(): Promise<TrainingStore> {
+  return readKey<TrainingStore>(KEYS.training, { history: [] });
+}
+
+export async function saveTraining(store: TrainingStore): Promise<TrainingStore> {
+  const next: TrainingStore = { ...store, history: store.history.slice(0, 30) };
+  await chrome.storage.local.set({ [KEYS.training]: next });
+  return next;
+}
+
+/* ------------------------------------------------- submission watermarks */
+
+/**
+ * Claims a batch of submission ids, atomically.
+ *
+ * Read-decide-write lives here rather than in the content script because two
+ * tabs open on the same status page would otherwise both decide the same
+ * submissions were new, and commit them twice.
+ */
+export async function claimSubmissionIds(
+  platform: string,
+  ids: string[],
+  watched: string[],
+): Promise<Claim> {
+  const marks = await readKey<Record<string, string>>(KEYS.watermarks, {});
+  const claim = claimSubmissions(marks[platform], ids, new Set(watched));
+  if (claim.next && claim.next !== marks[platform]) {
+    await chrome.storage.local.set({
+      [KEYS.watermarks]: { ...marks, [platform]: claim.next },
+    });
+  }
+  return claim;
 }
 
 /* --------------------------------------------------------- backup/restore */

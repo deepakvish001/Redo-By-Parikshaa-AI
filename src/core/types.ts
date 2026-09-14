@@ -1,4 +1,5 @@
 import type { FocusSettings } from './focus.ts';
+import type { RepoTarget } from './github.ts';
 
 export type Platform =
   | 'leetcode'
@@ -165,6 +166,33 @@ export interface SolvedProblem {
   tags: string[];
   language: string;
   code: string;
+  /**
+   * Every accepted solution, keyed by file extension.
+   *
+   * Keyed by extension rather than by language name on purpose: `GNU C++17` and
+   * `GNU C++20` are the same file, and the newer one should replace the older,
+   * while C++ and Python are two files that must sit side by side. `code` and
+   * `language` above stay as the most recent, so nothing that reads one
+   * solution has to learn about this.
+   */
+  solutions?: Record<
+    string,
+    {
+      language: string;
+      code: string;
+      solvedAt: number;
+      /**
+       * The version this one replaced, kept so a re-solve can be compared with
+       * the last attempt at it.
+       *
+       * One back, not a full history: "what did I do differently this time" is
+       * the question people actually have, and every version of every solution
+       * would grow without bound in a store that also has to fit in a backup
+       * file somebody commits.
+       */
+      previous?: { code: string; solvedAt: number; solveTimeMs?: number };
+    }
+  >;
   /** ms since epoch of the most recent accepted submission. */
   solvedAt: number;
   /** How many times the user has submitted before getting it accepted. */
@@ -198,6 +226,16 @@ export interface SolvedProblem {
   github: GithubSyncState;
   parikshaa: ParikshaaSyncState;
   revision: RevisionState;
+  /**
+   * When this record last changed, on whichever machine changed it.
+   *
+   * Exists for syncing between machines: `solvedAt` does not move when a
+   * problem is *revised*, so without this a review done on the laptop and one
+   * done on the desktop are indistinguishable and the merge has nothing to pick
+   * on. Optional because records written before this existed do not have it —
+   * those fall back to the newest timestamp they do carry.
+   */
+  updatedAt?: number;
 }
 
 export interface ParikshaaSyncState {
@@ -249,10 +287,40 @@ export interface RevisionState {
 export interface Settings {
   github: {
     token: string;
+    /**
+     * A GitHub OAuth App client id, for "Sign in with GitHub".
+     *
+     * A setting and not only a build constant, because an OAuth App belongs to
+     * an account: a build published by somebody else carries their id, and a
+     * fork or a local install carries none. Rather than leaving the button
+     * permanently dead for everyone who did not publish the build, the id can
+     * be pasted here. It is not a secret — the device flow has no client secret,
+     * which is exactly why it is the only OAuth flow an extension can run
+     * honestly — so storing it beside the settings costs nothing.
+     */
+    clientId: string;
+    /**
+     * Ask for private repositories too when signing in.
+     *
+     * On, because "connect and then pick any of my repositories" is what people
+     * mean by connecting. It does make the token broader: `repo` reaches every
+     * repository you can, where `public_repo` reaches only the public ones. The
+     * fine-grained token remains the narrower option, and is still offered.
+     */
+    signInPrivate: boolean;
     owner: string;
     repo: string;
     branch: string;
     enabled: boolean;
+    /**
+     * A repository per platform, for people who keep LeetCode and Codeforces
+     * apart. Anything without an entry here goes to the repository above, so
+     * one repository for everything stays the default and needs no setup.
+     *
+     * An entry is only honoured when it names both an owner and a repository;
+     * a blank branch falls back to the default's.
+     */
+    perPlatform: Partial<Record<Platform, RepoTarget>>;
     /** Commit message template; `{title}` and `{platform}` are substituted. */
     commitMessage: string;
     /**
@@ -260,10 +328,124 @@ export interface Settings {
      * Daily rather than per-solve so the file does not bloat every commit.
      */
     backup: boolean;
+    /**
+     * Keep this browser in step with that backup, both ways.
+     *
+     * With it on, the extension pulls the repository's copy, merges it with
+     * what is here, and pushes the result — so a schedule built on the laptop
+     * is the same schedule on the desktop. The repository is the whole sync
+     * mechanism; there is no server, and there is not going to be one.
+     */
+    sync: boolean;
   };
   parikshaa: {
     /** Mark matching problems solved on parikshaa.org. */
     enabled: boolean;
+  };
+  /**
+   * What the extension adds to the judges' own pages. Everything here is a
+   * switch because people installed Redo to sync solutions, and must not open
+   * Codeforces one morning to find it rebuilt.
+   */
+  page: {
+    /** Master switch. Off means no injection at all beyond the review nudge. */
+    enabled: boolean;
+    /** The sidebar card on a problem page. */
+    rail: boolean;
+    /** Rating chip and tags on the rail. Tags stay hidden until asked for. */
+    rating: boolean;
+    /** Reveal the problem's tags without leaving the page. */
+    tags: boolean;
+    /** A running clock for how long this attempt has taken. */
+    timer: boolean;
+    /** Solved ticks, due badges and rating chips down listing pages. */
+    listings: boolean;
+    /** Streak and today's picks on your own Codeforces profile. */
+    profile: boolean;
+    /**
+     * Today's problem and the streak calendar on the problemset page.
+     *
+     * Two pinned rows at the top of the list and a box in the sidebar. On the
+     * problemset page only, because that is the page where you are already
+     * choosing what to solve — anywhere else it would be an interruption.
+     */
+    daily: boolean;
+    /**
+     * The editorial and three similar problems, on the rail.
+     *
+     * The two things you reach for at opposite ends of a problem: a way out
+     * when you are beaten, and a way on when you are not.
+     */
+    next: boolean;
+    /** A preview card when you hover a Codeforces handle. */
+    hovercards: boolean;
+    /** Which of your saved handles has solved the problem you are on. */
+    friends: boolean;
+    /** A College tab and your country rank on a standings page. */
+    standings: boolean;
+    /**
+     * The split-pane workspace: statement beside an editor.
+     *
+     * Off by default, unlike everything else here. The others add a line to a
+     * page; this one covers it, and it costs a two-hundred-kilobyte editor
+     * that is only downloaded once you ask for it.
+     */
+    workspace: boolean;
+    /**
+     * Open the workspace by itself on every problem page.
+     *
+     * Off by default even when the workspace is on, because it turns a page you
+     * might have opened only to read into a page you have to close. It is the
+     * right setting for somebody who solves in the workspace every time, and
+     * the wrong one for everybody else.
+     */
+    workspaceAuto: boolean;
+    /**
+     * Restyle Codeforces itself, dark.
+     *
+     * The only thing here that changes the judge's own page rather than adding
+     * to it, so it is off by default and it is one stylesheet: switching it off
+     * removes it and the page is exactly as the site built it.
+     */
+    skin: boolean;
+  };
+  /**
+   * Hand each accepted solve to an editor listening on this machine.
+   *
+   * A protocol rather than an integration: Redo posts JSON to a local port and
+   * anything can listen. The localhost permission is *optional* in the
+   * manifest, so an install that never turns this on never carries it.
+   */
+  bridge: {
+    enabled: boolean;
+    port: number;
+  };
+  /**
+   * Solution threads, as issues on a repository you name.
+   *
+   * No backend: GitHub already runs one. Posting is public, under your own
+   * account, in a repository you chose — which is stated in Settings rather
+   * than buried, because it is the whole trade.
+   */
+  community: {
+    enabled: boolean;
+    /** Defaults to your sync repository's owner when left blank. */
+    owner: string;
+    repo: string;
+  };
+  /**
+   * Statement translation.
+   *
+   * The one feature that sends anything to a third party, so: off by default,
+   * your own key, and PRIVACY.md names Google as the recipient. With no key it
+   * does nothing at all rather than falling back to something.
+   */
+  translate: {
+    enabled: boolean;
+    /** The user's own Google Gemini key. Never leaves this machine except to Google. */
+    apiKey: string;
+    /** Target language code, e.g. `hi`. */
+    language: string;
   };
   diagnostics: {
     /**
@@ -289,6 +471,18 @@ export interface Settings {
   handles: {
     /** Codeforces handle, for rating and contest prediction. */
     codeforces: string;
+    /**
+     * A Codeforces API key and secret, generated by you at
+     * codeforces.com/settings/api.
+     *
+     * Optional. Everything public — rating, contest history, solved problems —
+     * needs only the handle; these sign requests so the API answers *as you*,
+     * which is what `user.friends` requires and what makes `user.status` include
+     * gym and private-contest submissions. Stored like every other credential
+     * here: unencrypted, because extension storage is the only storage there is.
+     */
+    cfApiKey: string;
+    cfApiSecret: string;
     /** LeetCode username, for contest rating. */
     leetcode: string;
     /**
@@ -296,6 +490,10 @@ export interface Settings {
      * what almost everybody is actually working towards.
      */
     goal: number;
+    /** Codeforces handles to look for on a problem page. Kept locally. */
+    friends: string[];
+    /** Your institution, as Codeforces spells it, for the College standings. */
+    organization: string;
   };
   revision: {
     /** Interval ladder in days. Stage n schedules `intervals[n]` days out. */
@@ -341,6 +539,33 @@ export interface AcceptedSubmission {
   tags: string[];
   language: string;
   code: string;
+  /**
+   * Every accepted solution, keyed by file extension.
+   *
+   * Keyed by extension rather than by language name on purpose: `GNU C++17` and
+   * `GNU C++20` are the same file, and the newer one should replace the older,
+   * while C++ and Python are two files that must sit side by side. `code` and
+   * `language` above stay as the most recent, so nothing that reads one
+   * solution has to learn about this.
+   */
+  solutions?: Record<
+    string,
+    {
+      language: string;
+      code: string;
+      solvedAt: number;
+      /**
+       * The version this one replaced, kept so a re-solve can be compared with
+       * the last attempt at it.
+       *
+       * One back, not a full history: "what did I do differently this time" is
+       * the question people actually have, and every version of every solution
+       * would grow without bound in a store that also has to fit in a backup
+       * file somebody commits.
+       */
+      previous?: { code: string; solvedAt: number; solveTimeMs?: number };
+    }
+  >;
   runtimeNote?: string;
   memoryNote?: string;
   /** Submissions made for this problem in the current session, accepted one included. */

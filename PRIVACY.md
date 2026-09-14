@@ -9,9 +9,9 @@ browser.
 ## The short version
 
 Redo has no server, no account and no analytics. Everything it records is kept in your own
-browser. The only data that leaves your machine goes directly to services **you** connect —
-your GitHub repository and, optionally, your Parikshaa account — and nothing is sent anywhere
-else, ever.
+browser. The only data that leaves your machine goes directly to services **you** connect — your
+GitHub repository, optionally your Parikshaa account, and — only if you switch translation on and
+supply your own key — Google's Gemini API. Nothing is sent anywhere else, ever.
 
 ## What is stored, and where
 
@@ -30,23 +30,87 @@ All of the following lives in `chrome.storage.local`, on your device:
 | Labels you add to problems | To group and filter your own list |
 | Unsolved problems from your recent Codeforces contests | To build the upsolve queue |
 | Your Codeforces handle and LeetCode username | To read your public contest rating |
+| A Codeforces API key and secret, if you add them | To let the Codeforces API answer as you |
+| Your Google Gemini key, if you add one | To translate statements when you press Translate |
+| Unfinished code and test cases you type in the workspace | To give them back when you reopen the problem |
 
 ## What is sent, and to whom
 
 Redo makes network requests to exactly these places:
 
 1. **The judge you are on** (LeetCode, Codeforces, AtCoder, CodeChef, HackerRank,
-   GeeksforGeeks) — to read the problem's own details and your own submission's source. These
+   GeeksforGeeks, CSES) — to read the problem's own details and your own submission's source. These
    are the same requests the page itself makes, and they carry only your existing session with
    that site.
-2. **api.github.com** — only if you turn GitHub sync on, and only to the repository you name.
-   It receives your solution, your notes, and the problem metadata listed above.
+2. **api.github.com** — only if you turn GitHub sync on, and only to the repository you name, or
+   to the repositories you name if you give some judges their own. It receives your solution, your
+   notes, and the problem metadata listed above. A repository only ever receives the problems that
+   belong in it.
 3. **Your Parikshaa project's API** — only if you turn Parikshaa sync on. It receives your
    solution and a record that you solved the problem, written to your own account.
 4. **Contest listings** — `codeforces.com`, `leetcode.com`, `codechef.com` and `atcoder.jp`
    public schedule endpoints. These requests contain no personal data.
 5. **Codeforces' and LeetCode's public rating APIs** — only if you enter a handle. Each receives
-   only the handle you gave it, and only the one that belongs to it.
+   only the handle you gave it, and only the one that belongs to it. Your LeetCode contest history
+   is read from LeetCode itself; the rating estimate shown for a contest awaiting its result is
+   computed on your machine from your own past results, and **no rating-predictor service is
+   contacted** — doing so would mean handing your username to a third party.
+6. **api.github.com's repository list** — only when you press *Choose from my repositories*, and
+   only so the picker has something to show. It receives your token and nothing else.
+
+## Community threads
+
+Off by default. With it on and a repository named, opening a problem's thread reads **issues** in
+that repository through the GitHub API, and **Post my solution** opens an issue or adds a comment
+to it. Posting is **public, under your own GitHub account, in the repository you chose** — the
+button says so, with the repository's name on it, rather than asking you to confirm a dialog.
+
+Redo does not hold any of it: the threads are GitHub's, readable and deletable by you there, and
+they outlive the extension. Reading uses the same token as the sync; posting additionally needs
+that token to have `Issues: read and write` on the community repository, which is a permission
+your solutions repository does not need — so use a separate repository if you would rather not
+grant it on the one holding your code.
+
+Other people's posts are shown as plain text, never rendered as markdown or HTML.
+
+## Translation
+
+This is **the only part of Redo that sends anything to a third party**, and it is off until you
+switch it on and paste in a key of your own. With it on, pressing **Translate** on a Codeforces
+problem sends that statement's prose to **Google's Gemini API** using your key.
+
+What is sent is deliberately less than the statement. Formulas, code spans, sample inputs and
+outputs are replaced by numbered markers before anything leaves the machine, so Google receives
+"Alice and Bob play a game with ⟦0⟧ stones" and never the formula itself. Nothing is sent until
+you press the button, a translation is kept locally for a day so re-reading costs nothing, and a
+translation that came back with a marker moved, dropped or duplicated is discarded rather than
+shown — a formula silently missing from a sentence changes what the problem is asking.
+
+Your Gemini key is stored in this browser like the GitHub token and is used only from the
+extension's background worker, so it never enters a judge's page. It is sent as a request header
+rather than in the URL, because keys in URLs end up in logs and referrers. Redo has no key of its
+own and no server to hold one.
+
+Google's handling of what it receives is governed by
+[Google's terms](https://ai.google.dev/gemini-api/terms), not by this policy.
+
+## The workspace
+
+If you turn the workspace on, both of its buttons send your code to **Codeforces** and nowhere else:
+
+- **Submit** posts through Codeforces' own submit form — your source and the compiler id, with the
+  CSRF token that page issued to your signed-in session.
+- **Run** posts your source, the compiler id and the input of the case you are looking at to
+  Codeforces' **custom invocation** page, which is the site's own feature for running code.
+
+Both are byte for byte the requests the site makes when you press its own buttons; the only
+difference is which element you clicked. There is no third-party compiler, runner or judge involved
+at any point, and nothing in the workspace is sent to any server other than Codeforces.
+
+What you type is saved on your own machine as you type it, so that closing a tab does not lose a
+solution. Drafts for the sixty most recently touched problems are kept; older ones are dropped as
+newer ones arrive, and clearing the editor deletes that problem's draft outright. Settings shows how
+many are stored and has a **Forget them** button that deletes all of them at once.
 
 ## Backups
 
@@ -55,6 +119,10 @@ same repository you sync solutions to. It contains everything in the table above
 GitHub token**, which is stripped out deliberately: a backup is a file people commit, mail
 themselves and drop in cloud storage, and a repository-scoped write token inside one would be a
 credential leak with a very long tail. Re-pasting a token takes ten seconds.
+
+If you also turn on **Keep this browser in step with that backup**, the same file is read back and
+merged, so two machines share one schedule. Nothing new leaves your browser for it — it is the
+repository you already sync to, and no other party is involved at any point.
 
 The same file is what **Download a backup** saves to your computer. Nothing is uploaded anywhere
 else, and the daily backup can be turned off in Settings.
@@ -70,6 +138,19 @@ them. For that reason:
 
 - Use a **fine-grained** GitHub token scoped to the single repository you sync to, with the
   `Contents: read and write` permission and nothing else.
+- If you use **Sign in with GitHub** instead, the token GitHub issues can read and write every
+  repository you have access to. That is a property of OAuth, not a choice made here, and it is
+  why the fine-grained token is still the recommendation. The sign-in talks only to
+  `github.com`, over a permission requested when you press the button and released when the
+  sign-in ends; the code you type is shown to you and to nobody else.
+- A Codeforces API key and secret, if you choose to add them, are stored the same way. They are
+  optional, they are yours to revoke at codeforces.com/settings/api, and only the key and a
+  SHA-512 signature ever leave the browser — the secret itself is hashed, never sent. Redo does
+  not ask for, store, or transmit a Codeforces password; there is no OAuth for Codeforces and it
+  will not pretend otherwise.
+- Checking whether you are signed in to Codeforces fetches codeforces.com's own home page with
+  the cookies your browser already has, and reads nothing from it but whether a logout link is
+  present.
 - The Parikshaa session is read from the site's own storage — it is the session you are already
   signed in with, not a new credential — and Redo never refreshes or extends it.
 - Turn either integration off, and Redo stops using that credential.
@@ -108,4 +189,4 @@ with the date above updated.
 ## Contact
 
 Questions or requests: open an issue at
-<https://github.com/deepakvish001/New-Repo/issues>.
+<https://github.com/deepakvish001/Redo-By-Parikshaa-AI/issues>.

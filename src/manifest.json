@@ -9,12 +9,15 @@
     "alarms",
     "notifications",
     "sidePanel",
-    "tabs"
+    "tabs",
+    "scripting",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "https://leetcode.com/*",
     "https://leetcode.cn/*",
     "https://codeforces.com/*",
+    "https://*.codeforces.com/*",
     "https://atcoder.jp/*",
     "https://www.codechef.com/*",
     "https://www.hackerrank.com/*",
@@ -26,7 +29,8 @@
     "https://api.github.com/*",
     "https://parikshaa.org/*",
     "https://www.parikshaa.org/*",
-    "https://*.supabase.co/*"
+    "https://*.supabase.co/*",
+    "https://generativelanguage.googleapis.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -71,6 +75,7 @@
         "https://leetcode.com/*",
         "https://leetcode.cn/*",
         "https://codeforces.com/*",
+        "https://*.codeforces.com/*",
         "https://atcoder.jp/*",
         "https://www.codechef.com/*",
         "https://www.hackerrank.com/*",
@@ -112,5 +117,9 @@
   "short_name": "Redo",
   "side_panel": {
     "default_path": "panel/index.html"
-  }
+  },
+  "optional_host_permissions": [
+    "http://127.0.0.1/*",
+    "https://github.com/*"
+  ]
 }

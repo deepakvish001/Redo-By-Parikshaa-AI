@@ -1,3 +1,21 @@
+import { codeforces } from './cf-api.ts';
+import {
+  STARTING_RATING,
+  buildContests,
+  describeForm,
+  estimateDelta,
+  fitDelta,
+  pendingContest as lcPendingContest,
+  summarise as summariseLc,
+  type DeltaEstimate,
+  type LcContest,
+  type LcHistoryRow,
+  type LcSummary,
+} from '../core/lc-contests.ts';
+
+/** Handles per `user.info` call. The documented ceiling is ten thousand. */
+const CHUNK = 5000;
+
 import {
   buildUpsolveList,
   type ContestProblem,
@@ -22,37 +40,6 @@ import {
  * guess. LeetCode publishes a rating but not the field, which is why only one
  * of the two can be predicted — see `leetcodeRating` for what is possible.
  */
-
-const CF_API = 'https://codeforces.com/api';
-
-/** Codeforces asks for no more than one request every two seconds. */
-const CF_GAP_MS = 2100;
-/** Handles per `user.info` call. The documented ceiling is ten thousand. */
-const CHUNK = 5000;
-let lastCall = 0;
-
-async function codeforces<T>(method: string, params: Record<string, string>): Promise<T> {
-  const wait = Math.max(0, lastCall + CF_GAP_MS - Date.now());
-  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-  lastCall = Date.now();
-
-  // POST because a contest's worth of handles does not fit in a URL.
-  const response = await fetch(`${CF_API}/${method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams(params).toString(),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Codeforces returned ${response.status} for ${method}.`);
-  }
-
-  const json = (await response.json()) as { status: string; result?: T; comment?: string };
-  if (json.status !== 'OK' || json.result === undefined) {
-    throw new Error(json.comment ?? `Codeforces refused the ${method} request.`);
-  }
-  return json.result;
-}
 
 export interface CodeforcesProfile {
   handle: string;
@@ -310,8 +297,47 @@ export interface LeetCodeProfile {
   globalRanking?: number;
   topPercentage?: number;
   /** The most recent contest, and whether its rating has been applied yet. */
-  last?: { title: string; rating: number; ranking: number; trend: string; rated: boolean };
+  last?: { title: string; rating: number; ranking: number; trend?: string; rated: boolean };
+  /** Every contest entered, oldest first, each with its rating change. */
+  contests: LcContest[];
+  summary: LcSummary;
+  form?: string;
+  /**
+   * What a pending contest is likely to be worth — fitted to this user's own
+   * past results, never to the contest's field, which LeetCode does not
+   * publish. Absent unless a contest is actually awaiting its rating.
+   */
+  estimate?: DeltaEstimate & { contest: string; rank: number };
 }
+
+/**
+ * Two queries, and the reason there are two.
+ *
+ * The first asks for everything the contest page shows — the problems solved,
+ * the finish time, the contest's slug. The second asks only for what has been
+ * known to work. GraphQL fails a whole query over one unknown field, so if
+ * LeetCode ever renames or drops one of the extras, asking for it would take
+ * the rating display down with it. Falling back means a schema change costs the
+ * per-contest detail and nothing else.
+ */
+const LC_FULL_QUERY = `query ranking($username: String!) {
+  userContestRanking(username: $username) {
+    attendedContestsCount
+    rating
+    globalRanking
+    topPercentage
+  }
+  userContestRankingHistory(username: $username) {
+    attended
+    rating
+    ranking
+    trendDirection
+    problemsSolved
+    totalProblems
+    finishTimeInSeconds
+    contest { title titleSlug startTime }
+  }
+}`;
 
 const LC_QUERY = `query ranking($username: String!) {
   userContestRanking(username: $username) {
@@ -329,44 +355,61 @@ const LC_QUERY = `query ranking($username: String!) {
   }
 }`;
 
-interface LcHistoryEntry {
-  attended: boolean;
-  rating: number;
-  ranking: number;
-  trendDirection: string;
-  contest: { title: string; startTime: number };
+type LcHistoryEntry = LcHistoryRow;
+
+interface LcPayload {
+  data?: {
+    userContestRanking?: {
+      attendedContestsCount: number;
+      rating: number;
+      globalRanking: number;
+      topPercentage: number;
+    } | null;
+    userContestRankingHistory?: LcHistoryEntry[] | null;
+  };
+  errors?: Array<{ message: string }>;
 }
 
-export async function leetcodeProfile(username: string): Promise<LeetCodeProfile> {
+async function askLeetCode(query: string, username: string): Promise<LcPayload> {
   const response = await fetch('https://leetcode.com/graphql/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: LC_QUERY, variables: { username } }),
+    body: JSON.stringify({ query, variables: { username } }),
   });
   if (!response.ok) throw new Error(`LeetCode returned ${response.status}.`);
+  return (await response.json()) as LcPayload;
+}
 
-  const json = (await response.json()) as {
-    data?: {
-      userContestRanking?: {
-        attendedContestsCount: number;
-        rating: number;
-        globalRanking: number;
-        topPercentage: number;
-      } | null;
-      userContestRankingHistory?: LcHistoryEntry[] | null;
-    };
-    errors?: Array<{ message: string }>;
-  };
+export async function leetcodeProfile(username: string): Promise<LeetCodeProfile> {
+  let json = await askLeetCode(LC_FULL_QUERY, username);
 
+  // A rejected field takes the whole query with it, so drop back to the fields
+  // that have always worked rather than showing nothing.
+  if (json.errors?.length) json = await askLeetCode(LC_QUERY, username);
   if (json.errors?.length) throw new Error(json.errors[0]?.message ?? 'LeetCode refused.');
 
   const ranking = json.data?.userContestRanking;
   const history = (json.data?.userContestRankingHistory ?? []).filter((entry) => entry.attended);
   const recent = history[history.length - 1];
   const previous = history[history.length - 2];
+  const contests = buildContests(json.data?.userContestRankingHistory ?? []);
 
   return {
     username,
+    contests,
+    form: describeForm(contests),
+    summary: summariseLc(contests),
+    estimate: (() => {
+      // Only worth computing while a contest is ranked but not yet rated —
+      // once LeetCode has applied it, the real number is right there.
+      const pending = lcPendingContest(contests);
+      if (!pending) return undefined;
+      const estimate = estimateDelta(
+        fitDelta(contests, contests.at(-2)?.rating ?? STARTING_RATING),
+        pending.rank,
+      );
+      return estimate ? { ...estimate, contest: pending.title, rank: pending.rank } : undefined;
+    })(),
     rating: ranking?.rating,
     attended: ranking?.attendedContestsCount ?? history.length,
     globalRanking: ranking?.globalRanking,

@@ -136,39 +136,59 @@ export function parseCodeChef(body: string): Contest[] {
  * read instead. Times are rendered in the viewer's chosen timezone with an
  * explicit offset, which is what makes them parseable at all.
  */
-export function parseAtCoder(document_: Document): Contest[] {
-  const table =
-    document_.querySelector('#contest-table-upcoming') ??
-    document_.querySelector('.table-responsive');
+/**
+ * AtCoder's upcoming-contest table, read out of the raw HTML.
+ *
+ * Text and not a `Document` on purpose: this runs in the service worker, and
+ * **an MV3 service worker has no `DOMParser`** — it is `undefined` there, so
+ * `new DOMParser()` threw, the fetcher rejected, and AtCoder went into the
+ * failed list on every refresh. Contest Radar had never once shown an AtCoder
+ * contest, and nothing said so louder than one greyed-out row.
+ *
+ * The table is regular enough for this: a row carries a `<time>`, a link to
+ * `/contests/<slug>`, and a duration cell, in that order.
+ */
+export function parseAtCoder(html: string): Contest[] {
+  // Only the upcoming table. The same page lists finished and running contests
+  // in tables of their own, and their rows have the identical shape.
+  const section = /id="contest-table-upcoming"([\s\S]*?)(?:<div[^>]+id="contest-table|$)/.exec(html);
+  const table = section?.[1];
   if (!table) return [];
 
   const contests: Contest[] = [];
-  for (const row of table.querySelectorAll('tbody tr')) {
-    const timeText = row.querySelector('time')?.textContent?.trim() ?? '';
-    const link = row.querySelector<HTMLAnchorElement>('a[href^="/contests/"]');
-    const href = link?.getAttribute('href') ?? '';
-    const slug = /\/contests\/([^/?#]+)/.exec(href)?.[1];
-    if (!slug || !timeText) continue;
 
+  for (const [row] of table.matchAll(/<tr[\s\S]*?<\/tr>/g)) {
+    const timeText = /<time[^>]*>([^<]+)<\/time>/.exec(row)?.[1]?.trim();
+    const link = /<a[^>]+href="(\/contests\/([^"/?#]+))"[^>]*>([\s\S]*?)<\/a>/.exec(row);
+    if (!timeText || !link) continue;
+
+    const [, href, slug, label] = link;
     const startAt = Date.parse(timeText.replace(' ', 'T'));
     if (Number.isNaN(startAt)) continue;
 
-    // The duration column reads "01:40"; anything else is left at zero.
-    const duration = /(\d+):(\d{2})/.exec(row.querySelector('td:nth-child(3)')?.textContent ?? '');
+    // The duration cell reads "01:40". Searched for after the link so a start
+    // time of "21:00" in the first cell cannot be mistaken for it.
+    const duration = /(\d+):(\d{2})/.exec(row.slice(link.index + link[0].length));
     const durationMs = duration
       ? (Number(duration[1]) * 60 + Number(duration[2])) * 60_000
       : 0;
 
     contests.push({
-      id: contestId('atcoder', slug),
+      id: contestId('atcoder', slug!),
       platform: 'atcoder',
-      name: link?.textContent?.trim() || slug,
+      name: stripTags(label ?? '') || slug!,
       url: `https://atcoder.jp${href}`,
       startAt,
       durationMs,
     });
   }
+
   return contests;
+}
+
+/** The link's own text, without the rated-range badge AtCoder nests inside it. */
+function stripTags(html: string): string {
+  return html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 }
 
 /* ---------------------------------------------------------------- shared */

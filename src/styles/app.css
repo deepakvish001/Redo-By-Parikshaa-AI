@@ -1031,8 +1031,13 @@ button:focus-visible {
 /* -------------------------------------------------------------- options page */
 
 .page {
-  max-width: 680px;
+  /* Wider than the old 680px because there are now two columns in it. A
+     settings page on a desktop window that uses a quarter of it is a settings
+     page that looks unfinished. */
+  max-width: 1060px;
   margin: 0 auto;
+  /* Room for the fixed save bar, so the last section is never under it. */
+  padding-bottom: 78px;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -1716,4 +1721,1502 @@ body.gate {
 
 .filebtn input[type='file'] {
   display: none;
+}
+
+/* ------------------------------------------------------------ first run */
+
+/* Only shown while unconfigured, so it earns the accent border. */
+.setup {
+  border-color: var(--accent);
+  background: linear-gradient(var(--accent-wash), var(--accent-wash)), var(--surface);
+}
+
+.setup__list {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.setup__list li {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.setup__list li b { color: var(--text); font-weight: 600; }
+
+/* A step already done stays listed — the list is the map, not a checklist
+   that vanishes as you go. */
+.setup__list li.is-done {
+  color: var(--text-faint);
+  text-decoration-color: var(--border);
+}
+
+.setup__list li.is-done::marker { content: '✓ '; }
+
+.setup code {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11.5px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* --------------------------------------------------------------- home tab */
+
+.home__streak {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 15px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(var(--accent-wash), var(--accent-wash)), var(--surface);
+  margin-bottom: 10px;
+}
+
+.home__flame {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--accent);
+}
+
+.home__flame svg { align-self: center; flex: none; }
+
+.home__count {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.home__unit {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.home__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* Five weeks of the daily problem. A texture you glance at, not a chart you
+   read — which is what the code always said and not what it did: stretched
+   across the panel the cells came out 60px square, and five rows of those is a
+   third of the first screen given to a thing with almost nothing in it. */
+.cal {
+  display: grid;
+  grid-template-columns: repeat(7, 14px);
+  justify-content: start;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.cal__day {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background: var(--surface-raised);
+  border: 1px solid transparent;
+}
+
+.cal__day--done { background: var(--accent); }
+.cal__day--skipped { background: var(--surface-raised); border-color: var(--border-strong); }
+.cal__day--missed { background: hsl(0 84% 62% / 0.28); }
+.cal__day--future { background: var(--surface-raised); border-color: var(--accent); }
+
+.daily {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px 13px;
+}
+
+.daily.is-done { border-left-color: var(--ok); }
+
+.daily__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.daily__key {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+
+.daily__rating {
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.daily__name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.daily__tags {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.trio {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.trio__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 8px 9px;
+  min-width: 0;
+}
+
+.trio__label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.trio__rating {
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.trio__name {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.upsolve__contest.is-overdue { color: var(--amber); }
+
+.upsolve__name.link {
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.upsolve__name.link:hover { color: var(--accent-soft); }
+
+/* ---------------------------------------------------------------- charts */
+
+/* A histogram of bars whose height is the count and whose colour is the band,
+   so the shape and the difficulty are two separate readings of one chart. */
+.hist {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 108px;
+  padding: 14px 0 0;
+  overflow-x: auto;
+}
+
+.hist__col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  flex: 1 0 22px;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.hist__count {
+  font-size: 9px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.hist__bar {
+  width: 100%;
+  min-height: 3px;
+  border-radius: 2px 2px 0 0;
+  transition: filter 120ms ease;
+}
+
+.hist__col:hover .hist__bar { filter: brightness(1.35); }
+
+.hist__label {
+  font-size: 8.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  writing-mode: vertical-rl;
+  height: 26px;
+}
+
+.bin {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  margin-top: 8px;
+}
+
+.dough {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.dough__svg { width: 104px; height: 104px; flex: none; }
+
+.dough__key {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dough__key li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+}
+
+.dough__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.dough__tag {
+  flex: 1;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dough__n { color: var(--text-faint); }
+
+.heat__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.heat__head .faint { flex: 1; font-size: 10px; }
+
+.heat__year {
+  font: inherit;
+  font-size: 11px;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 2px 5px;
+}
+
+/* Scrolls on its own so a year of columns never widens the panel. */
+.heat { overflow-x: auto; padding-bottom: 4px; }
+
+.heat__grid { display: flex; gap: 2px; width: max-content; }
+
+.heat__col { display: flex; flex-direction: column; gap: 2px; }
+
+.heat__day {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--surface-raised);
+}
+
+.heat__day.is-blank { background: none; }
+
+.bar--split { display: flex; gap: 1px; background: var(--bg); }
+
+.bar__seg { height: 100%; display: block; }
+.bar__seg--ok { background: var(--ok); }
+.bar__seg--bad { background: var(--danger); }
+
+/* ---------------------------------------------------------------- rounds */
+
+.round {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px 13px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.round__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.round__title {
+  font-size: 12.5px;
+  font-weight: 700;
+  flex: 1;
+}
+
+/* Tabular so the seconds do not shove the layout once a second. */
+.countdown {
+  font-family: ui-monospace, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.countdown.is-low { color: var(--danger); }
+.countdown.is-done { color: var(--text-faint); font-size: 12px; font-weight: 600; }
+
+.slot {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--surface-raised);
+  border-left: 3px solid var(--border-strong);
+}
+
+.slot--solved { border-left-color: var(--ok); }
+.slot--attempted { border-left-color: var(--danger); }
+
+.slot__rating {
+  font-size: 12px;
+  font-weight: 800;
+  min-width: 34px;
+}
+
+.slot__name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot__name:hover { color: var(--accent-soft); }
+
+.slot__state {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-faint);
+  flex: none;
+}
+
+.slot--solved .slot__state { color: var(--ok); }
+.slot--attempted .slot__state { color: var(--danger); }
+
+.round__foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.round__foot .faint { flex: 1; font-size: 11px; }
+
+.rungs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.rung { display: flex; align-items: center; gap: 2px; }
+
+.rung input {
+  width: 62px;
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 4px 6px;
+}
+
+.rung__time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.rung__time input {
+  width: 70px;
+  font: inherit;
+  font-size: 12px;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 4px 6px;
+}
+
+/* ----------------------------------------------------------- suggestions */
+
+.suggest {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 9px;
+  margin-bottom: 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.suggest:hover { border-color: var(--accent); }
+
+.suggest__rating {
+  font-size: 13px;
+  font-weight: 800;
+  min-width: 36px;
+  flex: none;
+}
+
+.suggest__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.suggest__name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The reason is the point of the row — it is what a leaderboard cannot say. */
+.suggest__why {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  line-height: 1.45;
+}
+
+/* ------------------------------------------------------------- the notebook */
+
+/* Two views over one filter: the folders, or every note you have written.
+   A segmented control rather than a sixth tab, because the search box and the
+   label bar above it belong to both. */
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  margin-bottom: 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.segmented button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+}
+
+.segmented button.is-on {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.segmented__count {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--text-muted);
+}
+
+.section-hint {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin: 0 2px 9px;
+}
+
+.note {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.note__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.note__title {
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--text);
+  text-decoration: none;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note__title:hover { color: var(--accent); }
+
+.note__meta { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+
+/* `pre-wrap` because notes are written with line breaks that mean something —
+   a list of cases, a formula, the counterexample that broke the first try. */
+.note__body {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+}
+
+.note__foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.note__spacer { flex: 1; }
+
+.note__chip {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+}
+
+.note__foot .link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* --------------------------------------------------------- the chart window */
+
+.windows {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  margin: 4px 0 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.windows button {
+  flex: 1;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+}
+
+.windows button.is-on {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+/* ---------------------------------------------------------- contest history */
+
+.roundsum {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.roundsum__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.roundsum__cell span {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.roundsum__cell small { font-size: 10.5px; color: var(--text-faint); }
+
+.roundsum .is-up { color: var(--ok); }
+.roundsum .is-down { color: var(--danger); }
+
+.past {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+
+.past__head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 9px 11px;
+  text-align: left;
+}
+
+.past__delta {
+  font-size: 12.5px;
+  font-weight: 700;
+  min-width: 38px;
+}
+
+.past__delta.is-up { color: var(--ok); }
+.past__delta.is-down { color: var(--danger); }
+
+.past__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.past__rank { font-size: 11.5px; color: var(--text-faint); }
+
+.past__body {
+  padding: 0 11px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.past__grid { display: flex; flex-wrap: wrap; gap: 5px; }
+
+/* Solved green, fought-and-lost red, never opened grey — the same three states
+   the upsolve queue uses, because they mean the same three things. */
+.past__p {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.past__p.is-ok { background: var(--ok); border-color: transparent; color: hsl(152 40% 10%); }
+.past__p.is-bad { background: var(--danger); border-color: transparent; color: hsl(0 40% 12%); }
+.past__p:hover { border-color: var(--accent); }
+
+/* --------------------------------------------------------------- the plan */
+
+.step {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+
+.step__head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 9px 11px;
+  text-align: left;
+}
+
+/* Numbered, because the order is the advice: the plan is not a menu. */
+.step__n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: hsl(20 40% 8%);
+  font-size: 11px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.step__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.step__count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.step__body { padding: 0 11px 10px; }
+
+.step__why {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+/* -------------------------------------------------------------- the thread */
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+
+.thread__open {
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.thread__post {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  background: var(--bg);
+}
+
+.thread__by {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* Posts are other people's markdown. Rendered as text on purpose — a panel
+   that renders a stranger's markdown is a panel that renders whatever they
+   felt like sending. */
+.thread__body {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow: auto;
+}
+
+/* ------------------------------------------------------------ device flow */
+
+.devicecode {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Big and letter-spaced: it is read off the screen and typed somewhere else,
+   and a code you have to squint at is a code you mistype. */
+.devicecode__code {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------ repository picker */
+
+.repopick {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.repopick input[type='search'] {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  width: 100%;
+}
+
+/* Capped and scrolling: an account with two hundred repositories must not push
+   every other setting off the page. */
+.repopick__list {
+  max-height: 216px;
+  overflow: auto;
+}
+
+.repopick__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.repopick__row:hover {
+  background: var(--surface-hover, rgba(127, 127, 127, 0.12));
+}
+
+.repopick__row.is-on {
+  background: var(--accent-soft, rgba(127, 127, 127, 0.18));
+  font-weight: 700;
+}
+
+.repopick__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repopick__tag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.16));
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.repopick__tag.is-warn {
+  color: var(--warn, hsl(30 90% 45%));
+}
+
+.repopick__empty {
+  padding: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* A button that reads as part of the sentence around it. */
+.linkish {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Numbered set-up steps inside a settings disclosure. */
+.steps {
+  margin: 6px 0 10px;
+  padding-left: 20px;
+}
+
+.steps li {
+  margin: 3px 0;
+}
+
+details.field > summary {
+  cursor: pointer;
+  font-weight: 650;
+  font-size: 12.5px;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+/* ------------------------------------------------------- connection checks */
+
+/* One line per thing that could be connected, each with its own verdict —
+   a single tick that hides which of three checks passed is worse than none. */
+.checks {
+  margin: 10px 0 4px;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.checks li {
+  position: relative;
+  padding: 4px 0 4px 22px;
+  color: var(--text-muted);
+}
+
+.checks li::before {
+  position: absolute;
+  left: 2px;
+  font-weight: 800;
+}
+
+.checks li.is-ok::before {
+  content: '✓';
+  color: var(--ok, hsl(140 55% 40%));
+}
+
+.checks li.is-bad::before {
+  content: '!';
+  color: var(--warn, hsl(30 90% 45%));
+}
+
+/* --------------------------------------------------- a repository per judge */
+
+.perrepo {
+  margin: 8px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.perrepo__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+}
+
+.perrepo__row + .perrepo__row {
+  border-top: 1px solid var(--border);
+}
+
+.perrepo__judge {
+  flex: none;
+  width: 108px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.perrepo__where {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+/* A judge that has been pointed somewhere reads as a decision, not a default. */
+.perrepo__where.is-set {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------ leetcode contest history */
+
+.lclist {
+  margin: 8px 0 6px;
+}
+
+.lclist .past__head {
+  text-decoration: none;
+}
+
+/* Ranked but not yet rated: neither a gain nor a loss, and it must not be
+   coloured as either. */
+.past__delta.is-wait {
+  color: var(--text-muted);
+}
+
+/* The estimate. Deliberately not styled like the facts around it — it is the
+   one number on this card that is a guess, and it should not borrow their
+   authority. */
+.lcpred {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.lcpred__head {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.lcpred__value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 2px 0 4px;
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.lcpred__value small {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.lcpred__basis {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------ re-solve diff */
+
+.rediff {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.rediff__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
+  text-align: left;
+  font-size: 12px;
+}
+
+.rediff__tag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-wash, rgba(255, 138, 0, 0.14));
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.rediff__line {
+  flex: 1;
+  color: var(--text-muted);
+}
+
+.rediff__body {
+  max-height: 320px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2, rgba(127, 127, 127, 0.06));
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre;
+}
+
+/* Colour and a sign, not colour alone — a diff read by somebody who cannot
+   distinguish red from green has to still be readable. */
+.rediff__added { color: var(--ok, hsl(152 60% 42%)); }
+.rediff__removed { color: var(--danger, hsl(0 72% 55%)); }
+.rediff__same { color: var(--text-muted); }
+.rediff__gap { color: var(--text-faint); font-style: italic; }
+
+/* -------------------------------------------------------- revision session */
+
+.sessionstart {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.session {
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.session__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.session__count {
+  flex: none;
+  font-weight: 750;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A bar rather than only "3 of 8": the point of a session is that it ends, and
+   a shape that visibly fills says that better than a fraction does. */
+.session__bar {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.2));
+  overflow: hidden;
+}
+
+.session__bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 220ms ease;
+}
+
+.session__skip {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.session__done {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 4px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------- the recall check */
+
+.recall__open {
+  width: 100%;
+  margin-top: 6px;
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.recall__open:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.recall {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.recall__q {
+  margin-bottom: 7px;
+  font-weight: 700;
+  font-size: 12.5px;
+}
+
+.recall__input {
+  width: 100%;
+  resize: vertical;
+}
+
+/* Read-only once the answer is out: answering before looking is the whole
+   mechanism, so there must be nothing to quietly improve afterwards. */
+.recall__input[readonly] {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.recall__label {
+  margin: 10px 0 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.recall__note {
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.recall__note.faint {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.recall__code {
+  max-height: 240px;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2, rgba(127, 127, 127, 0.08));
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+/* ------------------------------------------------------- settings, grouped */
+
+.settings {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 26px;
+  align-items: start;
+}
+
+/* Follows you down a long section rather than scrolling away at the top. */
+.settings__nav {
+  position: sticky;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.settings__search {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.settings__search:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.settings__tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 8px 11px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  color: var(--text-muted);
+}
+
+.settings__tab:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.settings__tab.is-on {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+/* A bar down the left of the current group, so which one you are in is
+   readable without relying on a background two shades apart. */
+.settings__tab.is-on::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 3px;
+  height: 22px;
+  margin-top: 2px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+
+.settings__tab {
+  position: relative;
+}
+
+.settings__tabname {
+  font-weight: 650;
+  font-size: 13px;
+}
+
+.settings__tab small {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.settings__body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* One group at a time. `data-group="all"` is the searching state, where every
+   section is a candidate and the search itself does the hiding. */
+.settings__body[data-group='sync'] .section-card:not([data-group='sync']),
+.settings__body[data-group='revision'] .section-card:not([data-group='revision']),
+.settings__body[data-group='pages'] .section-card:not([data-group='pages']),
+.settings__body[data-group='contests'] .section-card:not([data-group='contests']),
+.settings__body[data-group='advanced'] .section-card:not([data-group='advanced']) {
+  display: none;
+}
+
+.section-card[hidden] {
+  display: none !important;
+}
+
+/* ------------------------------------------------------------- the save bar */
+
+.savebar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  backdrop-filter: blur(8px);
+}
+
+.savebar__what {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 760px) {
+  .settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* A sticky sidebar on a narrow window is a sticky wall. */
+  .settings__nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .settings__search {
+    flex: 1 1 100%;
+  }
+}
+
+/* A banner with the fix attached, rather than only the diagnosis. */
+.banner--action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.banner--action span {
+  flex: 1;
+}
+
+.banner--action button {
+  flex: none;
 }

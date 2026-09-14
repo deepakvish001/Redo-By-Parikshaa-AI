@@ -134,13 +134,70 @@ function gateUrl(from: string, target: FocusTarget): string {
  * navigate the tab — deliberately chosen over `<all_urls>` host permissions,
  * which would let the extension read page content it has no business reading
  * and would change the install warning to cover every site.
+ *
+ * Three triggers, not one. The first version listened only for `changeInfo.url`
+ * and that is why focus mode looked broken: a URL *change* is not the only way
+ * to arrive somewhere.
  */
 export function watchNavigation(): void {
-  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-    const url = changeInfo.url;
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    // `changeInfo.url` is set only when the address actually changes — so a
+    // reload did not fire it, and neither did re-entering the address you were
+    // already on. Those need a second trigger.
+    //
+    // `complete` and not `loading` for that trigger: early in a navigation the
+    // tab still reports the URL it is leaving, so gating on `loading` would
+    // sometimes read the old page and yank a legitimate trip to Codeforces back
+    // to the gate. At `complete` the URL is settled. An ordinary navigation
+    // still gates instantly through `changeInfo.url`; only the cases that had
+    // no gate at all wait for the load to finish.
+    const url = changeInfo.url ?? (changeInfo.status === 'complete' ? tab.url : undefined);
     if (!url) return;
     void gateIfNeeded(tabId, url);
   });
+
+  // Switching to a tab counts as arriving at it. This is also what makes
+  // gating on settings changes safe to keep to the active tab: a background
+  // tab is left alone until you actually look at it.
+  chrome.tabs.onActivated.addListener(({ tabId }) => {
+    void gateTab(tabId);
+  });
+
+  // Turning focus mode on has to act on the tab you are looking at, or the
+  // feature appears to do nothing at all — the one tab in front of you when
+  // you flip the switch was the one tab it would never touch.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !('settings' in changes)) return;
+    void gateActiveTabs();
+  });
+}
+
+async function gateTab(tabId: number): Promise<void> {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab.url) await gateIfNeeded(tabId, tab.url);
+  } catch {
+    // The tab went away between the event and the lookup.
+  }
+}
+
+/**
+ * Gates what is on screen right now, and only that.
+ *
+ * The active tab of each window rather than every tab open: replacing forty
+ * background tabs with forty gate pages the moment somebody tries the feature
+ * would be destructive in a way that no amount of "you can go back" makes up
+ * for. A background tab is gated by `onActivated` when it is looked at, which
+ * is the moment the gate is actually for.
+ */
+export async function gateActiveTabs(): Promise<void> {
+  const settings = await getSettings();
+  if (!settings.focus.enabled) return;
+
+  const tabs = await chrome.tabs.query({ active: true });
+  await Promise.all(
+    tabs.map((tab) => (tab.id !== undefined && tab.url ? gateIfNeeded(tab.id, tab.url) : undefined)),
+  );
 }
 
 async function gateIfNeeded(tabId: number, url: string): Promise<void> {

@@ -1,10 +1,10 @@
 import { computeStats, dayKey } from '../core/analytics.ts';
 import { backupFilename, readBackup } from '../core/backup.ts';
-import { verifyAccess } from '../core/github.ts';
+import { listBranches, listRepos, verifyAccess } from '../core/github.ts';
 import { MAX_LABELS, normalise } from '../core/labels.ts';
 import { mergeUpsolve, reconcile, summariseUpsolve } from '../core/upsolve.ts';
 import type { DiagnosticEntry, Request, Response, ResponseMap } from '../core/messages.ts';
-import { problemKey } from '../core/paths.ts';
+import { extensionForLanguage, problemKey } from '../core/paths.ts';
 import { isExpired, type SessionDiagnostic } from '../core/parikshaa.ts';
 import { appendActivity, struggleScore } from '../core/journal.ts';
 import { WEEK_MS, summariseWeek, wrappedCaption } from '../core/wrapped.ts';
@@ -19,6 +19,7 @@ import {
   getParikshaaCredentials,
   getProblem,
   getProblemList,
+  claimSubmissionIds,
   getSettings,
   getUpsolve,
   putProblem,
@@ -28,7 +29,7 @@ import {
   saveUpsolve,
   updateProblem,
 } from '../core/storage.ts';
-import { applyRecall, dueProblems, initialRevision, isDue } from '../core/srs.ts';
+import { dueProblems, initialRevision, isDue } from '../core/srs.ts';
 import type {
   AcceptedSubmission,
   ActivityEvent,
@@ -42,16 +43,55 @@ import {
 } from './cses-pending.ts';
 import { getCachedContests, refreshContests, sendContestReminders } from './contests.ts';
 import { focusState, startPause, watchNavigation } from './focus.ts';
-import { applyBackup, currentBackup, pullBackup, pushBackup } from './backup.ts';
+import { applyBackup, currentBackup, getSyncState, pullBackup, pushBackup, syncNow } from './backup.ts';
+import {
+  ensureProblemset,
+  ensureUserStatus,
+  friendSolves,
+  handleCards,
+  lookup,
+  mirrorState,
+  noteSolved,
+  type CfProblemView,
+} from './cf-mirror.ts';
+import { dayKey as utcDay } from '../core/daily.ts';
+import { addToBacklog, buildHome, removeFromBacklog, skipToday } from './home.ts';
+import { buildInsights } from './insights.ts';
+import { buildTrain, finishContest, rerollSlot, startContest } from './train.ts';
+import { buildHistory, loadRound } from './history.ts';
+import { translateStrings } from './translate.ts';
+import { postSolution, readThreads } from './community.ts';
+import { pushToEditor, testBridge } from './bridge.ts';
+import { pollDeviceFlow, startDeviceFlow } from './device-flow.ts';
+import { connectCodeforces } from './cf-connect.ts';
+import { editorialFor, similarTo } from './cf-next.ts';
+import { applyReview, type ReviewMode } from '../core/recall-mode.ts';
+import type { Material, Similar } from '../core/cf-materials.ts';
 import { codeforcesProfile, fetchUpsolve, leetcodeProfile, predictCodeforces } from './rating.ts';
 import { flushPending, syncToParikshaa } from './parikshaa-sync.ts';
 import { syncProblem } from './sync.ts';
+import { DRAFTS_KEY } from '../workspace/drafts.ts';
 
 const BADGE_ALARM = 'refresh-badge';
 const DIGEST_ALARM = 'daily-digest';
 const CONTEST_ALARM = 'refresh-contests';
 const WRAPPED_ALARM = 'weekly-wrapped';
 const BACKUP_ALARM = 'daily-backup';
+const SYNC_ALARM = 'repo-sync';
+/**
+ * A one-off sync, a couple of minutes after something changed.
+ *
+ * Creating an alarm that already exists replaces it, so solving five problems
+ * in a row schedules one sync two minutes after the fifth rather than five
+ * syncs — a debounce with no timer to keep alive, which matters because an MV3
+ * worker will not be alive to run one.
+ */
+const SYNC_SOON_ALARM = 'repo-sync-soon';
+
+function syncSoon(): void {
+  chrome.alarms.create(SYNC_SOON_ALARM, { delayInMinutes: 2 });
+}
+const STREAK_ALARM = 'streak-nudge';
 
 const DIAGNOSTIC_KEY = 'detectionLog';
 /** Enough to cover a submission flow, small enough to stay in storage. */
@@ -195,6 +235,27 @@ async function recordSubmission(
     tags: submission.tags.length > 0 ? submission.tags : (existing?.tags ?? []),
     language: submission.language,
     code: submission.code,
+    // Keyed by extension, so re-solving in C++20 replaces the C++17 file while
+    // a Python solve sits beside it rather than on top of it.
+    solutions: {
+      ...existing?.solutions,
+      [extensionForLanguage(submission.language)]: (() => {
+        const slot = existing?.solutions?.[extensionForLanguage(submission.language)];
+        return {
+          language: submission.language,
+          code: submission.code,
+          solvedAt: now,
+          // The version being replaced, so re-solving this in three months can
+          // be compared with what you wrote today. Only when the code actually
+          // differs — resubmitting the identical file is not a new attempt at
+          // the problem and should not overwrite the thing worth comparing to.
+          previous:
+            slot && slot.code !== submission.code
+              ? { code: slot.code, solvedAt: slot.solvedAt, solveTimeMs: existing?.solveTimeMs }
+              : slot?.previous,
+        };
+      })(),
+    },
     solvedAt: now,
     attempts: submission.attempts ?? existing?.attempts ?? 1,
     runtimeNote: submission.runtimeNote,
@@ -218,9 +279,22 @@ async function recordSubmission(
   await putProblem(problem);
   await refreshBadge();
 
+  // The mirror caches an hour at a time, but the extension just watched this
+  // solve happen — leaving the page showing it as unsolved would be Redo
+  // disagreeing with something the user saw it record.
+  if (submission.platform === 'codeforces' && settings.handles.codeforces) {
+    await noteSolved(settings.handles.codeforces, submission.slug.toUpperCase()).catch(
+      () => undefined,
+    );
+  }
+
+  syncSoon();
   const [github, parikshaa] = await Promise.all([
     syncProblem(problem, settings),
     syncToParikshaa(problem, settings),
+    // Fire and forget. An editor that is not open is the normal case, not a
+    // fault, so a failed push must not become a toast on every solve.
+    pushToEditor(problem).catch(() => undefined),
   ]);
   const at = Date.now();
   const synced = {
@@ -240,12 +314,21 @@ async function recordSubmission(
 async function reviewProblem(
   id: string,
   recall: Recall,
+  mode: ReviewMode = 'resolve',
 ): Promise<ResponseMap['problem:review']> {
   const settings = await getSettings();
   const now = Date.now();
 
+  // A review is the change most worth carrying to the other machine — it moves
+  // the schedule, which is the thing worth having in two places at all.
+  syncSoon();
+
+  let held = false;
   const problem = await updateProblem(id, (current) => {
-    const revision = applyRecall(current.revision, recall, settings.revision.intervals, now);
+    const outcome = applyReview(current.revision, recall, mode, settings.revision.intervals, now);
+    const revision = outcome.revision;
+    held = outcome.held;
+
     return {
       ...current,
       revision,
@@ -253,7 +336,11 @@ async function reviewProblem(
         at: now,
         kind: 'review',
         outcome: recall,
-        reason: `stage ${current.revision.stage + 1} → ${revision.stage + 1}, next in ${Math.round(
+        // The mode is on the record, so a schedule that moved slowly can be
+        // explained months later rather than looking like a bug.
+        reason: `${mode === 'recall' ? 'recall' : 're-solve'} · stage ${
+          current.revision.stage + 1
+        } → ${revision.stage + 1}${held ? ' (held — recall only)' : ''}, next in ${Math.round(
           (revision.dueAt - now) / 86_400_000,
         )}d`,
       }),
@@ -285,7 +372,7 @@ async function reviewProblem(
 
 /* --------------------------------------------------------------- routing */
 
-async function handle(request: Request): Promise<unknown> {
+async function handle(request: Request, sender: chrome.runtime.MessageSender): Promise<unknown> {
   switch (request.type) {
     case 'submission:accepted':
       return recordSubmission(request.submission);
@@ -357,7 +444,7 @@ async function handle(request: Request): Promise<unknown> {
     }
 
     case 'problem:review':
-      return reviewProblem(request.id, request.recall);
+      return reviewProblem(request.id, request.recall, request.mode);
 
     case 'problem:details': {
       const problem = await updateProblem(request.id, (current) => ({
@@ -571,6 +658,190 @@ async function handle(request: Request): Promise<unknown> {
     case 'backup:pull':
       return pullBackup();
 
+    case 'sync:now':
+      return syncNow();
+
+    case 'sync:status':
+      return getSyncState();
+
+    case 'submissions:claim':
+      return claimSubmissionIds(request.platform, request.ids, request.watched);
+
+    case 'rail:get': {
+      const id = problemKey(request.platform as SolvedProblem['platform'], request.slug);
+      const [problem, settings, journal, opened] = await Promise.all([
+        getProblem(id),
+        getSettings(),
+        getJournal(id),
+        readOpened(),
+      ]);
+
+      // The mirror is only consulted for Codeforces, and only when it can
+      // answer — a cold cache must not hold the whole card back.
+      let cf: CfProblemView | undefined;
+      if (request.platform === 'codeforces') {
+        cf = (
+          await lookup(
+            [request.slug],
+            settings.handles.codeforces,
+            problem ? new Set([request.slug.toUpperCase()]) : undefined,
+          ).catch(() => undefined)
+        )?.[request.slug];
+      }
+
+      // Both are Codeforces-only and both are extras: a slow contest page must
+      // not hold up the card, so a failure is nothing rather than an error.
+      let editorial: Material | undefined;
+      let similar: Similar[] = [];
+      if (request.platform === 'codeforces' && settings.page.next) {
+        const contestId = /^(\d+)/.exec(request.slug)?.[1];
+        [editorial, similar] = await Promise.all([
+          contestId ? editorialFor(contestId).catch(() => undefined) : undefined,
+          similarTo(request.slug).catch(() => []),
+        ]);
+      }
+
+      return {
+        problem,
+        // A solved problem carries its own journal on the record.
+        journal: problem?.events ?? journal,
+        due: problem ? isDue(problem.revision, Date.now()) : false,
+        openedAt: opened[id],
+        cf,
+        editorial,
+        similar,
+        page: settings.page,
+        now: Date.now(),
+      };
+    }
+
+    case 'cf:lookup': {
+      const [{ handles }, problems] = await Promise.all([getSettings(), getProblemList()]);
+      const mine = new Set(
+        problems
+          .filter((problem) => problem.platform === 'codeforces')
+          .map((problem) => problem.slug.toUpperCase()),
+      );
+      return lookup(request.keys, handles.codeforces, mine);
+    }
+
+    case 'daily:get':
+      return buildHome();
+
+    case 'daily:skip':
+      return skipToday();
+
+    case 'backlog:add':
+      return addToBacklog(request.key);
+
+    case 'backlog:remove':
+      return removeFromBacklog(request.key);
+
+    case 'insights:get':
+      return buildInsights(request.days);
+
+    case 'cf:handles':
+      return handleCards(request.handles);
+
+    case 'cf:friends': {
+      const { handles } = await getSettings();
+      const watched = handles.friends.filter(Boolean);
+      return { solves: await friendSolves(watched, request.problem), watched: watched.length };
+    }
+
+    /**
+     * Injects the workspace bundle into the tab that asked for it.
+     *
+     * It lives outside the always-on content script because CodeMirror is the
+     * single heaviest thing this extension ships, and a person reading the
+     * problemset should never pay for an editor they did not open. A content
+     * script cannot inject itself, so the request comes here and the tab id
+     * comes from the sender rather than from the message — a page cannot ask
+     * for code to be run in a tab that is not its own.
+     */
+    case 'workspace:open': {
+      const tabId = sender.tab?.id;
+      if (tabId === undefined) return { ok: false, error: 'No tab to open the workspace in.' };
+
+      const { page } = await getSettings();
+      if (!page.enabled || !page.workspace) {
+        return { ok: false, error: 'The workspace is switched off in Settings.' };
+      }
+
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId, frameIds: sender.frameId === undefined ? undefined : [sender.frameId] },
+          files: ['workspace.js'],
+        });
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+
+    case 'workspace:drafts': {
+      const stored = await chrome.storage.local.get(DRAFTS_KEY);
+      return { count: Object.keys(stored[DRAFTS_KEY] ?? {}).length };
+    }
+
+    // Unfinished code is the most personal thing this extension holds, so
+    // there is a button that deletes it rather than only a promise that it
+    // eventually rolls over.
+    case 'workspace:forget-drafts':
+      await chrome.storage.local.remove(DRAFTS_KEY);
+      return { count: 0 };
+
+    case 'train:get':
+      return buildTrain();
+
+    case 'train:start':
+      return startContest(request.ratings, request.minutes);
+
+    case 'train:reroll':
+      return rerollSlot(request.index);
+
+    case 'train:finish':
+      return finishContest();
+
+    case 'history:get':
+      return buildHistory();
+
+    // Runs here rather than in the page so the user's Gemini key never enters
+    // a judge's tab.
+    case 'translate:strings':
+      return translateStrings(request.problem, request.strings);
+
+    case 'community:get':
+      return readThreads(request.problem);
+
+    // The code posted comes from the stored record, not from the caller, so a
+    // page cannot ask the worker to publish something arbitrary as you.
+    case 'community:post':
+      return postSolution(request.id);
+
+    case 'bridge:test':
+      return testBridge(request.port);
+
+    case 'github:device-start':
+      return startDeviceFlow(request.includePrivate, request.clientId);
+
+    // One poll per call: a fifteen-minute loop in the service worker would be
+    // killed by MV3 anyway, so the page that is open holds the timer.
+    case 'github:device-poll':
+      return pollDeviceFlow(request.deviceCode, request.clientId);
+
+    // One contest at a time, because the breakdown costs a request each and
+    // the rate limit is one every two seconds.
+    case 'history:round':
+      return loadRound(request.contestId);
+
+    case 'cf:refresh': {
+      const { handles } = await getSettings();
+      await ensureProblemset(true);
+      if (handles.codeforces) await ensureUserStatus(handles.codeforces, true);
+      return mirrorState(handles.codeforces);
+    }
+
     case 'rating:profiles': {
       const { handles } = await getSettings();
       // Fetched together but reported separately: one judge being unreachable
@@ -656,6 +927,25 @@ async function handle(request: Request): Promise<unknown> {
     case 'github:verify':
       return verifyAccess(request.config);
 
+    // The picker asks for these with whatever token is in the box, which may be
+    // one the user has typed but not yet saved — so the token comes with the
+    // request rather than being read from settings.
+    case 'cf:connect':
+      return connectCodeforces(request.handle, { key: request.key, secret: request.secret });
+
+    case 'github:repos':
+      return { repos: await listRepos(request.token) };
+
+    case 'github:branches':
+      return {
+        branches: await listBranches(
+          request.token,
+          request.owner,
+          request.repo,
+          request.defaultBranch,
+        ),
+      };
+
     default: {
       const exhaustive: never = request;
       throw new Error(`Unknown request: ${JSON.stringify(exhaustive)}`);
@@ -663,8 +953,8 @@ async function handle(request: Request): Promise<unknown> {
   }
 }
 
-chrome.runtime.onMessage.addListener((request: Request, _sender, sendResponse) => {
-  handle(request)
+chrome.runtime.onMessage.addListener((request: Request, sender, sendResponse) => {
+  handle(request, sender)
     .then((data) => sendResponse({ ok: true, data } as Response<Request['type']>))
     .catch((error: unknown) =>
       sendResponse({
@@ -694,12 +984,21 @@ chrome.runtime.onInstalled.addListener((details) => {
   // Checked daily; the nudge itself only fires once a week (see below).
   chrome.alarms.create(WRAPPED_ALARM, { periodInMinutes: 60 * 24 });
   chrome.alarms.create(BACKUP_ALARM, { periodInMinutes: 60 * 24 });
+  // Half-hourly. Often enough that moving between two machines in an evening
+  // works, rare enough that a quiet day adds no commits — a sync that changes
+  // nothing writes nothing.
+  chrome.alarms.create(SYNC_ALARM, { periodInMinutes: 30 });
+  // Hourly, but it only ever says anything in the evening (see below).
+  chrome.alarms.create(STREAK_ALARM, { periodInMinutes: 60 });
   void refreshBadge();
   if (details.reason === 'install') void chrome.runtime.openOptionsPage();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   void refreshBadge();
+  // The browser opening is the moment the other machine's work is most likely
+  // to be waiting, and the moment before this one starts making its own.
+  void syncNow();
 });
 
 // Registered unconditionally: the listener itself checks whether focus mode is
@@ -712,7 +1011,51 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === CONTEST_ALARM) void tickContests();
   if (alarm.name === WRAPPED_ALARM) void offerWrapped();
   if (alarm.name === BACKUP_ALARM) void dailyBackup();
+  if (alarm.name === SYNC_ALARM || alarm.name === SYNC_SOON_ALARM) void syncNow();
+  if (alarm.name === STREAK_ALARM) void nudgeStreak();
 });
+
+const STREAK_SENT_KEY = 'streakNudgedOn';
+
+/**
+ * One nudge, in the evening, only when a streak is genuinely at risk.
+ *
+ * The bar is deliberately high. A notification that fires when nothing is
+ * actually about to be lost is the kind people turn off within a week, taking
+ * the useful ones with it — so this stays quiet unless there is a run of at
+ * least three days, today is still open, and it is late enough that "later"
+ * has stopped being a plausible answer.
+ */
+async function nudgeStreak(): Promise<void> {
+  const settings = await getSettings();
+  if (!settings.revision.notify) return;
+
+  // Local hour, not UTC: the point is that it is evening where the user is.
+  const hour = new Date().getHours();
+  if (hour < 19 || hour > 22) return;
+
+  // The daily problem's calendar, so "already nudged today" and "today's pick"
+  // never disagree across the UTC boundary.
+  const today = utcDay(Date.now());
+  const stored = await chrome.storage.local.get(STREAK_SENT_KEY);
+  if (stored[STREAK_SENT_KEY] === today) return;
+
+  const home = await buildHome().catch(() => undefined);
+  if (!home) return;
+  if (!home.streak.todayPending || home.streak.current < 3) return;
+  if (home.solvedToday > 0) return;
+
+  await chrome.storage.local.set({ [STREAK_SENT_KEY]: today });
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
+    title: `${home.streak.current}-day streak, still going`,
+    message: home.daily?.main
+      ? `Today's problem is ${home.daily.main.key} (${home.daily.main.rating}). It keeps the run alive.`
+      : 'Solve one problem today to keep it.',
+    priority: 0,
+  });
+}
 
 /**
  * Commits the backup once a day, quietly.

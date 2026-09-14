@@ -121,12 +121,36 @@ export function readBackup(text: string): RestorePlan {
 }
 
 /**
+ * When a record last changed, however old the record is.
+ *
+ * `updatedAt` is stamped on every write, but records written before that field
+ * existed do not have one — and a backup from another machine may be one of
+ * them. For those, the newest timestamp the record does carry is the best
+ * available answer: a review moves `lastReviewedAt`, and a first solve moves
+ * `solvedAt`.
+ */
+export function touchedAt(problem: SolvedProblem): number {
+  return Math.max(
+    problem.updatedAt ?? 0,
+    problem.solvedAt ?? 0,
+    problem.revision?.lastReviewedAt ?? 0,
+  );
+}
+
+/**
  * Merges a backup into what is already here.
  *
  * Restoring onto a fresh install is the easy case. Restoring onto a machine
  * that has been used since the export is the one worth getting right: the
  * newer record of each problem wins, so importing an old backup cannot undo
  * work done after it.
+ *
+ * The comparison used to be on `solvedAt` alone, which was enough for restoring
+ * a file and not enough for keeping two machines in step: revising a problem
+ * does not change when it was solved, so a review on the laptop and a review on
+ * the desktop tied, and the merge kept whichever it saw last. Now every write
+ * stamps `updatedAt` and that is what is compared — a review counts as a change
+ * to the record, which is what it is.
  */
 export function mergeProblems(
   current: Record<string, SolvedProblem>,
@@ -141,9 +165,10 @@ export function mergeProblems(
       continue;
     }
 
-    // `solvedAt` is the only timestamp every record has carried since the
-    // first version, which makes it the one safe thing to compare on.
-    merged[id] = problem.solvedAt > existing.solvedAt ? problem : existing;
+    // Ties keep what is already here. Two machines that genuinely wrote at the
+    // same millisecond are indistinguishable, and preferring the local copy at
+    // least means a sync never changes anything you can see for no reason.
+    merged[id] = touchedAt(problem) > touchedAt(existing) ? problem : existing;
   }
 
   return merged;

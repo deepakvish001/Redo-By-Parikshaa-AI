@@ -1,3 +1,4 @@
+import { isHost } from '../core/hosts.ts';
 import type { AcceptedSubmission, Difficulty } from '../core/types.ts';
 import { parseHtml, type AdapterContext, type PlatformAdapter } from './types.ts';
 
@@ -47,6 +48,51 @@ export function failedOnTest(verdict: string): number | undefined {
   return Number.isFinite(failed) && failed > 0 ? failed - 1 : undefined;
 }
 
+/**
+ * The minimum a table row has to look like for the language read below. The
+ * real DOM satisfies it; a plain object in a test can too.
+ */
+export interface LanguageCell {
+  textContent: string | null;
+  previousElementSibling: LanguageCell | null;
+  querySelector(selectors: string): unknown;
+}
+
+export interface LanguageRow {
+  querySelector(selectors: string): LanguageCell | null;
+  querySelectorAll(selectors: string): Iterable<LanguageCell>;
+}
+
+/**
+ * The language, from its own column.
+ *
+ * Codeforces' status table runs `# · when · who · problem · language · verdict
+ * · time · memory`, so the language is the cell immediately before the verdict
+ * cell — which has a class, and is therefore something to anchor on rather than
+ * guess from.
+ *
+ * Guessing is what the old code did, and it kept being wrong in a way that is
+ * obvious in hindsight: the problem cell comes *first*, so any title containing
+ * a word that is also a language name won the race. Codeforces really does
+ * offer a language called `Secret_171`, so "1530E - Secret Santa" was filed as
+ * having been solved in "1530E - Secret Santa".
+ */
+export function readLanguage(row: LanguageRow): string {
+  const beside = row.querySelector('.status-verdict-cell')?.previousElementSibling;
+  const named = beside?.textContent?.trim();
+  if (named && named.length < 40) return named;
+
+  // Older or partial markup with no verdict cell to anchor on. The token scan
+  // still runs, but never over the cell holding the problem link — that is the
+  // one cell guaranteed to contain a title.
+  for (const cell of row.querySelectorAll('td')) {
+    if (cell.querySelector('a[href*="/problem/"]')) continue;
+    const text = cell.textContent?.trim() ?? '';
+    if (looksLikeLanguage(text)) return text;
+  }
+  return '';
+}
+
 /** True when a table cell reads like a language, not like a problem title. */
 export function looksLikeLanguage(text: string): boolean {
   if (!text || text.length >= 40) return false;
@@ -83,15 +129,33 @@ function parseProblemHref(href: string): { contestId: string; index: string } | 
   return null;
 }
 
+/** One finished row, read off the status table and waiting on a verdict of ours. */
+interface CodeforcesSubmission {
+  submissionId: string;
+  /** `2250A` — the problem key, not the submission's. */
+  key: string;
+  contestId: string;
+  index: string;
+  verdict: string;
+  accepted: boolean;
+  language: string;
+  runtime?: string;
+  memory?: string;
+  sourceHref: string;
+}
+
 export class CodeforcesAdapter implements PlatformAdapter {
   readonly platform = 'codeforces' as const;
 
   private readonly processed = new Set<string>();
+  /** Ids this page saw still being judged — new by definition. */
+  private readonly watched = new Set<string>();
   private readonly attempts = new Map<string, number>();
   private readonly metaCache = new Map<string, ProblemMeta>();
+  private announced = false;
 
   matches(url: URL): boolean {
-    return url.hostname.endsWith('codeforces.com');
+    return isHost(url.hostname, 'codeforces.com');
   }
 
   currentSlug(url: URL): string | null {
@@ -121,11 +185,20 @@ export class CodeforcesAdapter implements PlatformAdapter {
     return pathname.endsWith('/my') || search.includes('my=on') || pathname.includes('/submission/');
   }
 
+  /**
+   * Reads the table, then asks which of what it found is actually new.
+   *
+   * Two phases, because the answer to "is this new" lives in the service worker
+   * and this runs from a MutationObserver. The synchronous pass marks every row
+   * it collects as processed straight away, so the observer firing again mid-
+   * flight cannot queue the same submission twice.
+   */
   private scan(context: AdapterContext): void {
     const rows = document.querySelectorAll<HTMLTableRowElement>(
       'table.status-frame-datatable tr[data-submission-id]',
     );
     const handle = this.myHandle();
+    const batch: CodeforcesSubmission[] = [];
 
     for (const row of rows) {
       const submissionId = row.getAttribute('data-submission-id');
@@ -137,8 +210,17 @@ export class CodeforcesAdapter implements PlatformAdapter {
 
       // `waiting` is Codeforces' own flag for "the judge has not finished", and
       // unlike the verdict text it is the same on the Russian locale.
-      if (verdictCell?.getAttribute('waiting') === 'true') continue;
-      if (/in queue|running|testing|в очереди|выполняется/i.test(verdict)) continue;
+      const judging =
+        verdictCell?.getAttribute('waiting') === 'true' ||
+        /in queue|running|testing|в очереди|выполняется/i.test(verdict);
+      if (judging) {
+        // Seeing a verdict arrive is the one unambiguous signal that a
+        // submission is being made right now, so it is remembered: this is what
+        // lets the very first solve after installing be picked up, even though
+        // the rest of the page is history that must not be.
+        this.watched.add(submissionId);
+        continue;
+      }
 
       const author = row.querySelector<HTMLAnchorElement>('a[href^="/profile/"]')?.textContent?.trim();
       const mine = handle ? author === handle : this.isMySubmissionsPage();
@@ -148,71 +230,76 @@ export class CodeforcesAdapter implements PlatformAdapter {
       const parsed = problemLink ? parseProblemHref(problemLink.getAttribute('href') ?? '') : null;
       if (!parsed) continue;
 
-      const key = `${parsed.contestId}${parsed.index.toUpperCase()}`;
       this.processed.add(submissionId);
-      const language = this.languageFromRow(row);
       const judged = readJudgeCells(row);
       // `submissionverdict` is Codeforces' machine-readable verdict; the cell's
       // text is localised and "Accepted" is "Полное решение" in Russian.
       const machine = verdictCell?.getAttribute('submissionverdict') ?? '';
-      const accepted = machine ? machine === 'OK' : /^accepted/i.test(verdict);
+
+      batch.push({
+        submissionId,
+        key: `${parsed.contestId}${parsed.index.toUpperCase()}`,
+        contestId: parsed.contestId,
+        index: parsed.index.toUpperCase(),
+        verdict,
+        accepted: machine ? machine === 'OK' : /^accepted/i.test(verdict),
+        language: readLanguage(row),
+        runtime: judged.runtime,
+        memory: judged.memory,
+        sourceHref:
+          row.querySelector<HTMLAnchorElement>('a[href*="/submission/"]')?.getAttribute('href') ??
+          `/contest/${parsed.contestId}/submission/${submissionId}`,
+      });
+    }
+
+    if (batch.length > 0) void this.handle(context, batch);
+  }
+
+  private async handle(
+    context: AdapterContext,
+    batch: CodeforcesSubmission[],
+  ): Promise<void> {
+    const claim = await context.claim(
+      batch.map((entry) => entry.submissionId),
+      [...this.watched],
+    );
+
+    if (claim.adopted && !this.announced) {
+      this.announced = true;
+      context.onNotice(
+        'Redo is now watching Codeforces. Submissions already on this page were left alone — the next one you make gets committed.',
+      );
+    }
+
+    const wanted = new Set(claim.actionable);
+    for (const entry of batch) {
+      if (!wanted.has(entry.submissionId)) continue;
 
       // Codeforces has no run/submit split — every row in the status table is a
       // real submission, and the verdict cell names the test it died on.
-      context.onEvent(key, {
+      context.onEvent(entry.key, {
         at: Date.now(),
         kind: 'submit',
-        verdict,
-        accepted,
-        language: language || undefined,
-        runtime: judged.runtime,
-        memory: judged.memory,
-        testsPassed: failedOnTest(verdict),
-        submissionId,
+        verdict: entry.verdict,
+        accepted: entry.accepted,
+        language: entry.language || undefined,
+        runtime: entry.runtime,
+        memory: entry.memory,
+        testsPassed: failedOnTest(entry.verdict),
+        submissionId: entry.submissionId,
       });
 
-      if (!accepted) {
-        this.attempts.set(key, (this.attempts.get(key) ?? 0) + 1);
-        context.onAttempt(`codeforces:${key}`);
+      if (!entry.accepted) {
+        this.attempts.set(entry.key, (this.attempts.get(entry.key) ?? 0) + 1);
+        context.onAttempt(`codeforces:${entry.key}`);
         continue;
       }
 
-      const sourceHref =
-        row.querySelector<HTMLAnchorElement>('a[href*="/submission/"]')?.getAttribute('href') ??
-        `/contest/${parsed.contestId}/submission/${submissionId}`;
-
-      void this.resolve(context, {
-        key,
-        contestId: parsed.contestId,
-        index: parsed.index.toUpperCase(),
-        sourceHref,
-        language,
-        runtime: judged.runtime,
-        memory: judged.memory,
-      });
+      await this.resolve(context, entry);
     }
   }
 
-  private languageFromRow(row: HTMLTableRowElement): string {
-    for (const cell of row.querySelectorAll('td')) {
-      const text = cell.textContent?.trim() ?? '';
-      if (looksLikeLanguage(text)) return text;
-    }
-    return '';
-  }
-
-  private async resolve(
-    context: AdapterContext,
-    submission: {
-      key: string;
-      contestId: string;
-      index: string;
-      sourceHref: string;
-      language: string;
-      runtime?: string;
-      memory?: string;
-    },
-  ): Promise<void> {
+  private async resolve(context: AdapterContext, submission: CodeforcesSubmission): Promise<void> {
     try {
       const code = await this.fetchSource(submission.sourceHref);
       if (!code) {
@@ -265,17 +352,42 @@ export class CodeforcesAdapter implements PlatformAdapter {
 
     const fallback: ProblemMeta = { title: `${contestId}${index}`, tags: [], difficulty: 'unknown' };
 
+    // The contest page is tried first because it is the one the user is on and
+    // is therefore already warm. It hides tags and the rating while the round is
+    // running, though, so a solve during a contest lands here with nothing —
+    // which is exactly when the problemset copy has them.
+    const sources = [
+      `${window.location.origin}/contest/${contestId}/problem/${index}`,
+      `${window.location.origin}/problemset/problem/${contestId}/${index}`,
+    ];
+
+    let best: ProblemMeta | undefined;
+    for (const source of sources) {
+      const read = await this.readProblemPage(source);
+      if (!read) continue;
+      best ??= read;
+      // A title alone is worth keeping; tags are what makes it worth stopping.
+      if (read.tags.length > 0) {
+        best = read;
+        break;
+      }
+    }
+
+    if (!best) return fallback;
+    this.metaCache.set(key, best);
+    return best;
+  }
+
+  private async readProblemPage(url: string): Promise<ProblemMeta | null> {
     try {
-      const response = await fetch(
-        `https://codeforces.com/contest/${contestId}/problem/${index}`,
-        { credentials: 'include' },
-      );
-      if (!response.ok) return fallback;
+      const response = await fetch(url, { credentials: 'include' });
+      if (!response.ok) return null;
       const page = parseHtml(await response.text());
 
       const rawTitle = page.querySelector('.problem-statement .title')?.textContent?.trim() ?? '';
       // Titles arrive as "A. Sum of Round Numbers"; keep only the name.
-      const title = rawTitle.replace(/^[A-Za-z0-9]+\.\s*/, '') || fallback.title;
+      const title = rawTitle.replace(/^[A-Za-z0-9]+\.\s*/, '');
+      if (!title) return null;
 
       const tags: string[] = [];
       let rating: number | undefined;
@@ -287,11 +399,9 @@ export class CodeforcesAdapter implements PlatformAdapter {
         else tags.push(text);
       }
 
-      const meta: ProblemMeta = { title, tags, difficulty: ratingToDifficulty(rating) };
-      this.metaCache.set(key, meta);
-      return meta;
+      return { title, tags, difficulty: ratingToDifficulty(rating) };
     } catch {
-      return fallback;
+      return null;
     }
   }
 }

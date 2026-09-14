@@ -1,8 +1,19 @@
 import { adapterFor } from '../adapters/index.ts';
 import { OBSERVER_CHANNEL, type ObservedGlimpse } from '../adapters/observed.ts';
+import { shouldAutoOpenWorkspace } from '../core/cf-url.ts';
 import { send, type DiagnosticEntry } from '../core/messages.ts';
 import { formatDueIn } from '../core/srs.ts';
-import type { AttemptEvent, SolvedProblem } from '../core/types.ts';
+import type { AttemptEvent, Settings, SolvedProblem } from '../core/types.ts';
+import { MountRunner } from './inject/registry.ts';
+import { codeforcesDaily } from './mounts/cf-daily.ts';
+import { codeforcesListing } from './mounts/cf-listing.ts';
+import { leetcodeRail } from './mounts/lc-rail.ts';
+import { codeforcesHoverCard } from './mounts/cf-hovercard.ts';
+import { codeforcesProfile } from './mounts/cf-profile.ts';
+import { codeforcesRail } from './mounts/cf-rail.ts';
+import { codeforcesSkin } from './mounts/cf-skin.ts';
+import { codeforcesTranslate } from './mounts/cf-translate.ts';
+import { codeforcesStandings } from './mounts/cf-standings.ts';
 import { showReviewPanel } from './review-panel.ts';
 import { showToast } from './toast.ts';
 
@@ -29,12 +40,20 @@ function announceSaved(problem: SolvedProblem): void {
   });
 }
 
-async function checkRevisionDue(slug: string, platform: string): Promise<void> {
+async function checkRevisionDue(
+  slug: string,
+  platform: string,
+  railHandlesIt: () => boolean,
+): Promise<void> {
   try {
     // Starts the clock for this problem, whether or not it is already tracked.
     await send({ type: 'page:opened', platform, slug });
     const context = await send({ type: 'page:context', platform, slug });
-    if (context.tracked && context.due && context.problem) showReviewPanel(context.problem);
+    if (!context.tracked || !context.due || !context.problem) return;
+    // On a page where the rail is drawing the same prompt in the sidebar, a
+    // toast saying it again is the extension talking over itself.
+    if (railHandlesIt()) return;
+    showReviewPanel(context.problem);
   } catch {
     // The service worker may still be starting up; a missed nudge is harmless.
   }
@@ -114,25 +133,92 @@ function main(): void {
   const record = createDiagnosticSink(adapter.platform);
   const journal = createJournalSink(adapter.platform);
 
-  void send({ type: 'settings:get' })
-    .then((settings) => {
-      if (!settings.diagnostics.enabled) return;
+  // Redo's own widgets on the judge's page. The runner owns their whole
+  // lifetime; nothing else in this file knows they exist.
+  const mounts = new MountRunner([
+    codeforcesRail,
+    codeforcesListing,
+    codeforcesDaily,
+    leetcodeRail,
+    codeforcesProfile,
+    codeforcesStandings,
+    codeforcesHoverCard,
+    codeforcesSkin,
+    codeforcesTranslate,
+  ]);
+  mounts.start();
 
-      // The MAIN-world observer cannot read extension storage, so the setting
-      // is handed to it from here.
-      window.postMessage(
-        { channel: OBSERVER_CHANNEL, kind: 'diagnostics', enabled: true },
-        window.location.origin,
-      );
-      record('page', `${adapter.platform} content script on ${window.location.pathname}`);
+  let current: Settings | undefined;
 
-      window.addEventListener('message', (event: MessageEvent<ObservedGlimpse>) => {
-        if (event.source !== window) return;
-        if (event.data?.channel !== OBSERVER_CHANNEL || event.data.kind !== 'seen') return;
-        record('seen', `${event.data.method} ${event.data.path}`, event.data.matched);
-      });
-    })
-    .catch(() => undefined);
+  /**
+   * Opens the workspace by itself, at most once per page.
+   *
+   * Keyed on the address rather than on a flag, because the alternative is a
+   * loop: the user presses Close, some mutation re-runs this, and the overlay
+   * they just dismissed comes straight back. Once per URL means Close stays
+   * closed until you navigate somewhere else.
+   */
+  let autoOpenedFor: string | null = null;
+
+  const maybeAutoOpenWorkspace = async (): Promise<void> => {
+    const settings = current;
+    if (!settings || !shouldAutoOpenWorkspace(settings.page, window.location.pathname)) return;
+
+    const href = window.location.href;
+    if (autoOpenedFor === href) return;
+
+    // The statement is what the workspace is built around, and on a slow page
+    // it can arrive after this script does. Waiting a moment beats burning the
+    // one attempt on a page that was not finished loading.
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      if (document.querySelector('.problem-statement')) break;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      if (window.location.href !== href) return;
+    }
+    if (!document.querySelector('.problem-statement')) return;
+
+    autoOpenedFor = href;
+    await send({ type: 'workspace:open' }).catch(() => undefined);
+  };
+
+  const applySettings = (settings: Settings) => {
+    const first = current === undefined;
+    current = settings;
+    mounts.setSettings(settings);
+    void maybeAutoOpenWorkspace();
+    if (!first || !settings.diagnostics.enabled) return;
+
+    // The MAIN-world observer cannot read extension storage, so the setting is
+    // handed to it from here.
+    window.postMessage(
+      { channel: OBSERVER_CHANNEL, kind: 'diagnostics', enabled: true },
+      window.location.origin,
+    );
+    record('page', `${adapter.platform} content script on ${window.location.pathname}`);
+
+    window.addEventListener('message', (event: MessageEvent<ObservedGlimpse>) => {
+      if (event.source !== window) return;
+      if (event.data?.channel !== OBSERVER_CHANNEL || event.data.kind !== 'seen') return;
+      record('seen', `${event.data.method} ${event.data.path}`, event.data.matched);
+    });
+  };
+
+  void send({ type: 'settings:get' }).then(applySettings).catch(() => undefined);
+
+  // Turning a switch off in Settings should take the widget off the page you
+  // are already looking at, not on the next reload.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !('settings' in changes)) return;
+    void send({ type: 'settings:get' }).then(applySettings).catch(() => undefined);
+  });
+
+  /** True when the sidebar card is already showing the revision prompt. */
+  const railShowsDue = () =>
+    Boolean(
+      current?.page.enabled &&
+        current.page.rail &&
+        codeforcesRail.matches(new URL(window.location.href)),
+    );
 
   adapter.start({
     onAccepted: async (submission) => {
@@ -172,6 +258,31 @@ function main(): void {
       record('error', message);
       showToast({ title: 'Redo', body: message, tone: 'error' });
     },
+    onNotice: (message) => {
+      record('event', message);
+      showToast({ title: 'Redo', body: message, tone: 'info', timeout: 12_000 });
+    },
+    claim: async (ids, watched) => {
+      try {
+        const claim = await send({
+          type: 'submissions:claim',
+          platform: adapter.platform,
+          ids,
+          watched,
+        });
+        record(
+          'event',
+          `claimed ${claim.actionable.length} of ${ids.length} submissions${
+            claim.adopted ? ' (first sight of this judge — history adopted)' : ''
+          }`,
+        );
+        return claim;
+      } catch {
+        // The service worker being asleep must not turn into a page of history
+        // being committed, so a failed claim means nothing is acted on.
+        return { actionable: [], adopted: false };
+      }
+    },
   });
 
   let lastSlug: string | null = null;
@@ -179,7 +290,8 @@ function main(): void {
     const slug = adapter.currentSlug(new URL(window.location.href));
     if (!slug || slug === lastSlug) return;
     lastSlug = slug;
-    void checkRevisionDue(slug, adapter.platform);
+    void checkRevisionDue(slug, adapter.platform, railShowsDue);
+    void maybeAutoOpenWorkspace();
   };
 
   checkCurrentPage();

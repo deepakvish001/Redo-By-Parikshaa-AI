@@ -8,6 +8,7 @@ import {
   buildBackup,
   mergeJournals,
   mergeProblems,
+  touchedAt,
   readBackup,
   redactSettings,
 } from '../src/core/backup.ts';
@@ -115,4 +116,65 @@ test('journals merge in time order', () => {
 
 test('the filename carries the date so several backups can coexist', () => {
   assert.equal(backupFilename(Date.UTC(2026, 0, 15)), 'redo-backup-2026-01-15.json');
+});
+
+/* ------------------------------------------------- keeping two machines in step */
+
+const synced = (id, fields = {}) => ({
+  id,
+  slug: id,
+  platform: 'leetcode',
+  title: id,
+  difficulty: 'medium',
+  solvedAt: 1000,
+  revision: { stage: 1, ease: 2.5, dueAt: 2000, reviewCount: 0, lapses: 0, hintsUsed: 0 },
+  ...fields,
+});
+
+test('a revision on the other machine wins, even though solvedAt did not move', () => {
+  // This is the whole reason syncing needed more than the restore merge did.
+  // Revising a problem does not change when it was solved, so comparing
+  // `solvedAt` made a review on the laptop and a review on the desktop a tie —
+  // and the schedule, which is the thing worth syncing, never travelled.
+  const here = synced('two-sum', { updatedAt: 5000, revision: { stage: 1, ease: 2.5, dueAt: 2000, reviewCount: 0, lapses: 0, hintsUsed: 0 } });
+  const there = synced('two-sum', { updatedAt: 9000, revision: { stage: 4, ease: 2.5, dueAt: 9999, reviewCount: 3, lapses: 0, hintsUsed: 0 } });
+
+  const merged = mergeProblems({ 'two-sum': here }, { 'two-sum': there });
+  assert.equal(merged['two-sum'].revision.stage, 4, 'the newer record wins');
+  assert.equal(merged['two-sum'].solvedAt, 1000, 'and solvedAt was identical on both');
+});
+
+test('an older backup cannot undo newer work', () => {
+  const here = synced('two-sum', { updatedAt: 9000, revision: { stage: 4, ease: 2.5, dueAt: 9999, reviewCount: 3, lapses: 0, hintsUsed: 0 } });
+  const stale = synced('two-sum', { updatedAt: 3000 });
+
+  assert.equal(mergeProblems({ 'two-sum': here }, { 'two-sum': stale })['two-sum'].revision.stage, 4);
+});
+
+test('a record from before updatedAt existed falls back to what it does carry', () => {
+  // An old backup has no `updatedAt` at all. Its newest timestamp is the honest
+  // stand-in, so an old file still merges sensibly rather than always losing.
+  const old = synced('old', {
+    updatedAt: undefined,
+    solvedAt: 1000,
+    revision: { stage: 3, ease: 2.5, dueAt: 8000, lastReviewedAt: 7000, reviewCount: 2, lapses: 0, hintsUsed: 0 },
+  });
+  assert.equal(touchedAt(old), 7000, 'the review is newer than the solve');
+
+  const here = synced('old', { updatedAt: 4000 });
+  assert.equal(mergeProblems({ old: here }, { old })['old'].revision.stage, 3, 'the older-stamped local copy loses');
+});
+
+test('what only the other machine has is brought over', () => {
+  const merged = mergeProblems({ a: synced('a') }, { b: synced('b') });
+  assert.deepEqual(Object.keys(merged).sort(), ['a', 'b']);
+});
+
+test('a tie keeps what is already here', () => {
+  // Two machines that wrote in the same millisecond are indistinguishable, and
+  // preferring the local copy means a sync never changes something you are
+  // looking at for no reason anybody could explain.
+  const here = synced('x', { updatedAt: 5000, title: 'mine' });
+  const there = synced('x', { updatedAt: 5000, title: 'theirs' });
+  assert.equal(mergeProblems({ x: here }, { x: there }).x.title, 'mine');
 });

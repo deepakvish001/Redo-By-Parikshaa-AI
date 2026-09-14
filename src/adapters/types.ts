@@ -1,3 +1,4 @@
+import type { Claim } from '../core/watermark.ts';
 import type { AcceptedSubmission, AttemptEvent, Platform } from '../core/types.ts';
 
 export interface AdapterContext {
@@ -12,6 +13,18 @@ export interface AdapterContext {
   onEvent(slug: string, event: AttemptEvent): void;
   /** Surfaced to the user as a toast; adapters use it for recoverable failures. */
   onError(message: string): void;
+  /** Surfaced as an ordinary toast — something worth knowing, not a failure. */
+  onNotice(message: string): void;
+  /**
+   * Narrows a batch of finished submission ids to the ones that are new.
+   *
+   * Codeforces' `?my=on` and AtCoder's `/submissions/me` list every submission
+   * the account has ever made, and an adapter looking at that page cannot tell
+   * this morning's solve from one two years ago. The service worker keeps a
+   * high-water mark per judge and answers that question; `watched` names the
+   * ids this page saw still being judged, which are new by definition.
+   */
+  claim(ids: string[], watched: string[]): Promise<Claim>;
 }
 
 export interface PlatformAdapter {

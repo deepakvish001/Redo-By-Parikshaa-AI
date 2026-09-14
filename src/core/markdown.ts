@@ -7,7 +7,8 @@ import {
   formatDuration,
   summarise,
 } from './journal.ts';
-import { normalizeProblemId, solutionPath } from './paths.ts';
+import { normalizeProblemId, solutionFiles, solutionPath } from './paths.ts';
+import { describe as describeResolve, summarise as summariseResolve } from './resolve-diff.ts';
 import {
   PLATFORM_LABELS,
   type ActivityEvent,
@@ -32,6 +33,39 @@ function inlineCode(text: string): string {
  * This is the part that is worth re-reading months later: which verdict came
  * back, on which test, and how long the whole thing took.
  */
+/**
+ * How this attempt compared with the last one, when there was a last one.
+ *
+ * A sentence, not the diff itself: the two solutions are both in git, and git
+ * shows a diff better than a markdown file can. What the README adds is the
+ * summary you would otherwise have to reconstruct by finding the old commit.
+ */
+function resolveSection(problem: SolvedProblem): string[] {
+  const slot = Object.values(problem.solutions ?? {})
+    .filter((entry) => entry.previous)
+    .sort((a, b) => b.solvedAt - a.solvedAt)[0];
+  if (!slot?.previous) return [];
+
+  const sentence = describeResolve(
+    summariseResolve(
+      {
+        code: slot.previous.code,
+        language: slot.language,
+        solvedAt: slot.previous.solvedAt,
+        solveTimeMs: slot.previous.solveTimeMs,
+      },
+      {
+        code: slot.code,
+        language: slot.language,
+        solvedAt: slot.solvedAt,
+        solveTimeMs: problem.solveTimeMs,
+      },
+    ),
+  );
+
+  return sentence ? ['', '## Since last time', '', sentence] : [];
+}
+
 function attemptSection(events: AttemptEvent[]): string[] {
   if (events.length === 0) return [];
 
@@ -94,6 +128,17 @@ function escapeCell(text: string): string {
 }
 
 /** The per-problem README committed next to the solution file. */
+/**
+ * Every language this problem has been solved in, newest first.
+ *
+ * One line rather than one per file: the README's job is to say what is here,
+ * and "C++, Python" says it.
+ */
+function languageList(problem: SolvedProblem): string {
+  const files = solutionFiles(problem);
+  return files.map((file) => file.language).join(', ') || problem.language;
+}
+
 export function buildProblemReadme(problem: SolvedProblem): string {
   const lines = [
     `# ${normalizeProblemId(problem.problemId)}. ${problem.title}`,
@@ -102,7 +147,7 @@ export function buildProblemReadme(problem: SolvedProblem): string {
     `**Difficulty:** ${problem.difficulty === 'unknown' ? 'n/a' : problem.difficulty}  `,
     `**Link:** ${problem.url}  `,
     `**Solved:** ${isoDate(problem.solvedAt)}  `,
-    `**Language:** ${problem.language}  `,
+    `**Language:** ${languageList(problem)}  `,
     `**Attempts before accepted:** ${problem.attempts}`,
   ];
 
@@ -138,6 +183,22 @@ export function buildProblemReadme(problem: SolvedProblem): string {
     lines.push('', '## Complexity', '', complexity.join('  \n'));
   }
 
+  const files = solutionFiles(problem);
+  if (files.length > 1) {
+    // Only worth a section when there is more than one: a single file is
+    // already named in the folder beside this README.
+    lines.push(
+      '',
+      '## Solutions',
+      '',
+      ...files.map((file) => {
+        const name = file.path.split('/').pop() ?? file.path;
+        return `- [\`${name}\`](${encodeURIComponent(name)}) — ${file.language}`;
+      }),
+    );
+  }
+
+  lines.push(...resolveSection(problem));
   lines.push('', '## Approach', '', problem.note?.trim() || '_Add your notes here._');
   lines.push(...attemptSection(problem.events ?? []));
   lines.push(...historySection(problem.history ?? []));
@@ -216,13 +277,48 @@ export function buildIndexReadme(problems: SolvedProblem[], generatedAt: number)
         `[${escapeCell(problem.title)}](${encodeURI(path)})`,
         PLATFORM_LABEL[problem.platform] ?? problem.platform,
         problem.difficulty === 'unknown' ? '—' : problem.difficulty,
-        escapeCell(problem.language),
+        escapeCell(languageList(problem)),
         isoDate(problem.solvedAt),
         '',
       ].join(' | ').trim(),
     );
   }
 
+  lines.push(...topicSection(synced));
   lines.push('', '---', '', footer(), '');
   return lines.join('\n');
+}
+
+/**
+ * The same problems again, grouped by topic.
+ *
+ * A flat list answers "what have I done"; this answers "what have I done about
+ * graphs", which is the question somebody browsing a solutions repository is
+ * usually actually asking. Collapsed, so it does not push the table off screen.
+ */
+function topicSection(problems: SolvedProblem[]): string[] {
+  const byTag = new Map<string, SolvedProblem[]>();
+  for (const problem of problems) {
+    for (const tag of problem.tags) {
+      byTag.set(tag, [...(byTag.get(tag) ?? []), problem]);
+    }
+  }
+
+  if (byTag.size === 0) return [];
+
+  const lines = ['', '## By topic', ''];
+  const ordered = [...byTag.entries()].sort(
+    (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]),
+  );
+
+  for (const [tag, tagged] of ordered) {
+    lines.push(`<details><summary><b>${escapeCell(tag)}</b> — ${tagged.length}</summary>`, '');
+    for (const problem of tagged.sort((a, b) => b.solvedAt - a.solvedAt)) {
+      const path = problem.github.path ?? solutionPath(problem);
+      lines.push(`- [${escapeCell(problem.title)}](${encodeURI(path)})`);
+    }
+    lines.push('', '</details>', '');
+  }
+
+  return lines;
 }
