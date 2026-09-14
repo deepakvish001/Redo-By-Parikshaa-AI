@@ -215,7 +215,21 @@ function fullStamp(timestamp: number): string {
  * The rest of the record: how many times the problem was opened, revised,
  * hinted at and synced, and every one of those with its reason and its time.
  */
-function historySection(history: ActivityEvent[]): string[] {
+function historySection(all: ActivityEvent[]): string[] {
+  // The syncs themselves are left out, and that is not a tidiness decision.
+  //
+  // Committing this file *is* a GitHub sync, so it appends a `github` event to
+  // the record — which changes this table, which changes the file, which means
+  // the next sync has something new to commit, which appends another event. The
+  // content never converges, the "identical tree, no commit" guard upstream can
+  // never fire, and the repository collects a commit every time anything asks
+  // for a re-sync, each one saying only that a sync happened.
+  //
+  // Git already records when this file was committed, and far better than a
+  // table inside the file can. So the record here is the record of the
+  // *problem* — opened, solved, revised, hinted, annotated — and the panel,
+  // which is not writing itself to disk, still shows the sync rows.
+  const history = all.filter((event) => event.kind !== 'github' && event.kind !== 'parikshaa');
   if (history.length === 0) return [];
 
   const counts = countActivity(history);

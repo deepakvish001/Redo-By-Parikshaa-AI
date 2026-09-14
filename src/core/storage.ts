@@ -1,5 +1,6 @@
 import { DEFAULT_FOCUS } from './focus.ts';
 import { appendEvent } from './journal.ts';
+import { completeProblems } from './record.ts';
 import type { ParikshaaCredentials } from './parikshaa.ts';
 import type { UpsolveItem } from './upsolve.ts';
 import { claimSubmissions, type Claim } from './watermark.ts';
@@ -367,7 +368,10 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
 }
 
 export async function getProblems(): Promise<Record<string, SolvedProblem>> {
-  return readKey<Record<string, SolvedProblem>>(KEYS.problems, {});
+  // Normalised on the way out, because records also arrive from a backup file
+  // or another machine's repository, and one missing `github` object is the
+  // difference between a row that looks odd and a blank panel.
+  return completeProblems(await readKey<Record<string, SolvedProblem>>(KEYS.problems, {}));
 }
 
 export async function getProblemList(): Promise<SolvedProblem[]> {

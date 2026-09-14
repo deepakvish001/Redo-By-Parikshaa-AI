@@ -792,12 +792,37 @@ the half that is built.
 npm run dev          # rebuild on change
 npm run typecheck    # tsc --noEmit
 npm test             # unit tests: scheduler, adapters, analytics, hints, contests, markdown
+npm run e2e          # build, then drive the built extension in a real browser
+npm run verify       # typecheck + unit tests + end-to-end, in that order
 npm run build        # production build into dist/
 npm run package      # build, validate against the store's rules, and zip for upload
 npm run screenshots  # regenerate the 1280x800 store screenshots
 npm run icons        # regenerate the PNG icons
 npm run rename -- X  # rename the product everywhere in one pass
 ```
+
+### The end-to-end suite
+
+`npm run e2e` loads the built `dist/` into a real Chromium as an unpacked
+extension and drives it: it sends every one of the message types the pages and
+content scripts can send, solves a problem and reads back the commit, opens the
+workspace on a Codeforces problem and presses Run and Submit, walks the panel's
+tabs, gates a distraction with focus mode, and checks that every mount appears
+on the judges' pages and disappears when switched off.
+
+Every origin the extension talks to is answered by a stub in
+`scripts/e2e/stubs.mjs` — including a small in-memory Git, because solutions are
+committed through the Git Data API and a stub that only answered
+`PUT /contents` would never exercise that path. The judges are unreachable from
+CI, and pointing the suite at the real ones would make it fail for reasons that
+have nothing to do with the code.
+
+So what it proves is the wiring: that a message reaches its handler, that the
+handler reads the response it is given, and that what comes back is what the
+panel renders. What it cannot prove is that the judges still serve the shapes in
+`stubs.mjs` — that is what the adapters' own tests and a real install are for.
+Anything a stub does not answer is failed loudly rather than served a 404, so a
+hole in the harness shows up as a broken test instead of a passing one.
 
 ## Publishing
 

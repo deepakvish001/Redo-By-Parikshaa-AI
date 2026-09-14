@@ -81,7 +81,12 @@ export function applyRecall(
   intervals: number[],
   now: number,
 ): RevisionState {
-  const effect = RECALL_EFFECT[recall];
+  // An unrecognised rating is treated as `good` rather than throwing. A content
+  // script from the previous build keeps running in tabs that were already open
+  // when the extension updated, so the worker can be handed a word this version
+  // no longer knows — and losing the review entirely is worse than scheduling
+  // it as a plain pass.
+  const effect = RECALL_EFFECT[recall] ?? RECALL_EFFECT.good;
   const maxStage = Math.max(0, intervals.length - 1);
   const nextStage =
     effect.stage === 'reset'
