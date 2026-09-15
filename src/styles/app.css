@@ -242,6 +242,19 @@ button:focus-visible {
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   scrollbar-width: none;
+  /* Six tabs do not fit a 400px side panel, so the strip scrolls — and the
+     fade is what says so. A hidden scrollbar with a tab sliced down the middle
+     reads as a broken layout rather than as something you can scroll. */
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
+}
+
+/* Nothing to fade once everything fits. */
+@media (min-width: 460px) {
+  .tabs {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
 }
 
 .tabs::-webkit-scrollbar {
@@ -251,7 +264,7 @@ button:focus-visible {
 .tab {
   border: none;
   background: none;
-  padding: 7px 10px 9px;
+  padding: 7px 8px 9px;
   border-radius: 0;
   color: var(--text-muted);
   font-size: 12px;

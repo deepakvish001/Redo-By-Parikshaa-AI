@@ -109,12 +109,20 @@ export const CF_PROBLEMS = {
     { contestId: 1899, index: 'B', name: 'Two Out of Three', type: 'PROGRAMMING', rating: 900, tags: ['implementation'] },
     { contestId: 1899, index: 'C', name: 'Yarik and Array', type: 'PROGRAMMING', rating: 1200, tags: ['dp', 'greedy'] },
     { contestId: 1899, index: 'D', name: 'Yarik and Musical Notes', type: 'PROGRAMMING', rating: 1500, tags: ['math', 'number theory'] },
+    { contestId: 1898, index: 'B', name: 'Milena and Admirer', type: 'PROGRAMMING', rating: 1300, tags: ['greedy', 'math'] },
+    { contestId: 1898, index: 'C', name: 'Colorful Table', type: 'PROGRAMMING', rating: 1600, tags: ['data structures'] },
+    { contestId: 1897, index: 'C', name: 'Salyg1n and the MEX Game', type: 'PROGRAMMING', rating: 1400, tags: ['games', 'interactive'] },
+    { contestId: 1897, index: 'D', name: 'Cyclic Operations', type: 'PROGRAMMING', rating: 1900, tags: ['dfs and similar', 'graphs'] },
   ],
   problemStatistics: [
     { contestId: 1899, index: 'A', solvedCount: 12000 },
     { contestId: 1899, index: 'B', solvedCount: 9000 },
     { contestId: 1899, index: 'C', solvedCount: 4000 },
     { contestId: 1899, index: 'D', solvedCount: 1500 },
+    { contestId: 1898, index: 'B', solvedCount: 3000 },
+    { contestId: 1898, index: 'C', solvedCount: 1100 },
+    { contestId: 1897, index: 'C', solvedCount: 2400 },
+    { contestId: 1897, index: 'D', solvedCount: 800 },
   ],
 };
 
@@ -226,17 +234,67 @@ ${CF_PAGE_BODY}
 <h1><a href="/profile/deepakvish001">deepakvish001</a></h1>
 <ul><li><span class="user-blue">1420</span></li></ul></div></body></html>`);
 
-const cfProblemsetPage = html(`<html><body>
-${CF_PAGE_BODY}
-<div id="sidebar">
-  <div class="roundbox">Pay attention</div>
-</div>
-<table class="problems">
-  <tr><td class="id"><a href="/problemset/problem/1899/A">1899A</a></td>
-      <td><div><a href="/problemset/problem/1899/A">Game with Integers</a></div>
-          <div class="notice"><a href="/problemset/tags/games">games</a></div></td>
-      <td></td><td><span class="ProblemRating">800</span></td></tr>
-</table></body></html>`);
+const CF_ROWS = [
+  ['1899', 'A', 'Game with Integers', ['games', 'math'], 800, '12k'],
+  ['1899', 'B', 'Two Out of Three', ['implementation'], 900, '9k'],
+  ['1899', 'C', 'Yarik and Array', ['dp', 'greedy'], 1200, '4k'],
+  ['1899', 'D', 'Yarik and Musical Notes', ['math', 'number theory'], 1500, '1.5k'],
+  ['1898', 'B', 'Milena and Admirer', ['greedy', 'math'], 1300, '3k'],
+  ['1898', 'C', 'Colorful Table', ['data structures'], 1600, '1.1k'],
+  ['1897', 'C', 'Salyg1n and the MEX Game', ['games', 'interactive'], 1400, '2.4k'],
+  ['1897', 'D', 'Cyclic Operations', ['dfs and similar', 'graphs'], 1900, '800'],
+];
+
+/**
+ * The problem set, laid out the way Codeforces lays it out: the table on the
+ * left inside `#pageContent`, the sidebar on the right. The extension anchors
+ * its problem-of-the-day card to that sidebar, so a fixture that put the two
+ * in the wrong order would test — and photograph — the wrong thing.
+ */
+const cfProblemsetPage = html(`<html><head><title>Problemset - Codeforces</title>
+<style>
+  body { margin: 0; font: 13px/1.5 Verdana, Arial, sans-serif; color: #212121; background: #fff; }
+  #header { padding: 6px 12px; border-bottom: 1px solid #ddd; text-align: right; font-size: 12px; }
+  #pageContent { display: flex; gap: 22px; align-items: flex-start; padding: 16px 22px; }
+  .main { flex: 1; min-width: 0; }
+  #sidebar { width: 288px; flex: none; }
+  h2 { font-size: 17px; margin: 0 0 10px; font-weight: 700; }
+  table.problems { width: 100%; border-collapse: collapse; }
+  table.problems th { text-align: left; font-size: 11px; color: #777; padding: 6px 8px; border-bottom: 1px solid #e1e1e1; }
+  table.problems td { padding: 9px 8px; border-bottom: 1px solid #efefef; vertical-align: top; }
+  table.problems tr:nth-child(odd) td { background: #fafafa; }
+  td.id a { color: #0645ad; text-decoration: none; font-weight: 700; }
+  .name a { color: #0645ad; text-decoration: none; font-weight: 600; }
+  .notice a { color: #777; font-size: 11px; text-decoration: none; margin-right: 6px; }
+  .ProblemRating { color: #444; font-weight: 700; }
+  .solved { color: #777; font-size: 11px; white-space: nowrap; }
+  .roundbox { border: 1px solid #ddd; border-radius: 6px; padding: 11px 13px; margin-bottom: 14px; background: #fff; }
+  .roundbox .caption { font-weight: 700; margin-bottom: 7px; }
+  .roundbox ul { margin: 0; padding-left: 17px; color: #444; }
+</style></head><body>
+<div id="header"><a href="/profile/deepakvish001">deepakvish001</a> | <a href="/logout">Logout</a></div>
+<div id="pageContent">
+  <div class="main">
+    <h2>Problemset</h2>
+    <table class="problems">
+      <tr><th>#</th><th>Name</th><th></th><th>Solved</th></tr>
+      ${CF_ROWS.map(([contest, index, name, tags, rating, solved]) => `
+      <tr>
+        <td class="id"><a href="/problemset/problem/${contest}/${index}">${contest}${index}</a></td>
+        <td><div class="name"><a href="/problemset/problem/${contest}/${index}">${name}</a></div>
+            <div class="notice">${tags.map((tag) => `<a href="/problemset/tags/${tag}">${tag}</a>`).join('')}</div></td>
+        <td><span class="ProblemRating">${rating}</span></td>
+        <td class="solved">x${solved}</td>
+      </tr>`).join('')}
+    </table>
+  </div>
+  <div id="sidebar">
+    <div class="roundbox"><div class="caption">Pay attention</div>
+      <ul><li>Codeforces Round 900 (Div. 2)</li><li>Starts in 2 days</li></ul></div>
+    <div class="roundbox"><div class="caption">Top rated</div>
+      <ul><li>tourist &mdash; 3800</li><li>jiangly &mdash; 3750</li></ul></div>
+  </div>
+</div></body></html>`);
 
 /* -------------------------------------------------------------- LeetCode */
 

@@ -3180,7 +3180,11 @@ export function App() {
             // content is what a tablist is specified this way to avoid.
             tabIndex={tab === value ? 0 : -1}
             ref={(node) => {
-              if (node && tab === value && moveFocus.current) {
+              if (!node || tab !== value) return;
+              // The strip scrolls when six tabs do not fit, so the chosen one
+              // is brought into view however it was chosen.
+              node.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+              if (moveFocus.current) {
                 moveFocus.current = false;
                 node.focus();
               }

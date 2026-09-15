@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.mjs",
     "package": "npm run build && node scripts/package.mjs",
-    "screenshots": "node scripts/screenshots.mjs",
+    "screenshots": "npm run build && node scripts/screenshots/index.mjs",
     "rename": "node scripts/rename.mjs",
     "e2e": "npm run build && node scripts/e2e/index.mjs",
     "e2e:only": "node scripts/e2e/index.mjs",
