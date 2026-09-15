@@ -2,6 +2,7 @@ import { DEFAULT_FOCUS } from './focus.ts';
 import { appendEvent } from './journal.ts';
 import { completeProblems } from './record.ts';
 import { MAX_SHEETS, type Sheet } from './sheets.ts';
+import type { MockSession } from './mock.ts';
 import type { ParikshaaCredentials } from './parikshaa.ts';
 import type { UpsolveItem } from './upsolve.ts';
 import { claimSubmissions, type Claim } from './watermark.ts';
@@ -33,6 +34,7 @@ const KEYS = {
   backlog: 'backlog',
   training: 'training',
   sheets: 'sheets',
+  mock: 'mock',
 } as const;
 
 export const PENDING_CSES_SUBMISSION_TTL_MS = 15 * 60_000;
@@ -559,6 +561,24 @@ export async function saveBacklog(keys: string[]): Promise<string[]> {
   const trimmed = [...new Set(keys)].slice(0, 50);
   await chrome.storage.local.set({ [KEYS.backlog]: trimmed });
   return trimmed;
+}
+
+/* ------------------------------------------------------------ mock rounds */
+
+export interface MockStore {
+  active?: MockSession;
+  /** Finished rounds, newest first. A record, not an archive. */
+  history: MockSession[];
+}
+
+export async function getMock(): Promise<MockStore> {
+  return readKey<MockStore>(KEYS.mock, { history: [] });
+}
+
+export async function saveMock(store: MockStore): Promise<MockStore> {
+  const next: MockStore = { ...store, history: store.history.slice(0, 50) };
+  await chrome.storage.local.set({ [KEYS.mock]: next });
+  return next;
 }
 
 /* ---------------------------------------------------------------- sheets */

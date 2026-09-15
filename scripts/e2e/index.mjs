@@ -107,6 +107,8 @@ try {
     ['github:device-start', { includePrivate: true, clientId: 'Iv1.stub' }],
     ['github:repos', { token: 'ghp_stub' }],
     ['github:branches', { token: 'ghp_stub', owner: 'deepakvish001', repo: 'dsa', defaultBranch: 'main' }],
+    ['search', { query: 'stack' }],
+    ['mock:get', {}],
     ['sheets:get', {}],
     ['sheets:import', { name: 'Sweep', text: 'two-sum\n3sum' }],
     ['sheets:delete', { id: 'sweep' }],
@@ -1458,6 +1460,175 @@ try {
     const text = await plain.locator('body').innerText();
     assert.doesNotMatch(text, /Redo is installed/, 'the greeting shows on an ordinary visit');
     await plain.close();
+  });
+
+
+  /* ============================================= 26. search and mock rounds */
+
+  group('searching your own solutions');
+
+  await check('a word in the code finds the problem it is in', async () => {
+    await storage.set({ problems: {} });
+    await ask({ type: 'settings:save', patch: { github: { ...(await ask({ type: 'settings:get' })).github, enabled: false } } });
+
+    await ask({ type: 'submission:accepted', submission: submission({
+      slug: 'daily-temperatures', problemId: '739', title: 'Daily Temperatures',
+      tags: ['Stack'], code: 'def f(t):\n    stack = []\n    # monotonic, decreasing\n',
+    }) });
+    await ask({ type: 'submission:accepted', submission: submission({
+      slug: 'two-sum', problemId: '1', title: 'Two Sum', tags: ['Hash Table'], code: 'seen = {}',
+    }) });
+
+    const { hits } = await ask({ type: 'search', query: 'monotonic' });
+    assert.equal(hits.length, 1, `expected one hit, got ${hits.map((h) => h.title).join(', ')}`);
+    assert.equal(hits[0].title, 'Daily Temperatures');
+    assert.ok(hits[0].snippet, 'no line of code came back');
+    assert.equal(hits[0].snippet.line, 3, 'the line number is wrong');
+    assert.match(hits[0].snippet.text, /monotonic/);
+  });
+
+  await check('every word has to appear — the search is not an or', async () => {
+    const both = await ask({ type: 'search', query: 'monotonic stack' });
+    assert.equal(both.hits.length, 1, 'the second term was ignored');
+    const neither = await ask({ type: 'search', query: 'monotonic hash' });
+    assert.equal(neither.hits.length, 0, 'a problem matched without carrying both words');
+  });
+
+  await check('a title match outranks one buried in the code', async () => {
+    const { hits } = await ask({ type: 'search', query: 'sum' });
+    assert.ok(hits.length > 0, 'nothing matched');
+    assert.equal(hits[0].title, 'Two Sum', `ranked ${hits.map((h) => h.title).join(' > ')}`);
+  });
+
+  await check('the search carries the row, not every version of the source', async () => {
+    // A hit used to be the whole record, and a record carries every solution it
+    // has — a few hundred kilobytes to render a list of titles.
+    const { hits } = await ask({ type: 'search', query: 'stack' });
+    const keys = Object.keys(hits[0]).sort();
+    assert.ok(!keys.includes('code'), `the source crossed the boundary: ${keys.join(', ')}`);
+    assert.ok(!keys.includes('solutions'), 'every solution crossed the boundary');
+    assert.ok(keys.includes('title') && keys.includes('url'), `missing what the row needs: ${keys.join(', ')}`);
+  });
+
+  await check('an empty query returns nothing rather than everything', async () => {
+    const { hits } = await ask({ type: 'search', query: '   ' });
+    assert.deepEqual(hits, []);
+  });
+
+  await check('the panel filter reaches the code and shows the line', async () => {
+    const page = await rig.context.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(`chrome-extension://${id}/panel/index.html`);
+    await page.waitForTimeout(1800);
+    await page.getByRole('tab', { name: /^Solved/ }).click();
+    await page.waitForTimeout(700);
+
+    await page.locator('.search input').fill('monotonic');
+    await page.waitForTimeout(900);
+
+    const text = await page.locator('body').innerText();
+    assert.match(text, /Daily Temperatures/, `the match is not listed: ${text.slice(0, 400)}`);
+    assert.doesNotMatch(text, /Two Sum/, 'a problem that does not contain the word is still listed');
+    assert.match(text, /line 3/, 'the matching line is not shown');
+    assert.deepEqual(errors, [], `the Solved tab threw while searching: ${errors.join('; ')}`);
+    await page.close();
+  });
+
+  group('the mock interview round');
+
+  await check('nothing stale enough means the round says so rather than starting', async () => {
+    // Everything solved in this run is minutes old; a round on a problem you
+    // solved five minutes ago would measure nothing.
+    const data = await ask({ type: 'mock:get' });
+    assert.equal(data.candidates, 0, `${data.candidates} problems counted as stale`);
+    const response = await send({ type: 'mock:start', minutes: 30 });
+    assert.equal(response.ok, false, 'a round started with nothing to ask about');
+    assert.match(response.error, /week/i, `unhelpful message: ${response.error}`);
+  });
+
+  await check('a round starts on a problem that has gone stale', async () => {
+    const stale = {};
+    for (const n of [1, 2, 3]) {
+      stale[`leetcode:stale-${n}`] = {
+        id: `leetcode:stale-${n}`, platform: 'leetcode', slug: `stale-${n}`, problemId: String(n),
+        title: `Stale ${n}`, url: `https://leetcode.com/problems/stale-${n}/`, difficulty: 'medium',
+        tags: [], language: 'Python3', code: 'x', attempts: 1,
+        solvedAt: now - 90 * DAY, updatedAt: now - 90 * DAY,
+        github: { status: 'disabled' }, parikshaa: { status: 'disabled' },
+        revision: { stage: 2, ease: 1, dueAt: now + DAY, reviewCount: 2, lapses: 0, hintsUsed: 0, lastReviewedAt: now - 60 * DAY },
+      };
+    }
+    await storage.set({ problems: stale });
+
+    const started = await ask({ type: 'mock:start', minutes: 30 });
+    assert.ok(started.session, 'no round came back');
+    assert.equal(started.running, true);
+    assert.equal(started.hintsLocked, true, 'the hints are not sealed');
+    assert.match(started.session.problem.title, /^Stale /);
+    assert.ok(started.remainingMs > 29 * 60_000, `the clock started at ${started.remainingMs}ms`);
+  });
+
+  await check('starting again does not throw away the round in progress', async () => {
+    const before = (await ask({ type: 'mock:get' })).session;
+    const after = await ask({ type: 'mock:start', minutes: 60 });
+    assert.equal(after.session.startedAt, before.startedAt, 'the running round was replaced');
+    assert.equal(after.session.minutes, before.minutes, 'the length changed under the round');
+  });
+
+  await check('rerolling changes the problem and restarts the clock', async () => {
+    const before = (await ask({ type: 'mock:get' })).session;
+    const after = await ask({ type: 'mock:reroll' });
+    assert.notEqual(after.session.problem.slug, before.problem.slug, 'the reroll gave back the same problem');
+    assert.ok(after.session.startedAt >= before.startedAt, 'the clock did not restart');
+  });
+
+  await check('the round survives the panel being closed', async () => {
+    // The clock is rendered from `endsAt`, not counted down in a page's state —
+    // an interview timer that resets when you switch tabs is worse than none.
+    const page = await rig.context.newPage();
+    await page.goto(`chrome-extension://${id}/panel/index.html`);
+    await page.waitForTimeout(1500);
+    await page.close();
+
+    const still = await ask({ type: 'mock:get' });
+    assert.equal(still.running, true, 'closing the panel ended the round');
+  });
+
+  await check('finishing records the outcome and clears the round', async () => {
+    const finished = await ask({ type: 'mock:finish', outcome: 'solved' });
+    assert.equal(finished.running, false);
+    assert.equal(finished.hintsLocked, false, 'the hints are still sealed after the round');
+    assert.equal(finished.history[0]?.outcome, 'solved', 'the outcome was not recorded');
+    assert.ok(finished.history[0]?.finishedAt, 'no finish time');
+  });
+
+  await check('finishing twice does not record the round twice', async () => {
+    const before = (await ask({ type: 'mock:get' })).history.length;
+    await ask({ type: 'mock:finish', outcome: 'solved' });
+    assert.equal((await ask({ type: 'mock:get' })).history.length, before, 'the round was recorded again');
+  });
+
+  await check('the round is on the Train tab, with a clock', async () => {
+    await ask({ type: 'mock:start', minutes: 20 });
+    const page = await rig.context.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(`chrome-extension://${id}/panel/index.html`);
+    await page.waitForTimeout(1800);
+    await page.getByRole('tab', { name: /^Train/ }).click();
+    await page.waitForTimeout(1200);
+
+    const text = await page.locator('body').innerText();
+    assert.match(text, /Mock interview/i, 'the card is not on the tab');
+    assert.match(text, /\d\d:\d\d/, `no clock is showing: ${text.slice(0, 400)}`);
+    assert.match(text, /sealed|shut/i, 'the card does not say the hints are locked');
+
+    const timer = await page.getByRole('timer').count();
+    assert.ok(timer > 0, 'the clock is not announced as a timer');
+    assert.deepEqual(errors, [], `the Train tab threw: ${errors.join('; ')}`);
+    await page.close();
+    await ask({ type: 'mock:finish', outcome: 'gave-up' });
   });
 
   /* ================================================ 14. the whole surface */

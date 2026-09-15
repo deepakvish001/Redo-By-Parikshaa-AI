@@ -24,6 +24,8 @@ import type { CfConnection } from './cf-auth.ts';
 import type { ReviewMode } from './recall-mode.ts';
 import type { Material, Similar } from './cf-materials.ts';
 import type { Sheet, SheetEntry, SheetProgress } from './sheets.ts';
+import type { MockOutcome, MockSession, MockState } from './mock.ts';
+import type { SearchHit } from './search.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
@@ -48,6 +50,32 @@ export interface SheetsData {
   progress: SheetProgress[];
   /** A few worth doing next, drawn from whichever sheet is closest to done. */
   next: Array<SheetEntry & { sheet: string; url: string }>;
+}
+
+/**
+ * A search hit, flattened for the wire.
+ *
+ * The whole `SolvedProblem` would carry every solution's source across the
+ * message boundary for every hit — a few hundred kilobytes to render a list of
+ * titles. Only what the row shows is sent.
+ */
+export interface SearchResult {
+  id: string;
+  title: string;
+  url: string;
+  platform: string;
+  difficulty: string;
+  tags: string[];
+  solvedAt: number;
+  fields: SearchHit['fields'];
+  snippet?: SearchHit['snippet'];
+}
+
+export interface MockData extends MockState {
+  /** How many problems are old enough to be asked about at all. */
+  candidates: number;
+  /** Finished rounds, newest first. */
+  history: MockSession[];
 }
 
 export interface DashboardData {
@@ -138,6 +166,11 @@ export type Request =
   | { type: 'bridge:test'; port: number }
   | { type: 'github:device-start'; includePrivate: boolean; clientId?: string }
   | { type: 'github:device-poll'; deviceCode: string; clientId?: string }
+  | { type: 'search'; query: string }
+  | { type: 'mock:get' }
+  | { type: 'mock:start'; minutes: number }
+  | { type: 'mock:reroll' }
+  | { type: 'mock:finish'; outcome: MockOutcome }
   | { type: 'sheets:get' }
   | { type: 'sheets:import'; name: string; text: string }
   | { type: 'sheets:delete'; id: string }
@@ -216,6 +249,11 @@ export interface ResponseMap {
   'community:get': CommunityData;
   'community:post': CommunityData & { posted?: boolean };
   'bridge:test': BridgeResult;
+  search: { hits: SearchResult[]; searched: number };
+  'mock:get': MockData;
+  'mock:start': MockData;
+  'mock:reroll': MockData;
+  'mock:finish': MockData;
   'sheets:get': SheetsData;
   'sheets:import': SheetsData & { added: string; read: number; skipped: number; duplicates: number };
   'sheets:delete': SheetsData;

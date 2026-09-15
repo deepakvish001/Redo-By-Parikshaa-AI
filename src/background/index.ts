@@ -63,6 +63,7 @@ import { translateStrings } from './translate.ts';
 import { postSolution, readThreads } from './community.ts';
 import { pushToEditor, testBridge } from './bridge.ts';
 import { getSheetsData, importSheet, removeSheet } from './sheets.ts';
+import { beginMock, endMock, getMockData, rerollMock, searchProblems } from './mock.ts';
 import { isHost } from '../core/hosts.ts';
 import { pollDeviceFlow, startDeviceFlow } from './device-flow.ts';
 import { connectCodeforces } from './cf-connect.ts';
@@ -823,6 +824,21 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
 
     case 'bridge:test':
       return testBridge(request.port);
+
+    case 'search':
+      return searchProblems(request.query);
+
+    case 'mock:get':
+      return getMockData();
+
+    case 'mock:start':
+      return beginMock(request.minutes);
+
+    case 'mock:reroll':
+      return rerollMock();
+
+    case 'mock:finish':
+      return endMock(request.outcome);
 
     case 'sheets:get':
       return getSheetsData();

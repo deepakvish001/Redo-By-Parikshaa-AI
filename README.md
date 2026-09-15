@@ -99,6 +99,16 @@ Solving is the easy part. Remembering three months later is the part nothing els
   into the problem's README.
 - **Keeps your reasoning, not just the code.** Notes and your own time/space complexity are
   editable from the popup and go into the problem's committed README.
+- **Tracks the sheet you are working from.** Blind 75 built in; anything else — NeetCode 150,
+  Striver's A2Z, your college's list — imported by pasting it. Problems you solved before the
+  import already count, sections are tracked separately, and the six Blind 75 problems behind
+  LeetCode Premium are marked rather than dropped.
+- **One problem, on a clock, hints sealed.** A mock interview round drawn from what you solved
+  at least a week ago — because "I know this one" and "I can write this one in thirty-five
+  minutes" are different claims, and only the second is what an interview asks for.
+- **Searches your own code.** "Where did I use a monotonic stack" is answerable from the Solved
+  tab: the filter reads the source as well as titles, tags and notes, and shows the line it
+  matched.
 - **Ranks your weak topics.** Mastery per tag is computed from how far each problem has climbed
   the ladder, how often you forgot it on review, how many attempts it took to get accepted,
   how many hints you needed, and how long it took relative to the difficulty — so "dynamic
@@ -215,6 +225,77 @@ Solving is the easy part. Remembering three months later is the part nothing els
   get committed to repositories.
 - **Runs entirely locally.** No backend, no account, no telemetry. The only network calls are to
   the sites you are already on and to the GitHub repository you configured.
+
+## Practice sheets
+
+Paste a list and Redo tracks it against what you have already solved. Nothing resets to zero —
+matching is on the same `platform:slug` key the rest of the extension uses, so a problem you
+solved months before importing the sheet counts the moment it lands.
+
+**Blind 75 ships built in.** It is written out in the source rather than fetched: short enough
+to get right by hand, stable enough to freeze. Every other list is imported by pasting it, which
+is both more honest than transcribing four hundred slugs from memory and more useful — your
+college's sheet works exactly as well as a famous one.
+
+Import accepts what you already have, one problem per line:
+
+- a LeetCode or Codeforces URL (either the problemset or the in-contest form)
+- a bare slug — `two-sum`, `3sum`
+- a markdown link, straight out of somebody's README
+- `Title | slug`, or a numbered row from a spreadsheet
+- just the title, which becomes the slug LeetCode would have used
+- a JSON export, which round-trips exactly between machines
+
+A `# Heading` line makes the rows under it a section, and sections are what the panel shows:
+"Arrays 9/10" is one problem from a row going green, and that is what gets opened. "62 of 150"
+is a number you can stare at for a month.
+
+Two deliberate choices. A line that is ambiguous is **skipped and counted** rather than guessed
+at — the import reports "94 read, 2 skipped", because leaving a real problem out is a line you
+can paste again while inventing one you can never solve is a permanent wrong number in the
+progress bar. And the six Blind 75 problems behind LeetCode Premium are **marked, not dropped**:
+Redo does not work around the paywall, and a bar that stops at 92% needs a visible reason.
+
+## Mock interview
+
+One problem you solved a while ago, a clock, and the hints sealed until it stops.
+
+Revision with the schedule is unhurried by design. An interview is not, and the gap between "I
+know this one" and "I can write this one in thirty-five minutes with someone watching" is what
+people are actually preparing for.
+
+The problem is drawn from what you have already solved and have not touched in at least a week,
+least-recently-revised first — the round should ask about the things furthest from your
+fingertips, not what you did yesterday. Sealed rather than hidden: stopping the round early
+opens everything, because a lock you cannot open is one people work around by opening the
+problem in another tab.
+
+The clock is rendered from its end time rather than counted down in the page, so it stays right
+across a closed panel, a reloaded tab and a sleeping laptop.
+
+## Searching your own solutions
+
+The Solved tab's filter reads the **source**, not just titles and tags — which is the difference
+between finding the problem whose note says "monotonic stack" and finding the one where you
+actually wrote one. Until now the only way to answer that was to clone the repository and grep
+it, and the repository is where the answer is least convenient because the code is spread over a
+few hundred directories.
+
+Terms are ANDed, so "monotonic stack" finds a solution whose note says "stack, and it has to stay
+monotonic". Matches are ranked by where they landed — a title match outranks a code match,
+because `max` appears in half of everything — and a code hit shows the line it matched, with its
+number. Every solution on a problem is searched, so re-solving in C++ does not hide the Python
+one. Nothing leaves the browser and there is no index to keep fresh.
+
+## Keyboard shortcuts
+
+| Keys | What |
+| --- | --- |
+| <kbd>Alt</kbd>+<kbd>R</kbd> | Open the panel |
+| <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> | Open the problem that has been waiting longest |
+| <kbd>Alt</kbd>+<kbd>W</kbd> | Open the workspace, on a Codeforces problem |
+
+Rebind them at `chrome://extensions/shortcuts`.
 
 ## Contest rating
 

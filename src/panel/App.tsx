@@ -38,10 +38,13 @@ import {
   type DashboardData,
   type RatingProfiles,
   type HomeData,
+  type MockData,
   type SheetsData,
   type UpsolveResponse,
 } from '../core/messages.ts';
 import type { SheetProgress } from '../core/sheets.ts';
+import { DEFAULT_MOCK_MINUTES, MOCK_LENGTHS, formatClock } from '../core/mock.ts';
+import { describeFields, searchSolutions, type SearchHit } from '../core/search.ts';
 import { bandFloor, type RatingGoal } from '../core/rating.ts';
 import type { LeetCodeProfile } from '../background/rating.ts';
 import { problemUrl } from '../core/daily.ts';
@@ -591,6 +594,7 @@ function ProblemCard({
   showRecall,
   collapsible = false,
   defaultOpen = false,
+  match,
 }: {
   problem: SolvedProblem;
   now: number;
@@ -613,6 +617,8 @@ function ProblemCard({
    */
   collapsible?: boolean;
   defaultOpen?: boolean;
+  /** Set while a search is on: where this problem matched, and the line. */
+  match?: SearchHit;
 }) {
   const [editing, setEditing] = useState(false);
   const [discussing, setDiscussing] = useState(false);
@@ -647,6 +653,16 @@ function ProblemCard({
           {formatDueIn(problem.revision.dueAt, now)}
         </span>
         <ChevronRight size={12} className="row__chevron" />
+        {match?.snippet && (
+          // The line itself, because "it matched the code" without showing
+          // which line is one more click to find out what you already asked.
+          <span className="row__snippet">
+            <span className="row__snippetline mono">{match.snippet.text}</span>
+            <span className="row__snippetmeta">
+              line {match.snippet.line} · matched {describeFields(match.fields)}
+            </span>
+          </span>
+        )}
       </button>
     );
   }
@@ -1766,6 +1782,137 @@ function TrainCountdown({ until }: { until: number }) {
  * choose what it trains — picking the ratings turns the same problemset into a
  * speed drill or an hour on the one band you keep failing at.
  */
+/**
+ * One problem, a clock, and nobody to ask.
+ *
+ * Revision with the schedule is unhurried by design. An interview is not, and
+ * the gap between "I know this one" and "I can write this one in thirty-five
+ * minutes with someone watching" is what people are actually preparing for.
+ *
+ * The clock is rendered from `endsAt` rather than counted down in state, so it
+ * stays right across a closed panel, a reloaded page and a sleeping laptop —
+ * an interview timer that quietly drifts is worse than none.
+ */
+function MockCard() {
+  const [data, setData] = useState<MockData | null>(null);
+  const [minutes, setMinutes] = useState(DEFAULT_MOCK_MINUTES);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [tick, setTick] = useState(0);
+
+  const load = useCallback(async (action?: () => Promise<MockData>) => {
+    setBusy(true);
+    setError('');
+    try {
+      setData(await (action ? action() : send({ type: 'mock:get' })));
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : String(problem));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // A second hand only while something is running; no timer otherwise.
+  useEffect(() => {
+    if (!data?.running) return undefined;
+    const timer = window.setInterval(() => setTick((value) => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [data?.running]);
+
+  const remaining = data?.session && !data.session.finishedAt
+    ? Math.max(0, data.session.endsAt - Date.now())
+    : 0;
+  // `tick` is read so the clock re-renders each second.
+  void tick;
+
+  if (!data) return null;
+
+  const session = data.session && !data.session.finishedAt ? data.session : undefined;
+  const last = data.history[0];
+
+  return (
+    <section className="mock">
+      <div className="mock__head">
+        <ClockIcon size={13} />
+        <span className="mock__title">Mock interview</span>
+        {session && (
+          <span className={`mock__clock mono ${remaining < 60_000 ? 'is-low' : ''}`} role="timer" aria-live="off">
+            {formatClock(remaining)}
+          </span>
+        )}
+      </div>
+
+      {error && <div className="banner banner--error">{error}</div>}
+
+      {session ? (
+        <>
+          <button type="button" className="mock__problem" onClick={() => openUrl(session.problem.url)}>
+            <span className={`row__dot row__dot--${session.problem.difficulty ?? 'medium'}`} />
+            {session.problem.title}
+          </button>
+          <p className="mock__hint">
+            {remaining > 0
+              ? 'Hints and your own previous solution stay shut until the clock stops — or until you stop it.'
+              : 'Time is up. Everything is unlocked; rate how it went.'}
+          </p>
+          <div className="mock__actions">
+            <button type="button" className="primary" disabled={busy}
+              onClick={() => void load(() => send({ type: 'mock:finish', outcome: 'solved' }))}>
+              I solved it
+            </button>
+            <button type="button" className="ghost" disabled={busy}
+              onClick={() => void load(() => send({ type: 'mock:finish', outcome: 'gave-up' }))}>
+              Stop and open it up
+            </button>
+            {remaining > 0 && (
+              <button type="button" className="ghost" disabled={busy}
+                onClick={() => void load(() => send({ type: 'mock:reroll' }))}>
+                Different problem
+              </button>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="mock__hint">
+            One problem you solved a while ago, on a clock, with the hints sealed.{' '}
+            {data.candidates === 0
+              ? 'Nothing is old enough yet — a round draws on problems solved at least a week ago.'
+              : `${data.candidates} problem${data.candidates === 1 ? '' : 's'} are stale enough to ask about.`}
+          </p>
+          {last && (
+            <p className="mock__last">
+              Last round: {last.problem.title} — {last.outcome === 'solved' ? 'solved' : last.outcome === 'time-up' ? 'time ran out' : 'stopped'}.
+            </p>
+          )}
+          <div className="mock__actions">
+            <label className="mock__length">
+              <span className="faint">Length</span>
+              <select
+                value={minutes}
+                aria-label="Round length in minutes"
+                onChange={(event) => setMinutes(Number(event.target.value))}
+              >
+                {MOCK_LENGTHS.map((length) => (
+                  <option key={length} value={length}>{length} min</option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className="primary" disabled={busy || data.candidates === 0}
+              onClick={() => void load(() => send({ type: 'mock:start', minutes }))}>
+              {busy ? 'Starting…' : 'Start a round'}
+            </button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 function TrainTab() {
   const [data, setData] = useState<TrainData | null>(null);
   const [ladder, setLadder] = useState<number[] | null>(null);
@@ -2889,23 +3036,32 @@ export function App() {
     }
   }, [failedSyncs, load]);
 
-  /** Title, tag, label and language, because those are how people look. */
+  /**
+   * The filter, which is a search over everything the record holds.
+   *
+   * Including the source, which is the difference between "find the problem
+   * whose note says monotonic stack" and "find the one where I actually wrote
+   * one". The second is the question people have, and until now the only way to
+   * answer it was to clone the repository and grep it.
+   *
+   * Terms are ANDed, so "monotonic stack" finds a solution whose note says
+   * "stack, and it has to stay monotonic" — a single substring never would.
+   * Ordering stays with the tab's own control; this only decides membership,
+   * and carries the matching line of code along for the row to show.
+   */
+  const hits = useMemo(
+    () => (data && query.trim() ? searchSolutions(data.problems, query, data.problems.length) : null),
+    [data, query],
+  );
+
+  const hitById = useMemo(
+    () => new Map((hits ?? []).map((hit) => [hit.problem.id, hit])),
+    [hits],
+  );
+
   const matches = useCallback(
-    (problem: SolvedProblem) => {
-      const needle = query.trim().toLowerCase();
-      if (!needle) return true;
-      return (
-        problem.title.toLowerCase().includes(needle) ||
-        problem.slug.toLowerCase().includes(needle) ||
-        problem.language.toLowerCase().includes(needle) ||
-        problem.tags.some((tag) => tag.toLowerCase().includes(needle)) ||
-        (problem.labels ?? []).some((label) => label.includes(needle)) ||
-        // The note too. Searching for "monotonic stack" should find the problem
-        // where you wrote that down, not only the ones the judge tagged so.
-        (problem.note ?? '').toLowerCase().includes(needle)
-      );
-    },
-    [query],
+    (problem: SolvedProblem) => !hits || hitById.has(problem.id),
+    [hits, hitById],
   );
 
   const labels = useMemo(
@@ -3236,7 +3392,7 @@ export function App() {
                   <input
                     type="text"
                     value={query}
-                    placeholder="Filter by title, tag, label, language or note"
+                    placeholder="Search titles, tags, notes and the code itself"
                     onChange={(event) => setQuery(event.target.value)}
                   />
                   {query && (
@@ -3340,6 +3496,7 @@ export function App() {
                           labelSuggestions={suggestionsFor(problem.labels, labels)}
                           showRecall={false}
                           collapsible
+                          match={hitById.get(problem.id)}
                         />
                       )}
                     </PlatformFolder>
@@ -3352,6 +3509,7 @@ export function App() {
 
         {tab === 'train' && (
           <>
+            <MockCard />
             <TrainTab />
             <RatingCard />
             <ContestHistory />
