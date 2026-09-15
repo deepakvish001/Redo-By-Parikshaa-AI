@@ -23,6 +23,7 @@ import type { RepoChoice } from './github.ts';
 import type { CfConnection } from './cf-auth.ts';
 import type { ReviewMode } from './recall-mode.ts';
 import type { Material, Similar } from './cf-materials.ts';
+import type { Sheet, SheetEntry, SheetProgress } from './sheets.ts';
 import type {
   AcceptedSubmission,
   AttemptEvent,
@@ -34,6 +35,20 @@ import type {
   SolvedProblem,
   Stats,
 } from './types.ts';
+
+/**
+ * Every sheet with its progress worked out, plus what to do next.
+ *
+ * The progress is computed here rather than in the panel because the same
+ * numbers are wanted in two places — the sheet tab and the home card — and two
+ * copies of the arithmetic is how they end up disagreeing.
+ */
+export interface SheetsData {
+  sheets: Sheet[];
+  progress: SheetProgress[];
+  /** A few worth doing next, drawn from whichever sheet is closest to done. */
+  next: Array<SheetEntry & { sheet: string; url: string }>;
+}
 
 export interface DashboardData {
   problems: SolvedProblem[];
@@ -123,6 +138,9 @@ export type Request =
   | { type: 'bridge:test'; port: number }
   | { type: 'github:device-start'; includePrivate: boolean; clientId?: string }
   | { type: 'github:device-poll'; deviceCode: string; clientId?: string }
+  | { type: 'sheets:get' }
+  | { type: 'sheets:import'; name: string; text: string }
+  | { type: 'sheets:delete'; id: string }
   | { type: 'cf:connect'; handle: string; key: string; secret: string }
   | { type: 'github:repos'; token: string }
   | {
@@ -198,6 +216,9 @@ export interface ResponseMap {
   'community:get': CommunityData;
   'community:post': CommunityData & { posted?: boolean };
   'bridge:test': BridgeResult;
+  'sheets:get': SheetsData;
+  'sheets:import': SheetsData & { added: string; read: number; skipped: number; duplicates: number };
+  'sheets:delete': SheetsData;
   'github:device-start': StartResult;
   'github:device-poll': PollResult;
   'cf:connect': CfConnection;

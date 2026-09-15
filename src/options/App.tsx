@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FOCUS_MODE_LABELS, type FocusMode } from '../core/focus.ts';
 import { send, type DiagnosticEntry } from '../core/messages.ts';
 import {
@@ -16,6 +16,7 @@ import {
   UploadIcon,
 } from '../panel/icons.tsx';
 import type { SessionDiagnostic } from '../core/parikshaa.ts';
+import type { Sheet } from '../core/sheets.ts';
 import { DEFAULT_SETTINGS } from '../core/storage.ts';
 import { DEFAULT_PORT, bridgeOrigin } from '../core/bridge.ts';
 import { GITHUB_CLIENT_ID } from '../core/brand.ts';
@@ -992,6 +993,11 @@ function BackupSection({ connected }: { connected: boolean }) {
 export function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [intervalsText, setIntervalsText] = useState('');
+  const [sheetName, setSheetName] = useState('');
+  const [sheetText, setSheetText] = useState('');
+  const [sheetNote, setSheetNote] = useState('');
+  const [sheetBusy, setSheetBusy] = useState(false);
+  const [sheetList, setSheetList] = useState<Sheet[]>([]);
   const [leadText, setLeadText] = useState('');
   const [saveStatus, setSaveStatus] = useState<Status>(null);
   const [verifyStatus, setVerifyStatus] = useState<Status>(null);
@@ -1032,7 +1038,44 @@ export function App() {
       setPauseText(String(loaded.focus.pauseHours));
       setAllowlistText(loaded.focus.allowlist.join('\n'));
       if (loaded.diagnostics.enabled) await loadLog();
+      setSheetList((await send({ type: 'sheets:get' })).sheets);
     })();
+  }, []);
+
+  /**
+   * Importing says what it read *and* what it could not.
+   *
+   * A silent "imported" on a list where a third of the rows were prose is how
+   * somebody ends up with a sheet that can never reach 100% and no idea why.
+   */
+  const importSheet = useCallback(async () => {
+    if (!sheetText.trim()) {
+      setSheetNote('Paste the list first.');
+      return;
+    }
+    setSheetBusy(true);
+    setSheetNote('');
+    try {
+      const result = await send({ type: 'sheets:import', name: sheetName, text: sheetText });
+      setSheetList(result.sheets);
+      setSheetText('');
+      setSheetName('');
+      const extra = [
+        result.skipped > 0 ? `${result.skipped} line(s) skipped` : '',
+        result.duplicates > 0 ? `${result.duplicates} duplicate(s)` : '',
+      ].filter(Boolean);
+      setSheetNote(
+        `Imported ${result.read} problem(s)${extra.length > 0 ? ` — ${extra.join(', ')}` : ''}.`,
+      );
+    } catch (error) {
+      setSheetNote(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSheetBusy(false);
+    }
+  }, [sheetName, sheetText]);
+
+  const removeSheet = useCallback(async (sheetId: string) => {
+    setSheetList((await send({ type: 'sheets:delete', id: sheetId })).sheets);
   }, []);
 
   /**
@@ -1608,6 +1651,79 @@ export function App() {
             sign-in, Gmail and Calendar are always allowed.
           </div>
         </div>
+      </section>
+
+      <section id="s-sheets" data-group="revision" className="section-card">
+        <h2 className="section-card__title">
+          <ClockIcon size={14} />
+          Practice sheets
+        </h2>
+        <p className="section-card__hint">
+          Paste a list and Redo tracks it against what you have already solved — nothing resets
+          to zero. Blind 75 is built in. Anything else works too: NeetCode 150, Striver&rsquo;s
+          A2Z, your college&rsquo;s sheet, a seniors&rsquo; spreadsheet.
+        </p>
+
+        <div className="field">
+          <label className="field__label" htmlFor="sheet-name">
+            Sheet name
+          </label>
+          <input
+            id="sheet-name"
+            type="text"
+            value={sheetName}
+            onChange={(event) => setSheetName(event.target.value)}
+            placeholder="NeetCode 150"
+          />
+        </div>
+
+        <div className="field">
+          <label className="field__label" htmlFor="sheet-text">
+            The list
+          </label>
+          <textarea
+            id="sheet-text"
+            rows={7}
+            value={sheetText}
+            onChange={(event) => setSheetText(event.target.value)}
+            placeholder={'https://leetcode.com/problems/two-sum/\ntwo-sum\nTwo Sum | two-sum\n- [3Sum](https://leetcode.com/problems/3sum/)\n\n# Arrays\n...a markdown heading becomes a section'}
+          />
+          <div className="field__hint">
+            One problem per line: a LeetCode or Codeforces URL, a slug, a markdown link, or just
+            the title. A <code>#&nbsp;Heading</code> line makes the rows under it a section. A
+            JSON export from another machine works as-is. Lines that are not problems are skipped
+            and counted, so a pasted README does not turn into invented entries.
+          </div>
+        </div>
+
+        <div className="row-actions">
+          <button type="button" className="primary" onClick={() => void importSheet()} disabled={sheetBusy}>
+            {sheetBusy ? 'Reading…' : 'Import sheet'}
+          </button>
+          {sheetNote && <span className="field__hint">{sheetNote}</span>}
+        </div>
+
+        {sheetList.length > 0 && (
+          <div className="field">
+            <div className="field__label">Imported</div>
+            {sheetList.map((sheet) => (
+              <div className="bar-row" key={sheet.id}>
+                <div className="bar-row__label">
+                  {sheet.name} <span className="faint">· {sheet.entries.length} problems</span>
+                </div>
+                <div className="bar-row__value">
+                  {sheet.builtIn ? (
+                    <span className="faint">built in</span>
+                  ) : (
+                    <button type="button" className="ghost" onClick={() => void removeSheet(sheet.id)}>
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section id="s-revision-schedule" data-group="revision" className="section-card">

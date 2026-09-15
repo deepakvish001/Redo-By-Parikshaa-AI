@@ -1,6 +1,7 @@
 import { DEFAULT_FOCUS } from './focus.ts';
 import { appendEvent } from './journal.ts';
 import { completeProblems } from './record.ts';
+import { MAX_SHEETS, type Sheet } from './sheets.ts';
 import type { ParikshaaCredentials } from './parikshaa.ts';
 import type { UpsolveItem } from './upsolve.ts';
 import { claimSubmissions, type Claim } from './watermark.ts';
@@ -31,6 +32,7 @@ const KEYS = {
   daily: 'daily',
   backlog: 'backlog',
   training: 'training',
+  sheets: 'sheets',
 } as const;
 
 export const PENDING_CSES_SUBMISSION_TTL_MS = 15 * 60_000;
@@ -557,6 +559,37 @@ export async function saveBacklog(keys: string[]): Promise<string[]> {
   const trimmed = [...new Set(keys)].slice(0, 50);
   await chrome.storage.local.set({ [KEYS.backlog]: trimmed });
   return trimmed;
+}
+
+/* ---------------------------------------------------------------- sheets */
+
+/**
+ * Imported sheets, in the order they were added.
+ *
+ * The built-in list is not stored — it ships with the build, so storing a copy
+ * would mean a corrected entry never reaching anyone who imported it once.
+ * Only what the user pasted lives here.
+ */
+export async function getSheets(): Promise<Sheet[]> {
+  const stored = await readKey<Sheet[]>(KEYS.sheets, []);
+  return Array.isArray(stored) ? stored.filter((sheet) => sheet?.id && Array.isArray(sheet.entries)) : [];
+}
+
+export async function saveSheet(sheet: Sheet): Promise<Sheet[]> {
+  const sheets = await getSheets();
+  // Re-importing a sheet under the same name replaces it rather than stacking
+  // a second copy beside it — that is what somebody pasting an updated list
+  // means by importing it again.
+  const without = sheets.filter((entry) => entry.id !== sheet.id);
+  const next = [...without, sheet].slice(-MAX_SHEETS);
+  await chrome.storage.local.set({ [KEYS.sheets]: next });
+  return next;
+}
+
+export async function deleteSheet(id: string): Promise<Sheet[]> {
+  const next = (await getSheets()).filter((sheet) => sheet.id !== id);
+  await chrome.storage.local.set({ [KEYS.sheets]: next });
+  return next;
 }
 
 /* ------------------------------------------------------ training contests */

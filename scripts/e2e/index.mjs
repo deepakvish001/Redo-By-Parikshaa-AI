@@ -107,6 +107,9 @@ try {
     ['github:device-start', { includePrivate: true, clientId: 'Iv1.stub' }],
     ['github:repos', { token: 'ghp_stub' }],
     ['github:branches', { token: 'ghp_stub', owner: 'deepakvish001', repo: 'dsa', defaultBranch: 'main' }],
+    ['sheets:get', {}],
+    ['sheets:import', { name: 'Sweep', text: 'two-sum\n3sum' }],
+    ['sheets:delete', { id: 'sweep' }],
     ['cf:connect', { handle: 'deepakvish001', key: 'k'.repeat(32), secret: 's'.repeat(40) }],
     ['problem:delete', { id: 'leetcode:nonexistent' }],
   ];
@@ -1173,6 +1176,144 @@ try {
     const data = await ask({ type: 'upsolve:refresh' });
     assert.ok(data, 'upsolve refused to answer without a handle');
     await ask({ type: 'settings:save', patch: { handles: before.handles } });
+  });
+
+
+  /* ================================================ 24. practice sheets */
+
+  group('practice sheets');
+
+  await check('Blind 75 is there before anything is imported', async () => {
+    const data = await ask({ type: 'sheets:get' });
+    const blind = data.progress.find((sheet) => sheet.id === 'blind-75');
+    assert.ok(blind, `no built-in sheet: ${data.progress.map((s) => s.id).join(', ')}`);
+    assert.equal(blind.total, 75);
+    assert.ok(blind.groups.length >= 9, 'the sections were lost on the way through');
+  });
+
+  await check('a problem solved before the sheet existed already counts', async () => {
+    // The whole point of importing a sheet is being told where you are, not
+    // being reset to zero.
+    await storage.set({ problems: {} });
+    await ask({ type: 'settings:save', patch: { github: { ...(await ask({ type: 'settings:get' })).github, enabled: false } } });
+    await ask({ type: 'submission:accepted', submission: submission({ slug: 'two-sum', problemId: '1', title: 'Two Sum' }) });
+
+    const data = await ask({ type: 'sheets:get' });
+    const blind = data.progress.find((sheet) => sheet.id === 'blind-75');
+    assert.equal(blind.solved, 1, 'the existing solve did not count towards the sheet');
+    assert.ok(blind.percent > 0, 'the bar is still at zero');
+  });
+
+  await check('a pasted list becomes a sheet, and says what it skipped', async () => {
+    const result = await ask({
+      type: 'sheets:import',
+      name: 'My Sheet',
+      text: [
+        '# Arrays',
+        'https://leetcode.com/problems/two-sum/',
+        '- [3Sum](https://leetcode.com/problems/3sum/)',
+        'This line is a note and should not become a problem.',
+        '# Graphs',
+        'https://codeforces.com/problemset/problem/1899/A',
+        'two-sum',
+      ].join('\n'),
+    });
+
+    assert.equal(result.read, 3, `read ${result.read} problems`);
+    assert.equal(result.skipped, 1, 'the prose line was not skipped');
+    assert.equal(result.duplicates, 1, 'the repeated problem was not spotted');
+
+    const mine = result.progress.find((sheet) => sheet.id === 'my-sheet');
+    assert.ok(mine, 'the imported sheet is not in the list');
+    assert.equal(mine.solved, 1, 'the already-solved problem did not count');
+    assert.deepEqual(mine.groups.map((g) => g.name), ['Arrays', 'Graphs']);
+  });
+
+  await check('importing the same sheet again replaces it rather than stacking', async () => {
+    const before = (await ask({ type: 'sheets:get' })).sheets.length;
+    await ask({ type: 'sheets:import', name: 'My Sheet', text: 'two-sum\nvalid-anagram' });
+    const after = await ask({ type: 'sheets:get' });
+    assert.equal(after.sheets.length, before, 'a second copy was added');
+    assert.equal(after.sheets.find((s) => s.id === 'my-sheet').entries.length, 2, 'the sheet was not replaced');
+  });
+
+  await check('a Codeforces entry ticks off when that problem is solved', async () => {
+    await ask({ type: 'sheets:import', name: 'CF', text: 'https://codeforces.com/problemset/problem/1899/A' });
+    const before = (await ask({ type: 'sheets:get' })).progress.find((s) => s.id === 'cf');
+    assert.equal(before.solved, 0);
+
+    await ask({
+      type: 'submission:accepted',
+      submission: submission({
+        platform: 'codeforces', slug: '1899A', problemId: '1899A', title: 'Game with Integers',
+        url: 'https://codeforces.com/problemset/problem/1899/A', language: 'C++', code: 'int main(){}',
+      }),
+    });
+
+    const after = (await ask({ type: 'sheets:get' })).progress.find((s) => s.id === 'cf');
+    assert.equal(after.solved, 1, 'a Codeforces solve did not tick off its sheet entry');
+  });
+
+  await check('what to do next is drawn from one sheet, with links that work', async () => {
+    const data = await ask({ type: 'sheets:get' });
+    assert.ok(data.next.length > 0, 'nothing was suggested');
+    assert.equal(new Set(data.next.map((entry) => entry.sheet)).size, 1, 'the suggestions are scattered across sheets');
+    for (const entry of data.next) {
+      assert.match(entry.url, /^https:\/\/(leetcode\.com|codeforces\.com)\//, `bad link: ${entry.url}`);
+    }
+  });
+
+  await check('an empty import is refused with a reason, not stored', async () => {
+    const before = (await ask({ type: 'sheets:get' })).sheets.length;
+    const response = await send({ type: 'sheets:import', name: 'Nothing', text: 'just some prose here.' });
+    assert.equal(response.ok, false, 'an empty list was accepted as a sheet');
+    assert.match(response.error, /could not be read|empty/i, `unhelpful message: ${response.error}`);
+    assert.equal((await ask({ type: 'sheets:get' })).sheets.length, before, 'it was stored anyway');
+  });
+
+  await check('an imported sheet can be removed, the built-in one cannot be lost', async () => {
+    const after = await ask({ type: 'sheets:delete', id: 'my-sheet' });
+    assert.ok(!after.sheets.some((sheet) => sheet.id === 'my-sheet'), 'it was not removed');
+    assert.ok(after.sheets.some((sheet) => sheet.id === 'blind-75'), 'the built-in sheet went with it');
+  });
+
+  await check('the Sheets tab renders the bars', async () => {
+    const page = await rig.context.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(`chrome-extension://${id}/panel/index.html`);
+    await page.waitForTimeout(1600);
+    await page.getByRole('tab', { name: /^Sheets/ }).click();
+    await page.waitForTimeout(1000);
+
+    const text = await page.locator('body').innerText();
+    assert.match(text, /Blind 75/, `the sheet is not on the tab: ${text.slice(0, 300)}`);
+    const bars = await page.getByRole('progressbar').count();
+    assert.ok(bars > 0, 'no progress bar rendered');
+    assert.deepEqual(errors, [], `the Sheets tab threw: ${errors.join('; ')}`);
+    await page.close();
+  });
+
+  await check('a sheet can be imported from the Settings page itself', async () => {
+    const page = await rig.context.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(`chrome-extension://${id}/options/index.html`);
+    await page.waitForTimeout(1600);
+
+    // Settings shows one group at a time; sheets live under Revision.
+    await page.locator('.settings__tab', { hasText: 'Revision' }).click();
+    await page.waitForTimeout(500);
+
+    await page.locator('#sheet-name').fill('Typed In');
+    await page.locator('#sheet-text').fill('https://leetcode.com/problems/valid-anagram/\ngroup-anagrams');
+    await page.getByRole('button', { name: /Import sheet/i }).click();
+    await page.waitForTimeout(1500);
+
+    const stored = await ask({ type: 'sheets:get' });
+    assert.ok(stored.sheets.some((sheet) => sheet.id === 'typed-in'), 'the typed sheet was not stored');
+    assert.deepEqual(errors, [], `settings threw: ${errors.join('; ')}`);
+    await page.close();
   });
 
   /* ================================================ 14. the whole surface */

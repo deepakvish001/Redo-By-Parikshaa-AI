@@ -62,6 +62,7 @@ import { buildHistory, loadRound } from './history.ts';
 import { translateStrings } from './translate.ts';
 import { postSolution, readThreads } from './community.ts';
 import { pushToEditor, testBridge } from './bridge.ts';
+import { getSheetsData, importSheet, removeSheet } from './sheets.ts';
 import { pollDeviceFlow, startDeviceFlow } from './device-flow.ts';
 import { connectCodeforces } from './cf-connect.ts';
 import { editorialFor, similarTo } from './cf-next.ts';
@@ -821,6 +822,15 @@ async function handle(request: Request, sender: chrome.runtime.MessageSender): P
 
     case 'bridge:test':
       return testBridge(request.port);
+
+    case 'sheets:get':
+      return getSheetsData();
+
+    case 'sheets:import':
+      return importSheet(request.name, request.text);
+
+    case 'sheets:delete':
+      return removeSheet(request.id);
 
     case 'github:device-start':
       return startDeviceFlow(request.includePrivate, request.clientId);

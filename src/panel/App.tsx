@@ -38,8 +38,10 @@ import {
   type DashboardData,
   type RatingProfiles,
   type HomeData,
+  type SheetsData,
   type UpsolveResponse,
 } from '../core/messages.ts';
+import type { SheetProgress } from '../core/sheets.ts';
 import { bandFloor, type RatingGoal } from '../core/rating.ts';
 import type { LeetCodeProfile } from '../background/rating.ts';
 import { problemUrl } from '../core/daily.ts';
@@ -92,7 +94,7 @@ import {
 } from './icons.tsx';
 import { copyPng, downloadPng } from './share.ts';
 
-type Tab = 'home' | 'due' | 'all' | 'train' | 'stats';
+type Tab = 'home' | 'due' | 'all' | 'sheets' | 'train' | 'stats';
 
 const PLATFORM_SHORT: Record<string, string> = {
   codeforces: 'CF',
@@ -2342,6 +2344,158 @@ function SuggestionRow({ entry }: { entry: Suggestion }) {
  * think to ask — what have I solved, how am I doing, what is coming up. This
  * one answers the question you already had when you opened the panel.
  */
+/**
+ * One sheet's progress: the bar, the sections, and what is left.
+ *
+ * The sections matter more than the total. "62 of 150" is a number you can
+ * stare at for a month without it moving; "Arrays 9/10" is one problem away
+ * from a row going green, and that is the thing that gets opened.
+ */
+function SheetCard({
+  progress,
+  onDelete,
+}: {
+  progress: SheetProgress;
+  onDelete?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const done = progress.solved === progress.total && progress.total > 0;
+
+  return (
+    <section className="sheet">
+      <header className="sheet__head">
+        <div className="sheet__name">
+          {progress.name}
+          {done && <span className="sheet__done">done</span>}
+        </div>
+        <div className="sheet__count">
+          {progress.solved}<span className="faint">/{progress.total}</span>
+        </div>
+      </header>
+
+      <div
+        className="sheet__bar"
+        role="progressbar"
+        aria-valuenow={progress.percent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${progress.name}: ${progress.solved} of ${progress.total} solved`}
+      >
+        <div className="sheet__fill" style={{ width: `${progress.percent}%` }} />
+      </div>
+
+      <div className="sheet__meta">
+        <span>{progress.percent}%</span>
+        {progress.locked > 0 && (
+          // Said out loud so a bar that stops short has a visible reason rather
+          // than looking like a counting bug.
+          <span title="These need LeetCode Premium. Redo does not work around that.">
+            {progress.locked} need Premium
+          </span>
+        )}
+        <span className="shell__spacer" />
+        <button type="button" className="ghost" onClick={() => setOpen((value) => !value)}>
+          {open ? 'Hide' : 'Sections'}
+        </button>
+        {onDelete && (
+          <button type="button" className="ghost" onClick={onDelete}>
+            Remove
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div className="sheet__groups">
+          {progress.groups.map((group) => (
+            <div className="bar-row" key={group.name}>
+              <div className="bar-row__label">{group.name}</div>
+              <div className="bar-row__value">
+                {group.solved}/{group.total}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SheetsTab() {
+  const [data, setData] = useState<SheetsData | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    try {
+      setData(await send({ type: 'sheets:get' }));
+    } catch {
+      setData((current) => current);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const remove = useCallback(
+    async (id: string) => {
+      setBusy(true);
+      try {
+        setData(await send({ type: 'sheets:delete', id }));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [],
+  );
+
+  if (!data) return <div className="empty">{busy ? 'Loading…' : 'No sheets yet.'}</div>;
+
+  return (
+    <>
+      {data.next.length > 0 && (
+        <section className="card">
+          <div className="section-title">Next from {data.next[0]!.sheet}</div>
+          {data.next.map((entry) => (
+            <div className="row" key={`${entry.platform}:${entry.slug}`}>
+              <button
+                type="button"
+                className="row__title link"
+                onClick={() => openUrl(entry.url)}
+              >
+                {entry.title}
+              </button>
+              {entry.group && <span className="chip">{entry.group}</span>}
+              {entry.premium && <span className="chip chip--warn">Premium</span>}
+            </div>
+          ))}
+        </section>
+      )}
+
+      {data.progress.map((progress, index) => (
+        <SheetCard
+          key={progress.id}
+          progress={progress}
+          onDelete={
+            data.sheets[index]?.builtIn ? undefined : () => void remove(progress.id)
+          }
+        />
+      ))}
+
+      <div className="faint" style={{ padding: '10px 2px', lineHeight: 1.6 }}>
+        Blind 75 ships with Redo. Any other list — NeetCode 150, Striver's A2Z,
+        your college's — is imported by pasting it in{' '}
+        <button type="button" className="link" onClick={() => void chrome.runtime.openOptionsPage()}>
+          Settings
+        </button>
+        . Problems you solved before importing already count.
+      </div>
+    </>
+  );
+}
+
 function HomeTab({ onOpenDue }: { onOpenDue: () => void }) {
   const [data, setData] = useState<HomeData | null>(null);
   const [busy, setBusy] = useState(false);
@@ -2839,6 +2993,7 @@ export function App() {
             ['home', 'Home'],
             ['due', `Due${due.length > 0 ? ` (${due.length})` : ''}`],
             ['all', `Solved (${data.stats.total})`],
+            ['sheets', 'Sheets'],
             ['train', 'Train'],
             ['stats', 'Stats'],
           ] as Array<[Tab, string]>
@@ -2858,6 +3013,8 @@ export function App() {
 
       <div className="scroll">
         {tab === 'home' && <HomeTab onOpenDue={() => setTab('due')} />}
+
+        {tab === 'sheets' && <SheetsTab />}
 
         {tab === 'due' && (
           <>

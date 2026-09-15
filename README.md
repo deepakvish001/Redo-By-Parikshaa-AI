@@ -783,8 +783,10 @@ the half that is built.
   accepted results without a fresh capture do not create a solved record.
 - Parikshaa sync needs a parikshaa.org tab to have been open at some point in the last hour;
   otherwise problems queue until the session refreshes.
-- Storage is `chrome.storage.local`, which is capped around 10 MB — thousands of solutions, but
-  not unlimited.
+- Storage is `chrome.storage.local`. The 10 MB cap that normally applies is lifted by the
+  `unlimitedStorage` permission, so the real limit is the disk — but everything still lives in
+  one browser profile, which a reset or a mis-clicked "Remove extension" takes with it. That is
+  what the backup and the repository sync are for.
 
 ## Development
 
