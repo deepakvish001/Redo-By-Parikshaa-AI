@@ -63,6 +63,7 @@ import { translateStrings } from './translate.ts';
 import { postSolution, readThreads } from './community.ts';
 import { pushToEditor, testBridge } from './bridge.ts';
 import { getSheetsData, importSheet, removeSheet } from './sheets.ts';
+import { isHost } from '../core/hosts.ts';
 import { pollDeviceFlow, startDeviceFlow } from './device-flow.ts';
 import { connectCodeforces } from './cf-connect.ts';
 import { editorialFor, similarTo } from './cf-next.ts';
@@ -980,10 +981,21 @@ chrome.runtime.onMessage.addListener((request: Request, sender, sendResponse) =>
 
 // With no popup declared, clicking the toolbar icon has to be told to open
 // the side panel; without this the click does nothing at all.
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   void chrome.sidePanel
     .setPanelBehavior({ openPanelOnActionClick: true })
     .catch(() => undefined);
+
+  // A first install opens the setup page once.
+  //
+  // Only on `install`, never on `update`: a tab that appears on its own every
+  // time the extension updates is the behaviour people uninstall over. And
+  // without it the first run is a panel with nothing in it and no sign that
+  // GitHub has to be connected before anything gets committed — the most
+  // common way this ends up looking broken when it is merely unconfigured.
+  if (details.reason === 'install') {
+    void chrome.tabs.create({ url: chrome.runtime.getURL('options/index.html?welcome=1') });
+  }
 });
 
 chrome.runtime.onInstalled.addListener((details) => {
@@ -1134,6 +1146,72 @@ async function tickContests(): Promise<void> {
     await refreshContests(settings);
   }
   await sendContestReminders(settings);
+}
+
+/**
+ * The keyboard shortcuts.
+ *
+ * `_execute_action` is handled by Chrome itself and opens the panel, so only
+ * the two that do something extra are here. A revision tool that needs the
+ * mouse to start a revision is one you stop starting.
+ *
+ * Every one of these runs from a keystroke, which is a user gesture — which is
+ * what `sidePanel.open` requires and what an alarm or a timer could not give
+ * it.
+ */
+chrome.commands?.onCommand.addListener((command, tab) => {
+  if (command === 'review-next') {
+    void openNextDue(tab);
+    return;
+  }
+  if (command === 'open-workspace') {
+    void openWorkspaceOn(tab);
+  }
+});
+
+/**
+ * Opens the problem that has been waiting longest, and the panel beside it.
+ *
+ * Longest-waiting rather than a random due one: the queue is ordered, and the
+ * shortcut should agree with the list the panel shows rather than picking its
+ * own favourite.
+ */
+async function openNextDue(tab?: chrome.tabs.Tab): Promise<void> {
+  const due = dueProblems(await getProblemList(), Date.now());
+  const next = due[0];
+
+  if (!next) {
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
+      title: 'Nothing due',
+      message: 'The next revision appears when its interval comes round.',
+      priority: 0,
+    });
+    return;
+  }
+
+  const opened = await chrome.tabs.create({ url: next.url });
+  // The panel is per-window, and the new tab's window is the one to open it in.
+  if (opened.windowId !== undefined) {
+    await chrome.sidePanel.open({ windowId: opened.windowId }).catch(() => undefined);
+  } else if (tab?.windowId !== undefined) {
+    await chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => undefined);
+  }
+}
+
+/** Injects the workspace into the Codeforces tab the shortcut was pressed on. */
+async function openWorkspaceOn(tab?: chrome.tabs.Tab): Promise<void> {
+  const tabId = tab?.id;
+  if (tabId === undefined || !tab?.url) return;
+
+  const { page } = await getSettings();
+  if (!page.enabled || !page.workspace) return;
+  if (!isHost(new URL(tab.url).hostname, 'codeforces.com')) return;
+
+  await chrome.scripting
+    .executeScript({ target: { tabId }, files: ['workspace.js'] })
+    .catch(() => undefined);
 }
 
 chrome.notifications.onClicked.addListener((notificationId) => {

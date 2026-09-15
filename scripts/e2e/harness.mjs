@@ -67,7 +67,7 @@ export function report() {
       console.log(`\n  ${group_}`);
     }
     console.log(`    ${entry.ok ? 'ok  ' : 'FAIL'} ${entry.name}`);
-    if (!entry.ok) console.log(`         ${entry.error.split('\n').slice(0, 4).join('\n         ')}`);
+    if (!entry.ok) console.log(`         ${entry.error.split('\n').slice(0, 6).join('\n         ')}`);
   }
   console.log(`\n  ${results.length - failed.length}/${results.length} passed\n`);
   return failed.length;

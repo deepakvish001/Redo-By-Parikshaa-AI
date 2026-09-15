@@ -1316,6 +1316,150 @@ try {
     await page.close();
   });
 
+
+  /* ================================================= 25. keyboard and labels */
+
+  group('keyboard and screen readers');
+
+  /**
+   * The accessible name of every control on a page, computed in the page the
+   * way a screen reader would: the text, then aria-label, then the associated
+   * label element, then title. A control with none of those is announced as
+   * "button" and is unusable without sight of it.
+   */
+  const unnamedControls = (page) =>
+    page.evaluate(() => {
+      const nameOf = (el) => {
+        const aria = el.getAttribute('aria-label');
+        if (aria?.trim()) return aria.trim();
+        const by = el.getAttribute('aria-labelledby');
+        if (by) {
+          const target = document.getElementById(by);
+          if (target?.textContent?.trim()) return target.textContent.trim();
+        }
+        if (el.labels?.length) {
+          const text = [...el.labels].map((l) => l.textContent ?? '').join(' ').trim();
+          if (text) return text;
+        }
+        if (el.textContent?.trim()) return el.textContent.trim();
+        if (el.getAttribute('title')?.trim()) return el.getAttribute('title').trim();
+        if (el.getAttribute('placeholder')?.trim()) return el.getAttribute('placeholder').trim();
+        return '';
+      };
+
+      return [...document.querySelectorAll('button, a[href], input, select, textarea')]
+        .filter((el) => el.offsetParent !== null || el === document.activeElement)
+        .filter((el) => !nameOf(el))
+        .map((el) => `${el.tagName.toLowerCase()}${el.className ? `.${String(el.className).split(' ')[0]}` : ''}`);
+    });
+
+  await check('every control in the panel announces itself', async () => {
+    const page = await rig.context.newPage();
+    await page.goto(`chrome-extension://${id}/panel/index.html`);
+    await page.waitForTimeout(1800);
+
+    const bad = [];
+    for (const name of ['Home', 'Due', 'Solved', 'Sheets', 'Train', 'Stats']) {
+      await page.getByRole('tab', { name: new RegExp(`^${name}`) }).click();
+      await page.waitForTimeout(500);
+      bad.push(...(await unnamedControls(page)).map((entry) => `${name}: ${entry}`));
+    }
+    const unique = [...new Set(bad)];
+    assert.ok(unique.length === 0, `controls with no accessible name: ${unique.join(' | ')}`);
+    await page.close();
+  });
+
+  await check('every control in Settings announces itself', async () => {
+    const page = await rig.context.newPage();
+    await page.goto(`chrome-extension://${id}/options/index.html`);
+    await page.waitForTimeout(1800);
+
+    const bad = [];
+    for (const group of ['Sync', 'Revision', 'Judge pages', 'Contests', 'Advanced']) {
+      await page.locator('.settings__tab', { hasText: group }).click();
+      await page.waitForTimeout(400);
+      bad.push(...(await unnamedControls(page)).map((entry) => `${group}: ${entry}`));
+    }
+    const unique = [...new Set(bad)];
+    assert.ok(unique.length === 0, `controls with no accessible name: ${unique.join(' | ')}`);
+    await page.close();
+  });
+
+  await check('the tab strip is one tab stop, and the arrows move within it', async () => {
+    // Six separate tab stops in front of the content is exactly what the
+    // tablist pattern exists to avoid.
+    const page = await rig.context.newPage();
+    await page.goto(`chrome-extension://${id}/panel/index.html`);
+    await page.waitForTimeout(1800);
+
+    const stops = await page.evaluate(
+      () => [...document.querySelectorAll('[role="tab"]')].filter((el) => el.tabIndex === 0).length,
+    );
+    assert.equal(stops, 1, `${stops} of the tabs are in the tab order`);
+
+    await page.getByRole('tab', { name: /^Home/ }).focus();
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(400);
+    const selected = await page.evaluate(
+      () => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim(),
+    );
+    assert.match(selected ?? '', /^Due/, `ArrowRight selected ${selected}`);
+
+    // And focus went with it, or the next arrow press would do nothing.
+    const focused = await page.evaluate(() => document.activeElement?.getAttribute('role'));
+    assert.equal(focused, 'tab', 'focus did not follow the selection');
+
+    await page.keyboard.press('End');
+    await page.waitForTimeout(400);
+    const last = await page.evaluate(
+      () => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim(),
+    );
+    assert.match(last ?? '', /^Stats/, `End selected ${last}`);
+    await page.close();
+  });
+
+  await check('the tab panel is tied to the tab that opened it', async () => {
+    const page = await rig.context.newPage();
+    await page.goto(`chrome-extension://${id}/panel/index.html`);
+    await page.waitForTimeout(1800);
+    const wired = await page.evaluate(() => {
+      const tab = document.querySelector('[role="tab"][aria-selected="true"]');
+      const panel = document.getElementById(tab?.getAttribute('aria-controls') ?? '');
+      return Boolean(panel) && panel.getAttribute('aria-labelledby') === tab.id;
+    });
+    assert.ok(wired, 'the tab and its panel do not refer to each other');
+    await page.close();
+  });
+
+  await check('the keyboard shortcuts are declared and distinct', async () => {
+    const commands = await rig.worker.evaluate(() => chrome.commands.getAll());
+    const names = commands.map((entry) => entry.name);
+    for (const wanted of ['_execute_action', 'review-next', 'open-workspace']) {
+      assert.ok(names.includes(wanted), `${wanted} is not registered: ${names.join(', ')}`);
+    }
+    const bound = commands.map((entry) => entry.shortcut).filter(Boolean);
+    assert.equal(new Set(bound).size, bound.length, `two commands share a shortcut: ${bound.join(', ')}`);
+  });
+
+  await check('the setup page opens on install and greets you once', async () => {
+    // The welcome only shows for the URL the install opens, never on a later
+    // visit — a settings page that greets you every time is not a settings page.
+    const welcome = await rig.context.newPage();
+    await welcome.goto(`chrome-extension://${id}/options/index.html?welcome=1`);
+    await welcome.waitForTimeout(1500);
+    const greeted = await welcome.locator('body').innerText();
+    assert.match(greeted, /Redo is installed/, 'the first-run greeting is missing');
+    assert.match(greeted, /Alt/, 'the shortcuts are not shown to a new user');
+    await welcome.close();
+
+    const plain = await rig.context.newPage();
+    await plain.goto(`chrome-extension://${id}/options/index.html`);
+    await plain.waitForTimeout(1500);
+    const text = await plain.locator('body').innerText();
+    assert.doesNotMatch(text, /Redo is installed/, 'the greeting shows on an ordinary visit');
+    await plain.close();
+  });
+
   /* ================================================ 14. the whole surface */
 
   group('no page ever threw');

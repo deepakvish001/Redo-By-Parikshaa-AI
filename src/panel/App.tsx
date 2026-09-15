@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   calendarUrl,
   formatDuration,
@@ -95,6 +95,18 @@ import {
 import { copyPng, downloadPng } from './share.ts';
 
 type Tab = 'home' | 'due' | 'all' | 'sheets' | 'train' | 'stats';
+
+/** The strip's order, which is also the order the arrow keys walk. */
+const TAB_ORDER: Tab[] = ['home', 'due', 'all', 'sheets', 'train', 'stats'];
+
+const TAB_LABELS: Record<Tab, (due: number, solved: number) => string> = {
+  home: () => 'Home',
+  due: (count) => (count > 0 ? `Due (${count})` : 'Due'),
+  all: (_, solved) => `Solved (${solved})`,
+  sheets: () => 'Sheets',
+  train: () => 'Train',
+  stats: () => 'Stats',
+};
 
 const PLATFORM_SHORT: Record<string, string> = {
   codeforces: 'CF',
@@ -1862,6 +1874,9 @@ function TrainTab() {
                   min={800}
                   max={3500}
                   value={rating}
+                  // Named by position, because the rungs have no other label:
+                  // a screen reader otherwise reads six identical spin buttons.
+                  aria-label={`Problem ${index + 1} rating`}
                   onChange={(event) =>
                     setLadder(
                       rungs.map((entry, i) => (i === index ? Number(event.target.value) : entry)),
@@ -1872,6 +1887,7 @@ function TrainTab() {
                   type="button"
                   className="iconbtn"
                   title="Remove this problem"
+                  aria-label={`Remove problem ${index + 1}`}
                   onClick={() => setLadder(rungs.filter((_, i) => i !== index))}
                 >
                   ×
@@ -2740,6 +2756,12 @@ export function App() {
   /** The Library shows either the folders or the notebook over the same filter. */
   const [view, setView] = useState<'problems' | 'notes'>('problems');
   const [tab, setTab] = useState<Tab>('home');
+  /**
+   * Set when the arrow keys moved the selection, so the newly selected tab
+   * takes focus with it. Clicking must not steal focus the same way — that
+   * would scroll the strip under the pointer on every click.
+   */
+  const moveFocus = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -2987,31 +3009,49 @@ export function App() {
         </button>
       </header>
 
-      <nav className="tabs" role="tablist">
-        {(
-          [
-            ['home', 'Home'],
-            ['due', `Due${due.length > 0 ? ` (${due.length})` : ''}`],
-            ['all', `Solved (${data.stats.total})`],
-            ['sheets', 'Sheets'],
-            ['train', 'Train'],
-            ['stats', 'Stats'],
-          ] as Array<[Tab, string]>
-        ).map(([value, label]) => (
+      <nav className="tabs" role="tablist" aria-label="Sections">
+        {TAB_ORDER.map((value) => (
           <button
             key={value}
             type="button"
             role="tab"
+            id={`tab-${value}`}
+            aria-controls="tabpanel"
             className="tab"
             aria-selected={tab === value}
+            // Roving tabindex: one stop for the whole strip, then the arrow
+            // keys move within it. Six separate tab stops in front of the
+            // content is what a tablist is specified this way to avoid.
+            tabIndex={tab === value ? 0 : -1}
+            ref={(node) => {
+              if (node && tab === value && moveFocus.current) {
+                moveFocus.current = false;
+                node.focus();
+              }
+            }}
+            onKeyDown={(event) => {
+              const step =
+                event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+              if (step === 0 && event.key !== 'Home' && event.key !== 'End') return;
+              event.preventDefault();
+              const index = TAB_ORDER.indexOf(tab);
+              const next =
+                event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? TAB_ORDER.length - 1
+                    : (index + step + TAB_ORDER.length) % TAB_ORDER.length;
+              moveFocus.current = true;
+              setTab(TAB_ORDER[next]!);
+            }}
             onClick={() => setTab(value)}
           >
-            {label}
+            {TAB_LABELS[value](due.length, data.stats.total)}
           </button>
         ))}
       </nav>
 
-      <div className="scroll">
+      <div className="scroll" id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
         {tab === 'home' && <HomeTab onOpenDue={() => setTab('due')} />}
 
         {tab === 'sheets' && <SheetsTab />}

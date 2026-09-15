@@ -121,5 +121,28 @@
   "optional_host_permissions": [
     "http://127.0.0.1/*",
     "https://github.com/*"
-  ]
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+R",
+        "mac": "Alt+R"
+      },
+      "description": "Open the Redo panel"
+    },
+    "review-next": {
+      "suggested_key": {
+        "default": "Alt+Shift+R",
+        "mac": "Alt+Shift+R"
+      },
+      "description": "Open the next problem due for revision"
+    },
+    "open-workspace": {
+      "suggested_key": {
+        "default": "Alt+W",
+        "mac": "Alt+W"
+      },
+      "description": "Open the Codeforces workspace on this problem"
+    }
+  }
 }

@@ -998,6 +998,9 @@ export function App() {
   const [sheetNote, setSheetNote] = useState('');
   const [sheetBusy, setSheetBusy] = useState(false);
   const [sheetList, setSheetList] = useState<Sheet[]>([]);
+  // Read once: the flag is in the URL the install put there, and re-reading it
+  // on every render would keep the greeting up after the user navigated away.
+  const [welcome] = useState(() => new URLSearchParams(window.location.search).has('welcome'));
   const [leadText, setLeadText] = useState('');
   const [saveStatus, setSaveStatus] = useState<Status>(null);
   const [verifyStatus, setVerifyStatus] = useState<Status>(null);
@@ -1264,6 +1267,33 @@ export function App() {
           below.
         </p>
       </header>
+
+      {/*
+        The first run, and only the first run: the page is opened on install
+        with `?welcome=1`, so this says hello once and never again. A settings
+        page that greets you every visit stops being a settings page.
+      */}
+      {welcome && (
+        <section id="s-welcome" data-group="setup" className="section-card setup">
+          <h2 className="section-card__title">
+            <SparkIcon size={14} />
+            Redo is installed
+          </h2>
+          <p className="section-card__hint">
+            Nothing else is needed to start: solve something on LeetCode or Codeforces and it will
+            appear in the panel, scheduled for revision. The two settings below are what make it
+            commit to GitHub and light up the judges&rsquo; pages.
+          </p>
+          <ul className="setup__keys">
+            <li><kbd>Alt</kbd> + <kbd>R</kbd> — open the panel</li>
+            <li><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> — open the next problem due</li>
+            <li><kbd>Alt</kbd> + <kbd>W</kbd> — the workspace, on a Codeforces problem</li>
+          </ul>
+          <p className="section-card__hint" style={{ marginBottom: 0 }}>
+            Change these at <code>chrome://extensions/shortcuts</code>.
+          </p>
+        </section>
+      )}
 
       {/*
         Shown until the two things that make Redo do anything are set. Landing

@@ -3304,3 +3304,28 @@ details.field > summary {
 @media (prefers-reduced-motion: reduce) {
   .sheet__fill { transition: none; }
 }
+
+.setup__keys {
+  margin: 10px 0 12px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.setup__keys kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1.5px 6px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  text-align: center;
+}
